@@ -1,0 +1,12 @@
+data_mode: moon
+teaching_mode: omniscient
+same_feat_space: True
+n_iter: 500
+learning_rate: 1e-4
+batch_size: 10
+nb_train: 1200
+nb_test: 400
+dim: 2
+n_teacher_runs: 300
+class_1: 0
+class_2: 1

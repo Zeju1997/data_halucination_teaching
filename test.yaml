@@ -1,0 +1,2 @@
+lr: 0.05
+num_worker: 16

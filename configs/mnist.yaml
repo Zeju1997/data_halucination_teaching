@@ -1,0 +1,10 @@
+data_mode: mnist
+teaching_mode: omniscient
+same_feat_space: True
+n_iter: 300
+batch_size: 5
+nb_train: 5000
+nb_test: 1000
+n_teacher_runs: 30
+class_1: 1
+class_2: 7

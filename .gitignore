@@ -1,0 +1,11 @@
+*.pyc
+__pycache__/
+checkpoints/
+*.pth
+*.jpg
+*.png
+.ipynb_checkpoints/
+.idea/
+
+# data folder
+data/

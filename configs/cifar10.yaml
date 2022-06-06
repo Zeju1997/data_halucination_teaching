@@ -1,0 +1,10 @@
+data_mode: cifar10
+teaching_mode: omniscient
+same_feat_space: True
+n_iter: 500
+batch_size: 32
+nb_train: 40000 # 9000
+nb_test: 2000 # 500
+n_teacher_runs: 200
+class_1: 1
+class_2: 7
