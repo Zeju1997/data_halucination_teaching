@@ -1,11 +1,14 @@
 data_mode: gaussian
 teaching_mode: omniscient
 same_feat_space: True
-n_iter: 500
+n_iter: 300 # 500
 learning_rate: 1e-4
+batch_size: 1
 nb_train: 600
 nb_test: 200
 dim: 10
 n_teacher_runs: 30
 class_1: 0
 class_2: 1
+lr_factor: 10000
+gd_n: 300

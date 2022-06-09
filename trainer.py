@@ -22,14 +22,14 @@ from torchvision import transforms
 from torchvision.transforms import ToTensor
 from train_utils import *
 from eval import EvalMetrics
-import teachers.omniscient_teacher as omniscient
+import teachers.omniscient_teacher_nn as omniscient
 import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 import data.dataset_loader as data_loader
 
-from sklearn.datasets import make_moons
+from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 sys.path.append('..') #Hack add ROOT DIR
@@ -47,6 +47,8 @@ class Trainer:
         self.opt = options
         self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
 
+        self.visualize = True
+
         self.models = {}
         self.parameters_to_train = []
 
@@ -62,8 +64,15 @@ class Trainer:
         elif self.opt.data_mode == "mnist":
             self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=ToTensor())
             self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=ToTensor())
-        else:
+        elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
+        elif self.opt.data_mode == "moon":
+            print("Generating moon data ...")
+        elif self.opt.data_mode == "linearly_seperable":
+            print("Generating linearly seperable data ...")
+        else:
+            print("Unrecognized data!")
+            sys.exit()
 
         self.get_teacher_student()
 
@@ -75,6 +84,9 @@ class Trainer:
             else: # mnist / gaussian / moon
                 self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
                 self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
+
+                # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
+                # self.student = omniscient.StudentClassifier(self.opt.dim)
         elif self.opt.teaching_mode == "surrogate":
             if self.opt.data_mode == "cifar10":
                 if self.opt.same_feat_space:
@@ -190,34 +202,57 @@ class Trainer:
             y = np.where(y == self.opt.class_1, 0, 1)
 
         elif self.opt.data_mode == "gaussian":
-            dim = 10
             dim__diff = 7
             nb_data_per_class = 1000
 
-            X, y = self.init_data(dim, nb_data_per_class)
+            X, y = self.init_data(self.opt.dim, nb_data_per_class)
 
-            example = utils.BaseLinear(dim)
+            example = utils.BaseLinear(self.opt.dim)
+            baseline = utils.BaseLinear(self.opt.dim)
+
+            if self.visualize:
+                fig = plt.figure(figsize=(8,5))
+                plt.scatter(X[:, 0], X[:, 1], c=y)
+                plt.title('Gaussian Data')
+                plt.show()
 
         elif self.opt.data_mode == "moon":
-            dim = 2
             np.random.seed(0)
-            num_pts = 5000
             noise_val = 0.25
 
-            X, y = make_moons(num_pts, noise=noise_val)
+            X, y = make_moons(self.opt.nb_train+self.opt.nb_test, noise=noise_val)
 
-            example = utils.BaseLinear(dim)
+            example = utils.BaseLinear(self.opt.dim)
+            baseline = utils.BaseLinear(self.opt.dim)
 
-            plt.figure(figsize=(8,5))
-            plt.scatter(X[:, 0], X[:, 1], c=y)
-            plt.title('Moon Data')
-            plt.show()
+            if self.visualize:
+                fig = plt.figure(figsize=(8,5))
+                plt.scatter(X[:, 0], X[:, 1], c=y)
+                plt.title('Moon Data')
+                plt.show()
+
+        elif self.opt.data_mode == "linearly_seperable":
+            X, y = make_classification(
+                n_samples=self.opt.nb_train+self.opt.nb_test, n_features=2, n_redundant=0, n_informative=2, random_state=1, n_clusters_per_class=1
+            )
+            rng = np.random.RandomState(2)
+            X += 2 * rng.uniform(size=X.shape)
+
+            example = utils.BaseLinear(self.opt.dim)
+            baseline = utils.BaseLinear(self.opt.dim)
+
+            if self.visualize:
+                fig = plt.figure(figsize=(8,5))
+                plt.scatter(X[:, 0], X[:, 1], c=y)
+                plt.title('Linearly Seperable Data')
+                plt.show()
 
         else:
             print("Unrecognized data mode!")
             sys.exit()
 
         example.load_state_dict(self.teacher.state_dict())
+        baseline.load_state_dict(self.teacher.state_dict())
 
         # X_train = np.asarray(self.train_dataset.data.reshape((N, dim)))
         # X_train = np.asarray(X_train)
@@ -249,15 +284,16 @@ class Trainer:
         # train teacher
         accuracies = []
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[80, 160], gamma=0.1)
-        for _ in tqdm(range(self.opt.n_teacher_runs)):
-            for i in range(nb_batch):
-                i_min = i * self.opt.batch_size
-                i_max = (i + 1) * self.opt.batch_size
-                self.teacher.update(X_train[i_min:i_max].cuda(), y_train[i_min:i_max].cuda())
+        for n in tqdm(range(self.opt.n_teacher_runs)):
+            if n != 0:
+                for i in range(nb_batch):
+                    i_min = i * self.opt.batch_size
+                    i_max = (i + 1) * self.opt.batch_size
+                    self.teacher.update(X_train[i_min:i_max].cuda(), y_train[i_min:i_max].cuda())
             self.teacher.eval()
             test = self.teacher(X_test.cuda()).cpu()
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
@@ -270,28 +306,31 @@ class Trainer:
             print("Accuracy:", acc)
             self.scheduler.step()
 
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        if self.visualize == True:
+            fig = plt.figure()
+            plt.plot(accuracies, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
 
         # train example
         res_example = []
-        for _ in tqdm(range(self.opt.n_iter)):
-            i = torch.randint(0, nb_batch, size=(1,)).item()
-            i_min = i * self.opt.batch_size
-            i_max = (i + 1) * self.opt.batch_size
+        for n in tqdm(range(self.opt.n_iter)):
+            if n != 0:
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                i_min = i * self.opt.batch_size
+                i_max = (i + 1) * self.opt.batch_size
 
-            data = X_train[i_min:i_max].cuda()
-            label = y_train[i_min:i_max].cuda()
+                data = X_train[i_min:i_max].cuda()
+                label = y_train[i_min:i_max].cuda()
 
-            example.update(data, label)
+                example.update(data, label)
 
             example.eval()
             test = example(X_test.cuda()).cpu()
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
@@ -302,31 +341,51 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_example.append(acc)
 
-        plt.plot(res_example, c="b", label="Example (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        if self.visualize == True:
+            fig = plt.figure()
+            plt.plot(res_example, c="b", label="Example (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
 
         print("Base line trained\n")
 
         # train student
         res_student = []
+        res_baseline = []
+        generated_samples = np.zeros(2)
         for t in tqdm(range(self.opt.n_iter)):
-            i = self.teacher.select_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
-            # i = torch.randint(0, nb_batch, size=(1,)).item()
-            i_min = i * self.opt.batch_size
-            i_max = (i + 1) * self.opt.batch_size
+            if t != 0:
+                labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
+                best_data, best_label,  data = self.teacher.generate_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size, self.opt.lr_factor, self.opt.gd_n)
+                # data = self.teacher.generate_example(self.student, X_train.cuda(), labels, self.opt.batch_size)
 
-            x_t = X_train[i_min:i_max].cuda()
-            y_t = y_train[i_min:i_max].cuda()
+                # i = self.teacher.select_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
+                # i = torch.randint(0, nb_batch, size=(1,)).item()
+                # i_min = i * self.opt.batch_size
+                # i_max = (i + 1) * self.opt.batch_size
 
-            self.student.update(x_t, y_t)
+                # x_t = X_train[i_min:i_max].cuda()
+                # y_t = y_train[i_min:i_max].cuda()
+
+                # self.student.update(x_t, y_t)
+
+                self.student.update(torch.cuda.FloatTensor(data), labels)
+
+                baseline.update(best_data, best_label)
+
+                data = data.cpu().detach().numpy()
+                if t == 1:
+                    generated_samples = data[np.newaxis, :]
+                else:
+                    generated_samples = np.concatenate((generated_samples, data[np.newaxis, :]), axis=0)
+                print("len data", len(generated_samples))
 
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
@@ -335,19 +394,44 @@ class Trainer:
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
-            print("acc", acc)
             res_student.append(acc)
+
+            baseline.eval()
+            test = baseline(X_test.cuda()).cpu()
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc_base = nb_correct / X_test.size(0)
+            res_baseline.append(acc)
+
+            print("acc", acc, "acc baseline", acc_base)
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
 
-        plt.plot(res_example, c='b', label="linear classifier")
-        plt.plot(res_student, c='r', label="%s & linear classifier" % self.opt.teaching_mode)
-        plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        plt.xlabel("Iteration")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        if self.visualize == True:
+            fig = plt.figure()
+            plt.plot(res_example, c='b', label="linear classifier")
+            plt.plot(res_baseline, c='g', label="%s & baseline" % self.opt.teaching_mode)
+            plt.plot(res_student, c='r', label="%s & linear classifier" % self.opt.teaching_mode)
+            plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            plt.xlabel("Iteration")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+            plt.savefig("{}.jpg".format(res_example[0]))
+
+            # fig = plt.figure(figsize=(8,5))
+            # plt.scatter(X[:, 0], X[:, 1], c=y)
+            # plt.scatter(generated_samples[:, 0], generated_samples[:, 1], color='k')
+            # plt.title('Updated Data')
+            # plt.show()
 
     def main(self):
         X_test = next(iter(self.test_loader))[0].numpy()

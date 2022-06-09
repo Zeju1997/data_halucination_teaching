@@ -190,23 +190,26 @@ class Trainer:
             y = np.where(y == self.opt.class_1, 0, 1)
 
         elif self.opt.data_mode == "gaussian":
-            dim = 10
             dim__diff = 7
             nb_data_per_class = 1000
 
-            X, y = self.init_data(dim, nb_data_per_class)
+            X, y = self.init_data(self.opt.dim, nb_data_per_class)
 
-            example = utils.BaseLinear(dim)
+            example = utils.BaseLinear(self.opt.dim)
+
+            plt.figure(figsize=(8,5))
+            plt.scatter(X[:, 0], X[:, 1], c=y)
+            plt.title('Gaussian Data')
+            plt.show()
 
         elif self.opt.data_mode == "moon":
-            dim = 2
             np.random.seed(0)
             num_pts = 5000
             noise_val = 0.25
 
             X, y = make_moons(num_pts, noise=noise_val)
 
-            example = utils.BaseLinear(dim)
+            example = utils.BaseLinear(self.opt.dim)
 
             plt.figure(figsize=(8,5))
             plt.scatter(X[:, 0], X[:, 1], c=y)
@@ -248,7 +251,7 @@ class Trainer:
 
         # train teacher
         accuracies = []
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[80, 160], gamma=0.1)
+        # self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[160, 240], gamma=0.1)
         for _ in tqdm(range(self.opt.n_teacher_runs)):
             for i in range(nb_batch):
                 i_min = i * self.opt.batch_size
@@ -268,7 +271,7 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             accuracies.append(acc)
             print("Accuracy:", acc)
-            self.scheduler.step()
+            # self.scheduler.step()
 
         plt.plot(accuracies, c="b", label="Teacher (CNN)")
         plt.xlabel("Epoch")

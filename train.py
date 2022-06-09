@@ -28,7 +28,7 @@ def load_config(config_name):
 
 
 if __name__ == "__main__":
-    config = load_config("moon.yaml")
+    config = load_config("linearly_seperable.yaml")
     opts.set_defaults(**config)
 
     trainer = Trainer(opts.parse_args())

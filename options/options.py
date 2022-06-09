@@ -48,7 +48,11 @@ class Options:
         self.parser.add_argument("--learning_rate", type=float, help="learning rate", default=1e-3)
         self.parser.add_argument("--n_iter", type=int, help="number of iterations", default=1200)
         self.parser.add_argument("--batch_size", type=int, help="batch size", default=2)
+        self.parser.add_argument("--lr_factor", type=int, help="batch size", default=10000)
         self.parser.add_argument("--scheduler_step_size", type=int, help="scheduler step size for lr decreasing", default=15)
+        self.parser.add_argument("--gd_n", type=int, help="scheduler step size for lr decreasing", default=200)
+
+
         # System
         self.parser.add_argument("--no_cuda", help="if set disables CUDA", action="store_true")
         self.parser.add_argument("--num_workers", type=int, help="number of dataloader workers", default=8)
