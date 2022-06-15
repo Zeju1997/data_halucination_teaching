@@ -42,6 +42,35 @@ def init_weights(m):
         m.bias.data.fill_(0.01)
 
 
+def plot_classifier1(model, max, min):
+    w = 0
+    b = 0
+    for layer in model.children():
+        if isinstance(layer, nn.Linear):
+            w = layer.state_dict()['weight'].cpu().numpy()
+            b = layer.state_dict()['bias'].cpu().numpy()
+
+    slope = -(b/w[0, 1])/(b/w[0, 0])
+    intercept = b/w[0, 1]
+
+    x = np.linspace(min, max, 100)
+    y = slope * x + intercept
+    return x, y
+
+
+def plot_classifier(model, max, min):
+    w = 0
+    for layer in model.children():
+        if isinstance(layer, nn.Linear):
+            w = layer.state_dict()['weight'].cpu().numpy()
+
+    slope = (-w[0, 0]/w[0, 1] - 1) / (1 + w[0, 1]/w[0, 0])
+
+    x = np.linspace(min, max, 100)
+    y = slope * x
+    return x, y
+
+
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -211,14 +240,16 @@ class Trainer:
             baseline = utils.BaseLinear(self.opt.dim)
 
             if self.visualize:
-                fig = plt.figure(figsize=(8,5))
+                fig = plt.figure(figsize=(8, 5))
+                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+                plt.plot(a, b, '-r', label='y=wx+b')
                 plt.scatter(X[:, 0], X[:, 1], c=y)
                 plt.title('Gaussian Data')
                 plt.show()
 
         elif self.opt.data_mode == "moon":
             np.random.seed(0)
-            noise_val = 0.25
+            noise_val = 0.2
 
             X, y = make_moons(self.opt.nb_train+self.opt.nb_test, noise=noise_val)
 
@@ -226,7 +257,9 @@ class Trainer:
             baseline = utils.BaseLinear(self.opt.dim)
 
             if self.visualize:
-                fig = plt.figure(figsize=(8,5))
+                fig = plt.figure(figsize=(8, 5))
+                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+                plt.plot(a, b, '-r', label='y=wx+b')
                 plt.scatter(X[:, 0], X[:, 1], c=y)
                 plt.title('Moon Data')
                 plt.show()
@@ -242,7 +275,9 @@ class Trainer:
             baseline = utils.BaseLinear(self.opt.dim)
 
             if self.visualize:
-                fig = plt.figure(figsize=(8,5))
+                fig = plt.figure(figsize=(8, 5))
+                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+                plt.plot(a, b, '-r', label='y=wx+b')
                 plt.scatter(X[:, 0], X[:, 1], c=y)
                 plt.title('Linearly Seperable Data')
                 plt.show()
@@ -314,6 +349,13 @@ class Trainer:
             plt.legend()
             plt.show()
 
+            fig = plt.figure(figsize=(8, 5))
+            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+            plt.plot(a, b, '-r', label='y=wx+b')
+            plt.scatter(X[:, 0], X[:, 1], c=y)
+            plt.title('Linearly Seperable Data')
+            plt.show()
+
         # train example
         res_example = []
         for n in tqdm(range(self.opt.n_iter)):
@@ -355,10 +397,15 @@ class Trainer:
         res_student = []
         res_baseline = []
         generated_samples = np.zeros(2)
+        score_statistics = np.zeros(self.opt.n_iter)
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
-                labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
-                best_data, best_label,  data = self.teacher.generate_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size, self.opt.lr_factor, self.opt.gd_n)
+                # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
+                best_data, best_label, data, labels, better = self.teacher.generate_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size, self.opt.lr_factor, self.opt.gd_n)
+
+                if better:
+                    score_statistics[t] = 1
+
                 # data = self.teacher.generate_example(self.student, X_train.cuda(), labels, self.opt.batch_size)
 
                 # i = self.teacher.select_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
@@ -380,7 +427,7 @@ class Trainer:
                     generated_samples = data[np.newaxis, :]
                 else:
                     generated_samples = np.concatenate((generated_samples, data[np.newaxis, :]), axis=0)
-                print("len data", len(generated_samples))
+                print("iter", len(generated_samples))
 
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
@@ -403,12 +450,12 @@ class Trainer:
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
+                tmp = torch.max(test, dim=1).indices0
                 nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc_base = nb_correct / X_test.size(0)
-            res_baseline.append(acc)
+            res_baseline.append(acc_base)
 
             print("acc", acc, "acc baseline", acc_base)
 
@@ -416,22 +463,52 @@ class Trainer:
             sys.stdout.flush()
 
         if self.visualize == True:
-            fig = plt.figure()
-            plt.plot(res_example, c='b', label="linear classifier")
-            plt.plot(res_baseline, c='g', label="%s & baseline" % self.opt.teaching_mode)
-            plt.plot(res_student, c='r', label="%s & linear classifier" % self.opt.teaching_mode)
-            plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            plt.xlabel("Iteration")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-            plt.savefig("{}.jpg".format(res_example[0]))
+            fig, axs = plt.subplots(3, 2, figsize=(10, 16))
 
-            # fig = plt.figure(figsize=(8,5))
-            # plt.scatter(X[:, 0], X[:, 1], c=y)
-            # plt.scatter(generated_samples[:, 0], generated_samples[:, 1], color='k')
-            # plt.title('Updated Data')
+            axs[0, 0].plot(res_example, c='b', label="linear classifier")
+            axs[0, 0].plot(res_baseline, c='g', label="%s & baseline" % self.opt.teaching_mode)
+            axs[0, 0].plot(res_student, c='r', label="%s & linear classifier" % self.opt.teaching_mode)
+            # axs[0, 0].set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            axs[0, 0].set_title("Accuracy Comparison")
+            axs[0, 0].set_xlabel("Iteration")
+            axs[0, 0].set_ylabel("Accuracy")
+            axs[0, 0].legend()
             # plt.show()
+            # plt.savefig("{}.jpg".format(res_example[0]))
+
+            # plot
+            x = 0.5 + np.arange(self.opt.n_iter)
+            axs[0, 1].stem(x, score_statistics)
+            # plt.show()
+
+            axs[1, 0].scatter(X[:, 0], X[:, 1], c=y)
+            # axs[1, 0].scatter(generated_samples[:, 0], generated_samples[:, 1], color='k')
+            axs[1, 0].set_title('Updated Data')
+            # axs[1, 0].show()
+
+            a_gt, b_gt = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+            axs[1, 1].plot(a_gt, a_gt, '-g', label='y=wx+b')
+            axs[1, 1].plot(a, b, '-r', label='y=wx+b')
+            axs[1, 1].scatter(X[:, 0], X[:, 1], c=y)
+            axs[1, 1].set_title('Student Classifier')
+            # plt.show()
+
+            a_gt, b_gt = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+            a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
+            axs[2, 0].plot(a_gt, a_gt, '-g', label='y=wx+b')
+            axs[2, 0].plot(a, b, '-r', label='y=wx+b')
+            axs[2, 0].scatter(X[:, 0], X[:, 1], c=y)
+            axs[2, 0].set_title('SGD Classifier')
+            # plt.show()
+
+            a_gt, b_gt = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+            a, b = plot_classifier(baseline, X.max(axis=0), X.min(axis=0))
+            axs[2, 1].plot(a_gt, a_gt, '-g', label='y=wx+b')
+            axs[2, 1].plot(a, b, '-r', label='y=wx+b')
+            axs[2, 1].scatter(X[:, 0], X[:, 1], c=y)
+            axs[2, 1].set_title('Baseline IMT Classifier')
+            plt.show()
 
     def main(self):
         X_test = next(iter(self.test_loader))[0].numpy()

@@ -9,7 +9,7 @@ class LinearClassifier(nn.Module):
             :param n_in: nombre de features
             """
             super(LinearClassifier, self).__init__()
-            self.lin = nn.Linear(n_in, 1)
+            self.lin = nn.Linear(n_in, 1, bias=False)
             self.sig = nn.Sigmoid()
 
         def forward(self, x):
