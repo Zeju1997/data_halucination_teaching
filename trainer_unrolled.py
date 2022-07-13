@@ -22,7 +22,7 @@ import torchvision
 from torchvision import transforms
 from torchvision.transforms import ToTensor
 import torchvision.utils as vutils
-from torchvision.utils import save_image, make_grid
+from torchvision.utils import save_image
 from train_utils import *
 from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
@@ -30,9 +30,9 @@ import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-import data.dataset_loader as data_loader
+import data.dataset_loader as data_loade
 
-from datasets import BaseDataset
+from datasets import MoonDataset
 
 import networks.cgan as cgan
 import networks.unrolled_optimizer as unrolled
@@ -58,7 +58,7 @@ def weights_init(m):
 
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform(m.weight)
-        # torch.nn.init.kaiming_uniform(m.weight)
+        # torch.nn.init.kaiming_uniform_(m.weight)
         # m.bias.data.fill_(0.01)
 
 def plot_classifier(model, max, min):
@@ -105,7 +105,7 @@ def to_matrix(l, n):
 class Trainer:
     def __init__(self, options):
         self.opt = options
-        self.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
 
         self.visualize = True
 
@@ -122,20 +122,8 @@ class Trainer:
             # self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
             self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
         elif self.opt.data_mode == "mnist":
-            self.train_dataset = torchvision.datasets.MNIST(
-                root=CONF.PATH.DATA,
-                train=True,
-                download=True,
-                transform=transforms.Compose(
-                    [transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
-                ))
-            self.test_dataset = torchvision.datasets.MNIST(
-                root=CONF.PATH.DATA,
-                train=False,
-                download=True,
-                transform=transforms.Compose(
-                    [transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
-                ))
+            self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=ToTensor())
+            self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=ToTensor())
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
         elif self.opt.data_mode == "moon":
@@ -148,10 +136,6 @@ class Trainer:
 
         self.get_teacher_student()
 
-        self.writers = {}
-        for mode in ["train", "val"]:
-            self.writers[mode] = SummaryWriter(os.path.join(self.log_path, mode))
-
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
             if self.opt.data_mode == "cifar10":
@@ -159,8 +143,9 @@ class Trainer:
                 self.student = omniscient.OmniscientConvStudent(self.opt.eta)
             else: # mnist / gaussian / moon
                 self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-                torch.save(self.teacher.state_dict(), 'pretrained/teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
+
+                # torch.save(self.teacher.state_dict(), 'pretrained/teacher.pth')
+                # self.teacher.load_state_dict(torch.load('pretrained/teacher.pth'))
 
                 self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
 
@@ -206,9 +191,8 @@ class Trainer:
         else:
             print("Unrecognized teacher!")
             sys.exit()
-
-        self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
-        self.baseline.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
+        self.student.load_state_dict(self.teacher.state_dict())
+        self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
         """Convert all models to training mode
@@ -271,14 +255,18 @@ class Trainer:
             example = utils.BaseConv(self.opt.eta)
 
         elif self.opt.data_mode == "mnist":
-            data_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
-            X = next(iter(data_loader))[0].numpy()
-            Y = next(iter(data_loader))[1].numpy()
+            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            X = next(iter(train_loader))[0].numpy()
+            Y = next(iter(train_loader))[1].numpy()
             (N, W, H) = self.train_dataset.data.shape
             dim = W*H
             example = utils.BaseLinear(self.opt.dim)
             tmp_student = utils.BaseLinear(self.opt.dim)
+
+            # X_train = np.asarray(self.train_dataset.data.reshape((N, dim)))
             X = X.reshape((N, dim))
+            # Y_train = np.asarray(self.train_dataset.targets)
+            # Y_train = np.asarray(self.train_dataset.targets)
 
             # create new data set with class 1 as 0 and class 2 as 1
             f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
@@ -348,11 +336,19 @@ class Trainer:
         example.load_state_dict(self.teacher.state_dict())
         tmp_student.load_state_dict(self.teacher.state_dict())
 
+        # X_train = np.asarray(self.train_dataset.data.reshape((N, dim)))
+        # X_train = np.asarray(X_train)
+        # Y_train = np.asarray(self.train_dataset.targets)
+        # Y_train = np.asarray(Y_train)
+
         # Shuffle datasets
         randomize = np.arange(X.shape[0])
         np.random.shuffle(randomize)
         X = X[randomize]
         Y = Y[randomize]
+
+        # X = X[:self.opt.nb_train + self.opt.nb_test]
+        # y = y[:self.opt.nb_train + self.opt.nb_test]
 
         nb_batch = int(self.opt.nb_train / self.opt.batch_size)
 
@@ -362,163 +358,19 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test])
             y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
         elif self.opt.data_mode == "mnist":
-            X_train_im = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
-            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
-            X_test_im = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
-            y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
-
-            proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
-            X_train = X_train_im @ proj_matrix
-            X_test = X_test_im @ proj_matrix
-
-            data_train_im = BaseDataset(X_train_im, y_train)
-            data_test_im = BaseDataset(X_test_im, y_test)
-            train_loader_im = DataLoader(data_train_im, batch_size=self.opt.batch_size, drop_last=True)
-            test_loader_im = DataLoader(data_test_im, batch_size=self.opt.batch_size, drop_last=True)
-
-        else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-        data_train = BaseDataset(X_train, y_train)
-        data_test = BaseDataset(X_test, y_test)
-        train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
-        test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
-
-        '''
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        # Plot some training images
-        real_batch = next(iter(train_loader))
-
-        if self.visualize == True:
-            plt.figure(figsize=(8, 8))
-            plt.axis("off")
-            plt.title("Training Images")
-            plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
-            plt.show()
-
-        adversarial_loss = torch.nn.MSELoss()
-
-        # Create the generator
-        netG = cgan.Generator(self.opt).cuda()
-        netG.apply(weights_init)
-
-        netD = cgan.Discriminator(self.opt).cuda()
-        netD.apply(weights_init)
-
-        optimizer_D = optim.Adam(netD.parameters(), lr=self.opt.lr, betas=(self.opt.b1, self.opt.b2))
-        optimizer_G = optim.Adam(netG.parameters(), lr=self.opt.lr, betas=(self.opt.b1, self.opt.b2))
-        self.step = 0
-        for epoch in range(self.opt.n_epochs):
-            for i, (imgs, labels) in enumerate(train_loader):
-
-                # Adversarial ground truths
-                valid = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(1.0), requires_grad=False)
-                fake = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(0.0), requires_grad=False)
-
-                # Configure input
-                real_imgs = Variable(imgs.type(torch.cuda.FloatTensor))
-                labels = Variable(labels.type(torch.cuda.LongTensor))
-
-                # -----------------
-                #  Train Generator
-                # -----------------
-
-                optimizer_G.zero_grad()
-
-                # Sample noise and labels as generator input
-                z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (self.opt.batch_size, self.opt.dim))))
-
-                # self.opt.n_classes = 2
-                indices = np.random.randint(2, size=self.opt.batch_size).astype(int)
-                # classes = np.array([self.opt.class_1, self.opt.class_2])
-                classes = np.array([0, 1])
-                labels = classes[indices]
-                gen_labels = Variable(torch.cuda.LongTensor(labels))
-                labels = Variable(torch.cuda.LongTensor(labels))
-                # gen_labels = Variable(torch.cuda.LongTensor(np.random.randint(0, self.opt.n_classes, batch_size)))
-
-                # z = torch.cat((z, gen_labels.unsqueeze(0)), dim=1)
-                # Generate a batch of images
-                gen_imgs = netG(z, gen_labels)
-
-                # Loss measures generator's ability to fool the discriminator
-                validity = netD(gen_imgs, gen_labels)
-                g_loss = adversarial_loss(validity, valid)
-
-                g_loss.backward()
-                optimizer_G.step()
-
-                # ---------------------
-                #  Train Discriminator
-                # ---------------------
-
-                optimizer_D.zero_grad()
-
-                # Loss for real images
-                validity_real = netD(real_imgs, labels)
-                d_real_loss = adversarial_loss(validity_real, valid)
-
-                # Loss for fake images
-                validity_fake = netD(gen_imgs.detach(), gen_labels)
-                d_fake_loss = adversarial_loss(validity_fake, fake)
-
-                # Total discriminator loss
-                d_loss = (d_real_loss + d_fake_loss) / 2
-
-                d_loss.backward()
-                optimizer_D.step()
-
-                self.step = self.step + 1
-
-                print(
-                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                    % (epoch, self.opt.n_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
-                )
-
-            if epoch % 2 == 0:
-                n_row = 10
-                # Sample noise
-                # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (n_row ** 2, self.opt.dim))))
-                z = Variable(torch.randn(n_row ** 2, self.opt.dim)).cuda()
-
-                indices = np.random.randint(2, size=100).astype(int)
-                classes = np.array([0, 1])
-                labels = classes[indices]
-                labels = Variable(torch.cuda.LongTensor(labels))
-
-                gen_imgs = netG(z, labels)
-
-                # unproj_matrix = np.linalg.pinv(proj_matrix)
-                # im = gen_imgs.detach().clone().cpu() @ unproj_matrix
-
-                im = gen_imgs.detach().clone().cpu()
-
-                # img_shape = (1, 28, 28)
-                # im = np.reshape(im, (im.shape[0], 28, 28))
-                # im = im.view(im.size(0), *img_shape)
-                # im = torch.from_numpy(im)
-                # im = im.unsqueeze(1)
-                # im = np.transpose(im, (1, 2, 0))
-
-                save_folder = os.path.join(self.log_path, "imgs")
-                if not os.path.exists(save_folder):
-                    os.makedirs(save_folder)
-
-                grid = make_grid(im, nrow=10, normalize=True)
-                fig, ax = plt.subplots(figsize=(10, 10))
-                ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-                ax.axis('off')
-                plt.title("Fake Images, Label", )
-                img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
-                plt.savefig(img_path)
-                plt.close()
-                
-        sys.exit()
-        '''
+            proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
+            X_train = X_train @ proj_matrix
+            X_test = X_test @ proj_matrix
+        else:
+            X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
+            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
+            X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
         # train teacher
         accuracies = []
@@ -618,8 +470,8 @@ class Trainer:
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
         plt.legend()
-        # plt.show()
-        plt.close()
+        plt.show()
+        # plt.close()
 
         # train baseline
         res_baseline = []
@@ -675,179 +527,149 @@ class Trainer:
         print("Base line trained\n")
 
         # train student
-        netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
-        netG.apply(weights_init)
-
-        netD = unrolled.Discriminator(self.opt).cuda()
-        netD.apply(weights_init)
-
-        optimizer_D = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
-        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
-
-        # adversarial_loss = torch.nn.BCELoss()
-        adversarial_loss = torch.nn.MSELoss()
-
-        unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), proj_matrix=proj_matrix)
-
-        self.step = 0
-
+        generator = unrolled.Generator(self.teacher, tmp_student, X_train.shape[1], self.opt.hidden_dim).cuda()
+        generator.apply(weights_init)
+        optimizer = torch.optim.Adam(generator.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        unrolled_optimizer = unrolled.UnrolledOptimizer(nblocks=self.opt.n_unroll_blocks, teacher=self.teacher, student=tmp_student, generator=generator, X=X_train.cuda(), y=y_train.cuda(), batch_size=self.opt.batch_size)
+        res_student = []
+        a_student = []
+        b_student = []
         loss_student = []
+        w_diff_student = []
+        # w, h = generator.linear.weight.shape
 
-        img_shape = (1, 28, 28)
+        generated_samples = np.zeros(2)
+        # train generator
+
+        # alpha = 0.02
+        # beta1 = 0.9
+        # beta2 = 0.999
+        # initialize first and second moments
+        # m = torch.zeros((w, h)).cuda()
+        # v = torch.zeros((w, h)).cuda()
 
         w_init = self.student.lin.weight
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                for i, (data, labels) in enumerate(train_loader_im):
-                    self.step = self.step + 1
-                    # Adversarial ground truths
-                    valid = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(1.0), requires_grad=False)
-                    fake = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(0.0), requires_grad=False)
+        # for idx in tqdm(range(self.opt.n_iter)):
+        for idx in tqdm(range(self.opt.n_unroll)):
+            if idx != 0:
 
-                    # Configure input
-                    real_samples = Variable(data.type(torch.cuda.FloatTensor))
-                    # real_samples = data.view(data.size(0), *img_shape)
-                    # real_samples = Variable(real_samples.type(torch.cuda.FloatTensor))
-                    real_labels = Variable(labels.type(torch.cuda.LongTensor))
+                w_t = generator.state_dict()
+                gradients, loss = unrolled_optimizer(w_t, w_star, w_init)
 
-                    # -----------------
-                    #  Train Generator
-                    # -----------------
+                loss_student.append(loss.item())
 
-                    optimizer_G.zero_grad()
+                with torch.no_grad():
+                    for p, g in zip(generator.parameters(), gradients):
+                        p.grad = g
 
-                    # Generate a batch of images
-                    # w_stu = self.student.lin.weight
+                optimizer.step()
 
-                    # i = torch.randint(0, nb_batch, size=(1,)).item()
-                    # i_min = i * self.opt.batch_size
-                    # i_max = (i + 1) * self.opt.batch_size
 
-                    # gt_x = X_train[i_min:i_max].cuda()
-                    # generated_labels = y_train[i_min:i_max].cuda()
+                '''
+                with torch.no_grad():
+                    for p, g in zip(generator.parameters(), gradients_w):
+                        p.grad = g
 
-                    # x = torch.cat((w_stu, w_stu-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-                    # generated_samples = netG(x)
+                optimizer.step()
+                
+                grad = gradients[0]
+                eps = np.sqrt(np.finfo(float).eps)
+                m = beta1 * m + (1.0 - beta1) * grad
+                v = beta2 * v + (1.0 - beta2) * grad**2
+                m_hat = m / (1.0 - beta1**(idx+1))
+                v_hat = v / (1.0 - beta2**(idx+1))
+                update = torch.Tensor([alpha]).cuda() * m_hat / torch.sqrt(v_hat) + eps
 
-                    # Loss measures generator's ability to fool the discriminator
-                    # validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-                    # g_loss = adversarial_loss(validity, valid)
+                with torch.no_grad():
+                    for param in generator.parameters():
+                        param = param - update
 
-                    # Loss measures generator's ability to fool the discriminator
-                    w_t = netG.state_dict()
-                    gradients, generator_loss, generated_samples, generated_labels, g_loss = unrolled_optimizer(w_t, w_star, w_init, netD, valid)
+                for j in range(w):
+                    for k in range(h):
+                        # adam: convergence problem!
+                        # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                        m[j, k] = beta1 * m[j, k] + (1.0 - beta1) * grad[j, k]
+                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                        v[j, k] = beta2 * v[j, k] + (1.0 - beta2) * grad[j, k]**2
+                        # mhat(t) = m(t) / (1 - beta1(t))
+                        mhat = m[j, k] / (1.0 - beta1**(idx+1))
+                        # vhat(t) = v(t) / (1 - beta2(t))
+                        vhat = v[j, k] / (1.0 - beta2**(idx+1))
+                        # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                        update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
 
-                    loss_student.append(generator_loss.item())
+                        with torch.no_grad():
+                            for param in generator.parameters():
+                                param[j, k] = param[j, k] - update
+                '''
 
-                    with torch.no_grad():
-                        for p, g in zip(netG.parameters(), gradients):
-                            p.grad = g
+        plt.plot(loss_student, c='b', label="loss")
+        plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+        plt.xlabel("Iteration")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.show()
 
-                    optimizer_G.step()
+        loss111 = []
+        for idx in tqdm(range(self.opt.n_iter)):
+            if idx != 0:
+                w_t = self.student.lin.weight
 
-                    # ---------------------
-                    #  Train Discriminator
-                    # ---------------------
+                '''
+                y = torch.randint(0, 2, (1,), dtype=torch.float).cuda()
+                b = y_train.cuda() == y
+                indices = b.nonzero()
+                idx = torch.randint(0, len(indices), (1,))
+                gt_x = X_train[indices[idx].squeeze(0)].cuda()
+                '''
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                i_min = i * self.opt.batch_size
+                i_max = (i + 1) * self.opt.batch_size
 
-                    for _ in range(self.opt.n_critic):
-                        optimizer_D.zero_grad()
+                gt_x = X_train[i_min:i_max].cuda()
+                y = y_train[i_min:i_max].cuda()
 
-                        # Loss for real images
-                        validity_real = netD(real_samples, real_labels)
-                        d_real_loss = adversarial_loss(validity_real, valid)
+                # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
-                        # Loss for fake images
-                        validity_fake = netD(generated_samples.detach(), Variable(generated_labels.type(torch.cuda.LongTensor)))
-                        d_fake_loss = adversarial_loss(validity_fake, fake)
+                x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
+                generated_sample = generator(x)
 
-                        # Total discriminator loss
-                        d_loss = (d_real_loss + d_fake_loss) / 2
-
-                        d_loss.backward()
-                        optimizer_D.step()
-
-                    if i % self.opt.log_frequency == 0:
-                        print(
-                            "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                            % (epoch, self.opt.n_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
-                        )
-                        self.log("train", d_loss.item(), g_loss.item())
-
-            if epoch % self.opt.save_frequency == 0 and epoch >= self.opt.start_saving:
-                res_student = []
-                a_student = []
-                b_student = []
-                w_diff_student = []
-
-                self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
-
-                generated_samples = np.zeros(2)
-                for idx in tqdm(range(self.opt.n_iter)):
-                    if idx != 0:
-                        w_t = self.student.lin.weight
-
-                        i = torch.randint(0, nb_batch, size=(1,)).item()
-                        i_min = i * self.opt.batch_size
-                        i_max = (i + 1) * self.opt.batch_size
-
-                        gt_x = X_train[i_min:i_max].cuda()
-                        y = y_train[i_min:i_max].cuda()
-
-                        # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-
-                        # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                        x = torch.cat((w_t, w_t-w_star, z), dim=1)
-                        generated_sample = netG(x, y)
-
-                        if idx == 1:
-                            generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                            generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
-                        else:
-                            generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                            generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
-
-                        generated_sample = generated_sample @ proj_matrix.cuda()
-                        self.student.update(generated_sample, y)
-
-                    self.student.eval()
-                    test = self.student(X_test.cuda()).cpu()
-
-                    a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-                    a_student.append(a)
-                    b_student.append(b)
-
-                    if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                        tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                        nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                    elif self.opt.data_mode == "cifar10":
-                        tmp = torch.max(test, dim=1).indices
-                        nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                    else:
-                        sys.exit()
-                    acc = nb_correct / X_test.size(0)
-                    res_student.append(acc)
-
-                    # diff = self.teacher.lin.weight - example.lin.weight
-                    diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
-                    w_diff_student.append(diff.detach().clone().cpu())
-
-                if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch)
+                if idx == 1:
+                    generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
+                    generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
                 else:
-                    self.make_results_img(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix)
+                    generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
+                    generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
-                save_folder = os.path.join(self.log_path, "models", "weights_{}".format(epoch))
-                if not os.path.exists(save_folder):
-                    os.makedirs(save_folder)
+                self.student.update(generated_sample, y)
 
-                save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
-                to_save = netG.state_dict()
-                torch.save(to_save, save_path)
+                #self.student(generated_sample)
+                #out = self.student(generated_sample)
+                #loss_fn = nn.MSELoss()
+                #loss1 = loss_fn(out, y)
+                #loss111.append(loss1.item())
 
-                save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
-                to_save = netD.state_dict()
-                torch.save(to_save, save_path)
+            self.student.eval()
+            test = self.student(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+            a_student.append(a)
+            b_student.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            res_student.append(acc)
+
+            # diff = self.teacher.lin.weight - example.lin.weight
+            diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
+            w_diff_student.append(diff.detach().clone().cpu())
 
         plt.plot(w_diff_example, c='g', label="weight diff")
         plt.plot(w_diff_student, c='r', label="weight diff student")
@@ -858,10 +680,48 @@ class Trainer:
         plt.xlabel("Iteration")
         plt.ylabel("Accuracy")
         plt.legend()
-        plt.close()
+        plt.show()
 
         if self.visualize == False:
-            self.make_results_video(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student)
+            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
+            for i in tqdm(range(len(res_student))):
+                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                fig.set_size_inches(20, 5.8)
+                ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
+                ax1.scatter(X[:, 0], X[:, 1], c=Y)
+                ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
+                ax1.legend(loc="upper right")
+                ax1.set_title("Data Generation (Optimizer)")
+                #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
+                #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
+
+                ax2.plot(a_example[i], b_example[i], '-g', label='SGD Classifier')
+                ax2.scatter(X[:, 0], X[:, 1], c=Y)
+                ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1], marker='x')
+                ax2.legend(loc="upper right")
+                ax2.set_title("Data Selection (IMT)")
+                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
+                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
+
+                ax3.plot(res_example, 'go', label="linear classifier", alpha=0.5)
+                ax3.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
+                ax3.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
+                # ax3.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
+                ax3.legend(loc="upper right")
+                ax3.set_title("Test Set Accuracy")
+                #ax3.set_aspect('equal')
+
+                plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
+
+                plt.close()
+
+            os.chdir(CONF.PATH.OUTPUT)
+            subprocess.call([
+                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
+                'video_name.mp4'
+            ])
+            for file_name in glob.glob("*.png"):
+                os.remove(file_name)
 
         sys.exit()
 
@@ -963,8 +823,6 @@ class Trainer:
                 d_loss.backward()
                 optimizer_D.step()
 
-                self.step = self.step + 1
-
                 print(
                     "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
                     % (epoch, self.opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item())
@@ -974,16 +832,15 @@ class Trainer:
                 if batches_done % sample_interval == 0:
                     self.sample_image(netG, n_row=10, batches_done=batches_done)
 
-        visualize = True
+        visualize = False
         if visualize:
-            n_row = 5
+            n_row = 10
             # Sample noise
             z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (n_row ** 2, self.opt.latent_dim))))
             # Get labels ranging from 0 to n_classes for n rows
             # labels = np.array([num for _ in range(n_row) for num in range(n_row)])
-            indices = np.random.randint(2, size=25).astype(int)
-            # classes = np.array([self.opt.class_1, self.opt.class_2])
-            classes = np.array([0, 1])
+            indices = np.random.randint(2, size=100).astype(int)
+            classes = np.array([self.opt.class_1, self.opt.class_2])
             labels = classes[indices]
             labels = Variable(torch.cuda.LongTensor(labels))
             gen_imgs = netG(z, labels)
@@ -996,139 +853,104 @@ class Trainer:
             plt.imshow(im[:, :, 0], cmap="gray")
             plt.show()
 
-    def make_results_img(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
-        # unproj_matrix = np.linalg.pinv(proj_matrix)
-        n_rows = 10
-        indices = torch.randint(0, len(generated_samples), (n_rows**2,))
-        labels = generated_labels[indices]
-        samples = generated_samples[indices]
-
-        # gen_imgs = samples @ unproj_matrix
-
-        img_shape = (1, 28, 28)
-        # gen_imgs = samples
-        im = np.reshape(samples, (samples.shape[0], *img_shape))
-        im = torch.from_numpy(im)
-
-        save_folder = os.path.join(self.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        grid = make_grid(im, nrow=10, normalize=True)
-        fig, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-        ax.axis('off')
-        plt.title("Fake Images, Label", )
-        img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
-        # plt.figure(figsize=(10, 10)) # specifying the overall grid size
-
-        # for i in range(25):
-        #    plt.subplot(5, 5, i+1)    # the number of images in the grid is 5*5 (25)
-        #    plt.imshow(im[:, :, i], cmap="gray")
-
-        # plt.axis("off")
-
-        plt.figure(figsize=(10, 10))
-        # plt.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # plt.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # plt.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        plt.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        plt.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        plt.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # plt.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        plt.legend(loc="upper right")
-        plt.title("Test Set Accuracy")
-        #plt.set_aspect('equal')
-
-        img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
-    def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch):
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        fig.set_size_inches(14, 6)
-        ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
-        ax1.legend(loc="upper right")
-        ax1.set_title("Data Generation (Optimizer)")
-        #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-        #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-        # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax2.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax2.legend(loc="upper right")
-        ax2.set_title("Test Set Accuracy")
-        #ax2.set_aspect('equal')
-
-        save_folder = os.path.join(self.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
 
 
-    def make_results_video(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
-        # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-        for i in tqdm(range(len(w_diff_student))):
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(14, 6)
-            ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-            ax1.scatter(X[:, 0], X[:, 1], c=Y)
-            ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
-            ax1.legend(loc="upper right")
-            ax1.set_title("Data Generation (Optimizer)")
-            #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-            #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
+        '''
+        accuracies = []
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[80, 160], gamma=0.1)
+        for idx in tqdm(range(self.opt.n_teacher_runs)):
+            if idx != 0:
+                for i in range(nb_batch):
+                    i_min = i * self.opt.batch_size
+                    i_max = (i + 1) * self.opt.batch_size
 
-            # ax2.plot(a_example[i], b_example[i], '-g', label='SGD Classifier')
-            # ax2.scatter(X[:, 0], X[:, 1], c=Y)
-            # ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1], marker='x')
-            # ax2.legend(loc="upper right")
-            # ax2.set_title("Data Selection (IMT)")
-            # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-            # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
+                    indices = np.random.randint(2, size=self.opt.batch_size).astype(int)
+                    classes = np.array([self.opt.class_1, self.opt.class_2])
+                    labels = classes[indices]
+                    labels_long = Variable(torch.cuda.LongTensor(labels))
 
-            # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-            # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-            ax2.plot(w_diff_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            ax2.plot(w_diff_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-            ax2.legend(loc="upper right")
-            ax2.set_title("Test Set Accuracy")
-            #ax2.set_aspect('equal')
+                    z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (self.opt.batch_size, self.opt.latent_dim))))
+                    # Generate fake image batch with G
+                    gen_imgs = netG(z, labels_long)
+                    labels = Variable(torch.cuda.FloatTensor(labels))
 
-            plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
+                    (N, _, W, H) = gen_imgs.shape
 
-            plt.close()
+                    images = gen_imgs.detach().clone()
 
-        os.chdir(CONF.PATH.OUTPUT)
-        subprocess.call([
-            'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-            'video_name.mp4'
-        ])
-        for file_name in glob.glob("*.png"):
-            os.remove(file_name)
+                    # self.teacher.update(X_train[i_min:i_max].cuda(), y_train[i_min:i_max].cuda())
+                    self.teacher.update(images.reshape((N, W*H)), labels)
 
+            self.teacher.eval()
+            test = self.teacher(X_test.cuda()).cpu()
 
-    def log(self, mode, d_loss, g_loss):
-        """Write an event to the tensorboard events file
-        """
-        writer = self.writers[mode]
-        writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
-        writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            accuracies.append(acc)
+            print("Accuracy:", acc)
+            self.scheduler.step()
+
+        plt.plot(accuracies, c="b", label="Teacher (CNN)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.show()
+        '''
+
+        # train student
+        res_student = []
+        for t in tqdm(range(self.opt.n_iter)):
+            if t != 0:
+                # i = self.teacher.select_example(self.student, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
+                # i_min = i * self.opt.batch_size
+                # i_max = (i + 1) * self.opt.batch_size
+
+                # x_t = X_train[i_min:i_max].cuda()
+                # y_t = y_train[i_min:i_max].cuda()
+
+                # self.student.update(x_t, y_t)
+
+                indices = np.random.randint(2, size=self.opt.batch_size).astype(int)
+                classes = np.array([self.opt.class_1, self.opt.class_2])
+                labels = classes[indices]
+                labels_long = Variable(torch.cuda.LongTensor(labels))
+
+                z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (self.opt.batch_size, self.opt.latent_dim))))
+                # Generate fake image batch with G
+                gen_imgs = netG(z, labels_long)
+                labels = Variable(torch.cuda.FloatTensor(labels))
+
+                (N, _, W, H) = gen_imgs.shape
+
+                images = gen_imgs.detach().clone()
+
+                self.student.update(images.reshape((N, W*H)), labels)
+
+            self.student.eval()
+            test = self.student(X_test.cuda()).cpu()
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            print("acc", acc)
+            res_student.append(acc)
+
+            sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
+            sys.stdout.flush()
+
 
 
     def main(self):
@@ -1263,6 +1085,18 @@ class Trainer:
                                                                                         cls=cls)
                 # acc_iou += losses["accuracy/iou_{}".format(fluid)]
 
+    def log(self, mode, inputs, outputs, losses):
+        """Write an event to the tensorboard events file
+        """
+        writer = self.writers[mode]
+        for l, v in losses.items():
+            writer.add_scalar("{}".format(l), v, self.step)
+
+        for j in range(min(4, self.opt.batch_size, inputs["image"].shape[0])):  # write a maxmimum of four images
+            writer.add_image("inputs/{}".format(j), normalize_image(inputs["image"][j].data), self.step)
+            writer.add_image("labels/{}".format(j), normalize_target(inputs["label"][j].unsqueeze(0).data), self.step)
+            writer.add_image("predictions/{}".format(j), normalize_target(outputs["pred_idx"][j].data), self.step)
+            # writer.add_image("positive_region/{}".format(j), outputs["mask"][j].data, self.step)
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with

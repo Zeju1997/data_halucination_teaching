@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 
 
-class BaseDataset(Dataset):
+class MoonDataset(Dataset):
     def __init__(self, X, Y):
         self.data = X
         self.labels = Y

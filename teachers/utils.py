@@ -30,6 +30,21 @@ class BaseLinear(linear.LinearClassifier):
         loss.backward()
         self.optim.step()
 
+        # grad = torch.autograd.grad(loss, self.lin.weight, create_graph=True)
+        # new_weight = self.lin.weight - self.eta * grad[0]
+        # self.lin.weight = torch.nn.Parameter(new_weight.cuda())
+
+
+class BaseLinear1(torch.nn.Module):
+    def __init__(self, n_in):
+        super(BaseLinear, self).__init__()
+        self.lin = nn.Linear(n_in, 1, bias=False)
+        self.sig = nn.Sigmoid()
+
+    def forward(self, x):
+        out = self.lin(x)
+        return self.sig(out)
+
 
 class BaseConv(conv.ConvModel):
     """

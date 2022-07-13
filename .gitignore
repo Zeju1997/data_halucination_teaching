@@ -1,11 +1,19 @@
 *.pyc
 __pycache__/
+_cache/
 checkpoints/
 *.pth
 *.jpg
 *.png
+*ipynb
 .ipynb_checkpoints/
 .idea/
 
 # data folder
 data/
+pretrained/
+
+# output folder
+log/
+outputs/
+

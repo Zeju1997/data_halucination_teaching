@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from trainer import Trainer
+from trainer_cgan import Trainer
 from options.options import Options
 import os
 import argparse
@@ -28,7 +28,7 @@ def load_config(config_name):
 
 
 if __name__ == "__main__":
-    config = load_config("moon.yaml")
+    config = load_config("mnist.yaml")
     opts.set_defaults(**config)
 
     trainer = Trainer(opts.parse_args())

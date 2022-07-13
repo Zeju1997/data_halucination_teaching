@@ -1,4 +1,2 @@
-from .retouch_dataset import *
-from .gta_dataset import *
-from .cityscapes_dataset import *
-from .synthia_dataset import *
+from .moon_dataset import *
+from .base_dataset import *

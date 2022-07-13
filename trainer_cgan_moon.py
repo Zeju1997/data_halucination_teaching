@@ -403,10 +403,10 @@ class Trainer:
         adversarial_loss = torch.nn.MSELoss()
 
         # Create the generator
-        netG = cgan.Generator(self.opt).cuda()
+        netG = unrolled.Generator(self.opt).cuda()
         netG.apply(weights_init)
 
-        netD = cgan.Discriminator(self.opt).cuda()
+        netD = unrolled.Discriminator(self.opt).cuda()
         netD.apply(weights_init)
 
         optimizer_D = optim.Adam(netD.parameters(), lr=self.opt.lr, betas=(self.opt.b1, self.opt.b2))
@@ -684,10 +684,9 @@ class Trainer:
         optimizer_D = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
-        # adversarial_loss = torch.nn.BCELoss()
-        adversarial_loss = torch.nn.MSELoss()
+        adversarial_loss = torch.nn.BCELoss()
 
-        unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), proj_matrix=proj_matrix)
+        unrolled_optimizer = unrolled.UnrolledOptimizer(nblocks=self.opt.n_unroll_blocks, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), batch_size=self.opt.batch_size)
 
         self.step = 0
 
@@ -698,7 +697,7 @@ class Trainer:
         w_init = self.student.lin.weight
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
-                for i, (data, labels) in enumerate(train_loader_im):
+                for i, (data, labels) in enumerate(train_loader):
                     self.step = self.step + 1
                     # Adversarial ground truths
                     valid = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(1.0), requires_grad=False)
@@ -706,8 +705,6 @@ class Trainer:
 
                     # Configure input
                     real_samples = Variable(data.type(torch.cuda.FloatTensor))
-                    # real_samples = data.view(data.size(0), *img_shape)
-                    # real_samples = Variable(real_samples.type(torch.cuda.FloatTensor))
                     real_labels = Variable(labels.type(torch.cuda.LongTensor))
 
                     # -----------------
@@ -794,10 +791,9 @@ class Trainer:
                         y = y_train[i_min:i_max].cuda()
 
                         # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
                         # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                        x = torch.cat((w_t, w_t-w_star, z), dim=1)
+                        x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                         generated_sample = netG(x, y)
 
                         if idx == 1:
@@ -807,7 +803,6 @@ class Trainer:
                             generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                             generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
-                        generated_sample = generated_sample @ proj_matrix.cuda()
                         self.student.update(generated_sample, y)
 
                     self.student.eval()
@@ -997,24 +992,23 @@ class Trainer:
             plt.show()
 
     def make_results_img(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
-        # unproj_matrix = np.linalg.pinv(proj_matrix)
-        n_rows = 10
-        indices = torch.randint(0, len(generated_samples), (n_rows**2,))
+        unproj_matrix = np.linalg.pinv(proj_matrix)
+
+        indices = torch.randint(0, len(generated_samples), (25,))
         labels = generated_labels[indices]
         samples = generated_samples[indices]
 
-        # gen_imgs = samples @ unproj_matrix
-
-        img_shape = (1, 28, 28)
-        # gen_imgs = samples
-        im = np.reshape(samples, (samples.shape[0], *img_shape))
+        gen_imgs = samples @ unproj_matrix
+        im = np.reshape(gen_imgs, (gen_imgs.shape[0], 28, 28))
         im = torch.from_numpy(im)
+        im = im.unsqueeze(1)
+        # im = np.transpose(im, (1, 2, 0))
 
         save_folder = os.path.join(self.log_path, "imgs")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
-        grid = make_grid(im, nrow=10, normalize=True)
+        grid = make_grid(im, nrow=5, normalize=True)
         fig, ax = plt.subplots(figsize=(10, 10))
         ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
         ax.axis('off')
