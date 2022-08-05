@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from trainer_cgan import Trainer
+from trainer_blackbox_mixup_cnn import Trainer
 from options.options import Options
 import os
 import argparse
@@ -32,5 +32,5 @@ if __name__ == "__main__":
     opts.set_defaults(**config)
 
     trainer = Trainer(opts.parse_args())
-    trainer.train()
-    #trainer.main()
+    #trainer.train()
+    trainer.main()

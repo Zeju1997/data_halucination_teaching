@@ -70,9 +70,6 @@ class BaseConv(conv.ConvModel):
         self.optim.zero_grad()
         out = self(X)
         loss = self.loss_fn(out, y)
-
-        # a = list(self.parameters())[0].clone()
-
         loss.backward()
         self.optim.step()
 

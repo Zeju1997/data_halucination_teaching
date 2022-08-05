@@ -8,6 +8,7 @@ checkpoints/
 *ipynb
 .ipynb_checkpoints/
 .idea/
+*.mp4
 
 # data folder
 data/

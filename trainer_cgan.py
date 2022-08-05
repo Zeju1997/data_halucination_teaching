@@ -46,6 +46,8 @@ import glob
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
+torch.manual_seed(0)
+
 
 # custom weights initialization called on netG and netD
 def weights_init(m):
@@ -263,7 +265,7 @@ class Trainer:
         # self.set_train()
 
         if self.opt.data_mode == "cifar10":
-            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X = next(iter(train_loader))[0].numpy()
             y = next(iter(train_loader))[1].numpy()
             (N, W, H, C) = self.train_dataset.data.shape
@@ -271,7 +273,7 @@ class Trainer:
             example = utils.BaseConv(self.opt.eta)
 
         elif self.opt.data_mode == "mnist":
-            data_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            data_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X = next(iter(data_loader))[0].numpy()
             Y = next(iter(data_loader))[1].numpy()
             (N, W, H) = self.train_dataset.data.shape
@@ -749,7 +751,8 @@ class Trainer:
                     #  Train Discriminator
                     # ---------------------
 
-                    for _ in range(self.opt.n_critic):
+                    # for _ in range(self.opt.n_critic):
+                    if i % self.opt.n_critic == 0:
                         optimizer_D.zero_grad()
 
                         # Loss for real images
@@ -1122,14 +1125,12 @@ class Trainer:
         for file_name in glob.glob("*.png"):
             os.remove(file_name)
 
-
     def log(self, mode, d_loss, g_loss):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
         writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
         writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
-
 
     def main(self):
         X_test = next(iter(self.test_loader))[0].numpy()

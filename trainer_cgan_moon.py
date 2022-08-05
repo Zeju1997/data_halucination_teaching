@@ -263,7 +263,7 @@ class Trainer:
         # self.set_train()
 
         if self.opt.data_mode == "cifar10":
-            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X = next(iter(train_loader))[0].numpy()
             y = next(iter(train_loader))[1].numpy()
             (N, W, H, C) = self.train_dataset.data.shape
@@ -271,7 +271,7 @@ class Trainer:
             example = utils.BaseConv(self.opt.eta)
 
         elif self.opt.data_mode == "mnist":
-            data_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            data_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X = next(iter(data_loader))[0].numpy()
             Y = next(iter(data_loader))[1].numpy()
             (N, W, H) = self.train_dataset.data.shape

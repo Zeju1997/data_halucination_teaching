@@ -161,7 +161,7 @@ class Trainer:
         # Y_train = self.train_dataset.targets
 
         if self.opt.data_mode == "cifar10":
-            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X_train = next(iter(train_loader))[0].numpy()
             Y_train = next(iter(train_loader))[1].numpy()
             (N, W, H, C) = self.train_dataset.data.shape
@@ -172,7 +172,7 @@ class Trainer:
             y = Y_train
 
         elif self.opt.data_mode == "mnist":
-            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset), shuffle=False)
             X_train = next(iter(train_loader))[0].numpy()
             Y_train = next(iter(train_loader))[1].numpy()
             (N, W, H) = self.train_dataset.data.shape

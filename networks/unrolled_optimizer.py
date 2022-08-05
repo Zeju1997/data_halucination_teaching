@@ -57,15 +57,15 @@ class Discriminator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         self.model = nn.Sequential(
-            nn.Linear(opt.label_dim + int(np.prod(self.img_shape)), 512),
+            nn.Linear(opt.label_dim + int(np.prod(self.img_shape)), 256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 512),
+            nn.Linear(256, 256),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 512),
+            nn.Linear(256, 256),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 1),
+            nn.Linear(256, 1),
             # nn.Sigmoid()
         )
 
