@@ -16,7 +16,6 @@ import torch.nn as nn
 import json
 import os
 import networks
-import data
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
