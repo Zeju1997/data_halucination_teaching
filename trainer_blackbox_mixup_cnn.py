@@ -243,8 +243,8 @@ class Trainer:
 
                 # self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
 
-                torch.save(self.teacher.state_dict(), 'pretrained/teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('pretrained/teacher.pth'))
+                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+                # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
                 self.student = networks.ResNet18().cuda()
                 # self.student = networks.MLP().cuda()
@@ -729,7 +729,7 @@ class Trainer:
                 print("idx", idx, "avg loss:", avg_loss)
 
                 # if avg_loss < 5:
-                    # torch.save(netG.state_dict(), 'pretrained/netG.pth')
+                    # torch.save(netG.state_dict(), 'netG.pth')
                     #break
 
                 cls_loss = cls_loss + student_loss
@@ -848,8 +848,8 @@ class Trainer:
 
         # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         # self.student.load_state_dict(w_init)
-        self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
-        # netG.load_state_dict(torch.load('pretrained/netG.pth'))
+        self.student.load_state_dict(torch.load('eacher_w0.pth'))
+        # netG.load_state_dict(torch.load('netG.pth'))
 
         w_student2 = []
         for param in self.student.parameters():
@@ -1201,7 +1201,7 @@ class Trainer:
 
         # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         # self.student.load_state_dict(w_init)
-        self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
         self.student.train()
         train_loss = []
