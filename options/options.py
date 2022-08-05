@@ -16,7 +16,7 @@ class Options:
         self.parser.add_argument("--base_dir", type=str, help="path to the training data", default=os.path.join("datasets/retouch-dataset/pre_processed"))
         self.parser.add_argument("--list_dir", type=str, help="path to the split", default=os.path.join(file_dir, "splits", "split_cirrus_balanced"))
         self.parser.add_argument("--log_dir", type=str, help="log directory", default=os.path.join(file_dir, "log"))
-        self.parser.add_argument("--model_name", type=str, help="name of the model", default='CGAN')
+        self.parser.add_argument("--model_name", type=str, help="name of the model", default='Blackbox')
         self.parser.add_argument("--data_mode", type=str, help="data mode", default='mnist')
 
         # Teacher Parameters

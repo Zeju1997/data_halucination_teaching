@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 import json
@@ -184,7 +184,7 @@ def weight_diff(w_star, w):
 class Trainer:
     def __init__(self, options):
         self.opt = options
-        self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+        self.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
 
         self.visualize = True
 
@@ -206,9 +206,11 @@ class Trainer:
                 transforms.ToTensor(),
                 transforms.Normalize((0.1307,), (0.3081,)),
             ])
-
-            self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-            self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            # train, valid = random_split(train_dataset, [50000, 10000])
+            test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, shuffle=True)
+            self.test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, shuffle=True)
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
         elif self.opt.data_mode == "moon":
@@ -222,11 +224,15 @@ class Trainer:
         self.get_teacher_student()
 
         self.writers = {}
-        for mode in ["train", "val"]:
+        for mode in ["train", "test"]:
             self.writers[mode] = SummaryWriter(os.path.join(self.log_path, mode))
 
         # self.loss_fn = nn.MSELoss()
         self.loss_fn = nn.CrossEntropyLoss()
+
+        self.step = 0
+
+        self.experiment = "teacher"
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
@@ -359,12 +365,10 @@ class Trainer:
 
         elif self.opt.data_mode == "mnist":
             example = networks.ResNet18().cuda()
-            # example = networks.MLP().cuda()
             tmp_student = networks.ResNet18().cuda()
-            # tmp_student = networks.MLP().cuda()
             mixup_baseline = networks.ResNet18().cuda()
-            # mixup_baseline = networks.MLP().cuda()
 
+            '''
             # Selecting classes
             idx = (self.train_dataset.targets == self.opt.class_1) | (self.train_dataset.targets == self.opt.class_2)
             self.train_dataset.targets = self.train_dataset.targets[idx]
@@ -375,23 +379,8 @@ class Trainer:
 
             X = next(iter(train_loader))[0].numpy()
             Y = next(iter(train_loader))[1].numpy()
-
             '''
-            (N, W, H) = self.train_dataset.data.shape
-            # dim = W*H
-            
 
-            # X_train = np.asarray(self.train_dataset.data.reshape((N, dim)))
-            # X = X.reshape((N, dim))
-            # Y_train = np.asarray(self.train_dataset.targets)
-            # Y_train = np.asarray(self.train_dataset.targets)
-
-            # create new data set with class 1 as 0 and class 2 as 1
-            f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
-            X = X[f]
-            Y = Y[f]
-            Y = np.where(Y == self.opt.class_1, 0, 1)
-            '''
         elif self.opt.data_mode == "gaussian":
             dim__diff = 7
             nb_data_per_class = 1000
@@ -457,19 +446,11 @@ class Trainer:
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-        # X_train = np.asarray(self.train_dataset.data.reshape((N, dim)))
-        # X_train = np.asarray(X_train)
-        # Y_train = np.asarray(self.train_dataset.targets)
-        # Y_train = np.asarray(Y_train)
-
         # Shuffle datasets
-        randomize = np.arange(X.shape[0])
-        np.random.shuffle(randomize)
-        X = X[randomize]
-        Y = Y[randomize]
-
-        # X = X[:self.opt.nb_train + self.opt.nb_test]
-        # y = y[:self.opt.nb_train + self.opt.nb_test]
+        # randomize = np.arange(X.shape[0])
+        # np.random.shuffle(randomize)
+        # X = X[randomize]
+        # Y = Y[randomize]
 
         nb_batch = int(self.opt.nb_train / self.opt.batch_size)
 
@@ -479,14 +460,15 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test])
             y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
         elif self.opt.data_mode == "mnist":
-            X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
-            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
+            pass
+            # X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
+            # y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
 
-            X_val = torch.tensor(X[self.opt.nb_train:self.opt.nb_train*2], dtype=torch.float)
-            y_val = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train*2], dtype=torch.float)
+            # X_val = torch.tensor(X[self.opt.nb_train:self.opt.nb_train*2], dtype=torch.float)
+            # y_val = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train*2], dtype=torch.float)
 
-            X_test = torch.tensor(X[self.opt.nb_train*2:self.opt.nb_train*2 + self.opt.nb_test], dtype=torch.float)
-            y_test = torch.tensor(Y[self.opt.nb_train*2:self.opt.nb_train*2 + self.opt.nb_test], dtype=torch.float)
+            # X_test = torch.tensor(X[self.opt.nb_train*2:self.opt.nb_train*2 + self.opt.nb_test], dtype=torch.float)
+            # y_test = torch.tensor(Y[self.opt.nb_train*2:self.opt.nb_train*2 + self.opt.nb_test], dtype=torch.float)
 
             # proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
             # X_train = X_train_im @ proj_matrix
@@ -504,78 +486,31 @@ class Trainer:
 
             proj_matrix = torch.eye(X.shape[1])
 
-        data_train = BaseDataset(X_train, y_train)
-        data_val = BaseDataset(X_val, y_val)
-        data_test = BaseDataset(X_test, y_test)
-        train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
-        val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
-        test_loader = DataLoader(data_test, batch_size=len(data_test), drop_last=True)
-
-        # train teacher
-        accuracies = []
-        w_teacher = []
-        teacher_optim = torch.optim.SGD(self.teacher.parameters(), lr=self.opt.eta)
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(teacher_optim, milestones=[80, 160], gamma=0.1)
-        self.opt.n_teacher_runs = 30
-        for epoch in tqdm(range(self.opt.n_teacher_runs)):
-            self.teacher.train()
-            if epoch != 0:
-                self.train(self.teacher, train_loader, self.loss_fn, teacher_optim, epoch)
-
-            # acc = self.test(model=self.teacher, test_loader=test_loader)
-            acc, test_loss = self.test(model=self.teacher, test_loader=test_loader)
-            # accuracies.append(test_loss)
-            accuracies.append(acc)
-
-            '''
-            self.teacher.eval()
-            test = self.teacher(X_test.cuda()).cpu()
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-
-                # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                # nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-
-            accuracies.append(acc)
-            print("Accuracy:", acc.item())
-            self.scheduler.step()
-
-            self.teacher.train()
-            '''
-
-        if self.visualize == False:
-            fig = plt.figure()
-            plt.plot(accuracies, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-            # plt.close()
+        # data_train = BaseDataset(X_train, y_train)
+        # data_val = BaseDataset(X_val, y_val)
+        # data_test = BaseDataset(X_test, y_test)
+        # train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
+        # val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
+        # test_loader = DataLoader(data_test, batch_size=len(data_test), drop_last=True)
 
 
         # for param in self.teacher.parameters():
         #    w_teacher.append(param.data)
 
         # train example
+        self.experiment = "SGD"
         res_example = []
         res_loss_example = []
         a_example = []
         b_example = []
         w_diff_example = []
+        self.step = 0
         example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.eta)
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
-                self.train(example, train_loader, self.loss_fn, example_optim, epoch)
+                self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
 
-            acc, test_loss = self.test(example, test_loader=test_loader)
+            acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
             res_loss_example.append(test_loss)
             res_example.append(acc)
 
@@ -632,7 +567,9 @@ class Trainer:
             plt.legend()
             plt.show()
 
+
         # mixup baseline
+        self.experiment = "Vanilla Mixup"
         res_mixup = []
         res_loss_mixup = []
         a_mixup = []
@@ -646,7 +583,7 @@ class Trainer:
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
                 mixup_baseline.train()
-                for batch_idx, (inputs, targets) in enumerate(train_loader):
+                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
                     inputs, targets = inputs.cuda(), targets.long().cuda()
                     mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
@@ -664,10 +601,13 @@ class Trainer:
                     loss.backward()
                     mixup_baseline_optim.step()
 
+                    self.step += 1
+
                     if batch_idx % self.opt.log_interval == 0:
                         print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(train_loader.dataset),
-                            100. * batch_idx / len(train_loader), loss.item()))
+                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                            100. * batch_idx / len(self.train_loader), loss.item()))
+                        self.log(mode="train", name="", value=loss.item(), step=self.step)
 
                 '''
                 # w_t = self.student.lin.weight
@@ -702,7 +642,7 @@ class Trainer:
                 # mixup_baseline.update(mixed_x, mixed_y)
                 '''
 
-            acc, test_loss = self.test(mixup_baseline, test_loader=test_loader)
+            acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
             res_mixup.append(acc)
             res_loss_mixup.append(test_loss)
 
@@ -746,6 +686,7 @@ class Trainer:
             plt.legend()
             plt.show()
 
+        sys.exit()
 
         # train student
         if self.opt.data_mode == "moon":
@@ -988,6 +929,56 @@ class Trainer:
             # diff = weight_diff(w_teacher, w_student)
             # w_diff_student.append(diff)
 
+        sys.exit()
+
+        # train teacher
+        accuracies = []
+        w_teacher = []
+        teacher_optim = torch.optim.SGD(self.teacher.parameters(), lr=self.opt.eta)
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(teacher_optim, milestones=[80, 160], gamma=0.1)
+        self.opt.n_teacher_runs = 30
+        for epoch in tqdm(range(self.opt.n_teacher_runs)):
+            self.teacher.train()
+            if epoch != 0:
+                self.train(self.teacher, train_loader, self.loss_fn, teacher_optim, epoch)
+
+            # acc = self.test(model=self.teacher, test_loader=test_loader)
+            acc, test_loss = self.test(model=self.teacher, test_loader=test_loader)
+            # accuracies.append(test_loss)
+            accuracies.append(acc)
+
+            '''
+            self.teacher.eval()
+            test = self.teacher(X_test.cuda()).cpu()
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+                _, predicted = torch.max(test, dim=1)
+                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+
+                # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                # nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+
+            accuracies.append(acc)
+            print("Accuracy:", acc.item())
+            self.scheduler.step()
+
+            self.teacher.train()
+            '''
+
+        if self.visualize == False:
+            fig = plt.figure()
+            plt.plot(accuracies, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+            # plt.close()
 
         '''
         # train baseline
@@ -1384,12 +1375,37 @@ class Trainer:
             loss = loss_fn(output, target)
             loss.backward()
             optimizer.step()
+
+            self.step += 1
             if batch_idx % self.opt.log_interval == 0:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item()))
+                self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-    def test(self, model, test_loader):
+    def val(self, model, train_loader, loss_fn, optimizer, epoch):
+        model.train()
+        for batch_idx, (data, target) in enumerate(train_loader):
+
+            # first_image = np.array(data.cpu(), dtype='float')
+            # pixels = first_image.reshape((28, 28))
+            # plt.imshow(pixels, cmap='gray')
+            # plt.title("Label {}".format(target.item()))
+            # plt.show()
+
+            data, target = data.cuda(), target.long().cuda()
+            optimizer.zero_grad()
+            output = model(data)
+            loss = loss_fn(output, target)
+            loss.backward()
+            optimizer.step()
+            if batch_idx % self.opt.log_interval == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    epoch, batch_idx * len(data), len(train_loader.dataset),
+                    100. * batch_idx / len(train_loader), loss.item()))
+                self.log(mode="train", name="loss", value=loss.item())
+
+    def test(self, model, test_loader, epoch):
         model.eval()
         test_loss = 0
         correct = 0
@@ -1406,10 +1422,12 @@ class Trainer:
         test_loss /= len(test_loader.dataset)
 
         acc = correct / len(test_loader.dataset)
+        self.log(mode="test", name="acc", value=acc, step=epoch)
 
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
+        self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         return acc, test_loss
 
@@ -1578,12 +1596,11 @@ class Trainer:
                                                                                         cls=cls)
                 # acc_iou += losses["accuracy/iou_{}".format(fluid)]
 
-    def log(self, mode, d_loss, g_loss):
+    def log(self, mode, name, value, step):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
-        writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
+        writer.add_scalar("{}/{}/{}".format(self.experiment, mode, name), value, step)
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with
