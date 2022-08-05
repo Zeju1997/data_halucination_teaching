@@ -12,7 +12,6 @@ checkpoints/
 
 # data folder
 data/
-pretrained/
 
 # output folder
 log/
