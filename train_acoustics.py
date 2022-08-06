@@ -262,6 +262,7 @@ class Trainer:
 
     def load_data(self):
         transform = transforms.Compose([
+            transforms.Resize(224),
             transforms.ToTensor(),
             # transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -289,11 +290,12 @@ class Trainer:
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
         print("train dataset load!")
 
-        return test_loader, val_loader, train_loader
+        return train_loader, val_loader, test_loader
 
     def main(self):
         """Run a single epoch of training and validation
         """
+        torch.manual_seed(args.seed)
 
         train_loader, val_loader, test_loader = self.load_data()
 
@@ -660,7 +662,7 @@ if __name__ == "__main__":
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--n_epochs', type=int, default=14, metavar='N',
+    parser.add_argument('--n_epochs', type=int, default=100, metavar='N',
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
@@ -682,6 +684,8 @@ if __name__ == "__main__":
                         help='For Saving the current Model')
 
     args = parser.parse_args()
+
+    print(args)
 
     trainer = Trainer(args)
     trainer.main()
