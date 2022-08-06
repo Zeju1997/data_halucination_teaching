@@ -210,11 +210,11 @@ class Trainer:
                 transforms.ToTensor(),
                 transforms.Normalize((0.1307,), (0.3081,)),
             ])
-            train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             # train, valid = random_split(train_dataset, [50000, 10000])
-            test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
-            self.train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, shuffle=True)
-            self.test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, shuffle=True)
+            self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True)
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
         elif self.opt.data_mode == "moon":
@@ -512,7 +512,7 @@ class Trainer:
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0005, betas=(0.9, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_loader=self.train_loader, proj_matrix=None)
+        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
         adversarial_loss = torch.nn.MSELoss()
         res_student = []
         res_loss_student = []

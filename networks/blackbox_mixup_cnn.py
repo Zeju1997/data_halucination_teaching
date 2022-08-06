@@ -221,7 +221,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, train_loader, proj_matrix=None):
+    def __init__(self, opt, teacher, student, generator, train_dataset, proj_matrix=None):
         super(UnrolledBlackBoxOptimizer, self).__init__()
 
         self.opt = opt
@@ -235,9 +235,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         self.student = student
         self.generator = generator
 
-        self.data_iter = iter(train_loader)
+        self.dataset = train_dataset
 
-        # self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
+        self.nb_batch = int(len(train_dataset) / self.opt.batch_size)
 
         self.proj_matrix = proj_matrix
 
@@ -280,9 +280,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # i = torch.randint(0, self.nb_batch, size=(1,)).item()
             # gt_x_2, gt_y_2 = self.data_sampler(self.X, self.Y, i)
 
-            # i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = next(self.data_iter)
-            gt_x, gt_y = gt_x.cuda(), gt_y.cuda()
+            i = torch.randint(0, self.nb_batch, size=(1,)).item()
+            gt_x, gt_y = self.data_sampler(self.dataset, i)
 
             lam = self.generator(gt_x.cuda(), gt_y.cuda())
 
@@ -491,14 +490,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return grad_gen, loss_stu.item(), student_loss #, generated_x, gt_y, g_loss
 
-    def data_sampler(self, X, y, i):
+    def data_sampler(self, dataset, i):
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
 
-        x = X[i_min:i_max].cuda()
-        y = y[i_min:i_max].cuda()
+        x = dataset.data[i_min:i_max].cuda()
+        y = dataset.targets[i_min:i_max].cuda()
 
-        return x, y
+        return x.unsqueeze(1), y
 
 
 
