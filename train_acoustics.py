@@ -281,7 +281,7 @@ class Trainer:
         val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
         print("val dataset load!")
 
-        with open(os.path.join(self.opt.data_dir, 'test_features.p'), 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'validation_features.p'), 'rb') as f:
             x = pickle.load(f)
         with open(os.path.join(self.opt.data_dir, 'test_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
@@ -289,7 +289,7 @@ class Trainer:
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
         print("train dataset load!")
 
-        return train_loader, val_loader, test_loader
+        return test_loader, val_loader, train_loader
 
     def main(self):
         """Run a single epoch of training and validation
@@ -656,7 +656,7 @@ if __name__ == "__main__":
 
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch_size', type=int, default=1, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
