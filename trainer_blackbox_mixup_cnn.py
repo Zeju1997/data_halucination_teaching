@@ -657,18 +657,18 @@ class Trainer:
             # plt.close()
 
 
-        w_student1 = []
-        for param in self.student.parameters():
-            w_student1.append(param.data.clone())
+        # w_student1 = []
+        # for param in self.student.parameters():
+        #     w_student1.append(param.data.clone())
 
         # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         # self.student.load_state_dict(w_init)
         self.student.load_state_dict(torch.load('teacher_w0.pth'))
         # netG.load_state_dict(torch.load('netG.pth'))
 
-        w_student2 = []
-        for param in self.student.parameters():
-            w_student2.append(param.data.clone())
+        # w_student2 = []
+        # for param in self.student.parameters():
+        #    w_student2.append(param.data.clone())
 
         self.experiment = "Trained Mixup"
         student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
@@ -681,7 +681,7 @@ class Trainer:
                     inputs, targets = inputs.cuda(), targets.long().cuda()
                     # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
-                    index = torch.randperm(self.opt.batch_size).cuda()
+                    index = torch.randperm(inputs.shape[0]).cuda()
                     lam = netG(inputs, targets.long())
                     lam = torch.unsqueeze(lam, 2)
                     lam = torch.unsqueeze(lam, 3)
