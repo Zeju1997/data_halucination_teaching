@@ -265,36 +265,32 @@ class Trainer:
             transforms.ToTensor(),
             # transforms.Normalize((0.1307,), (0.3081,))
         ])
-        with open('./data/acoustics/test_features.p', 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'test_features.p'), 'rb') as f:
             x = pickle.load(f)
-
-        with open('./data/acoustics/test_scene_labels.p', 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'test_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-
-        test_train = SpectrogramDataset(x, y, transform)
-        test_loader = DataLoader(test_train, batch_size=self.opt.batch_size, drop_last=True)
+        data_test = SpectrogramDataset(x, y, transform)
+        test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
         print("test dataset load!")
 
-        with open('./data/acoustics/validation_features.p', 'rb') as f:
+        '''
+        with open(os.path.join(self.opt.data_dir, 'validation_features.p'), 'rb') as f:
             x = pickle.load(f)
-
-        with open('./data/acoustics/validation_scene_labels.p', 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'validation_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-
         data_val = SpectrogramDataset(x, y, transform)
         val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
         print("val dataset load!")
 
-        with open('./data/acoustics/test_features.p', 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'test_features.p'), 'rb') as f:
             x = pickle.load(f)
-
-        with open('./data/acoustics/test_scene_labels.p', 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'test_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-
         data_train = SpectrogramDataset(x, y, transform)
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
         print("train dataset load!")
-        return train_loader, val_loader, test_loader
+        '''
+        return test_loader, test_loader, test_loader
 
     def main(self):
         """Run a single epoch of training and validation
@@ -353,10 +349,11 @@ class Trainer:
             # plt.title("Label {}".format(target.item()))
             # plt.show()
 
-            data, target = data.float().cuda(), target.long().cuda()
+            data, target = data.float().cuda(), target.cuda()
+            label = target.argmax(dim=1)
             optimizer.zero_grad()
             output = model(data)
-            loss = loss_fn(output, target)
+            loss = loss_fn(output, label)
             loss.backward()
             optimizer.step()
 
@@ -396,12 +393,15 @@ class Trainer:
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
         with torch.no_grad():
             for data, target in test_loader:
-                data, target = data.float().cuda(), target.cuda()
+                data, target = data.float().cuda(), target.long().cuda()
+                label = target.argmax(dim=1)
                 output = model(data)
 
-                test_loss += loss_fn(output, target.long()).item()  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
+                test_loss += loss_fn(output, label).item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)
+
+                correct += pred.eq(label).sum().item()# get the index of the max log-probability
+                # correct += pred.eq(target.view_as(pred)).sum().item()
 
         test_loss /= len(test_loader.dataset)
 
@@ -653,13 +653,10 @@ class Trainer:
                                   sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
 
 
-
-
-
 if __name__ == "__main__":
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=2, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
