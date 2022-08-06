@@ -660,7 +660,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+    parser.add_argument('--test-batch_size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--n_epochs', type=int, default=100, metavar='N',
                         help='number of epochs to train (default: 14)')
