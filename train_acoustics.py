@@ -273,7 +273,6 @@ class Trainer:
         test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
         print("test dataset load!")
 
-        '''
         with open(os.path.join(self.opt.data_dir, 'validation_features.p'), 'rb') as f:
             x = pickle.load(f)
         with open(os.path.join(self.opt.data_dir, 'validation_scene_labels.p'), 'rb') as f:
@@ -289,8 +288,8 @@ class Trainer:
         data_train = SpectrogramDataset(x, y, transform)
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
         print("train dataset load!")
-        '''
-        return test_loader, test_loader, test_loader
+
+        return train_loader, val_loader, test_loader
 
     def main(self):
         """Run a single epoch of training and validation
@@ -654,6 +653,7 @@ class Trainer:
 
 
 if __name__ == "__main__":
+
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch_size', type=int, default=1, metavar='N',

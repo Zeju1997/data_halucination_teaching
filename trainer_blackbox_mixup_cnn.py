@@ -818,6 +818,7 @@ class Trainer:
             plt.legend()
             plt.show()
 
+        sys.exit()
 
         # mixup baseline
         self.experiment = "Vanilla Mixup"
