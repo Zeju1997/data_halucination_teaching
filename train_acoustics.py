@@ -308,7 +308,7 @@ class Trainer:
         w_diff_example = []
         self.step = 0
 
-        model = networks.ResNet18().cuda()
+        model = networks.ResNet18(in_channels=1).cuda()
         optimizer = torch.optim.SGD(model.parameters(), lr=self.opt.lr)
         scheduler = StepLR(optimizer, step_size=30, gamma=args.gamma)
         for epoch in tqdm(range(self.opt.n_epochs)):
