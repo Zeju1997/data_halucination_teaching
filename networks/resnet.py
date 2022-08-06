@@ -20,24 +20,24 @@ class ResNet(nn.Module):
         return output
 
 
-def ResNet18(in_channels=3):
-    return ResNet(model=18, in_channels=in_channels)
+def ResNet18(in_channels=3, num_classes=10):
+    return ResNet(model=18, in_channels=in_channels, num_classes=num_classes)
 
 
-def ResNet34(in_channels=3):
-    return ResNet(model=34, in_channels=in_channels)
+def ResNet34(in_channels=3, num_classes=10):
+    return ResNet(model=34, in_channels=in_channels, num_classes=num_classes)
 
 
-def ResNet50(in_channels=3):
-    return ResNet(model=50, in_channels=in_channels)
+def ResNet50(in_channels=3, num_classes=10):
+    return ResNet(model=50, in_channels=in_channels, num_classes=num_classes)
 
 
-def ResNet101(in_channels=3):
-    return ResNet(model=101, in_channels=in_channels)
+def ResNet101(in_channels=3, num_classes=10):
+    return ResNet(model=101, in_channels=in_channels, num_classes=num_classes)
 
 
-def ResNet152(in_channels=3):
-    return ResNet(model=152, in_channels=in_channels)
+def ResNet152(in_channels=3, num_classes=10):
+    return ResNet(model=152, in_channels=in_channels, num_classes=num_classes)
 
 
 def test():

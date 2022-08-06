@@ -494,10 +494,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
 
-        x = dataset.data[i_min:i_max].cuda()
-        y = dataset.targets[i_min:i_max].cuda()
+        x = torch.tensor(dataset.data[i_min:i_max]).cuda()
+        (N, W, H, C) = x.shape
+        x = torch.reshape(x, (N, C, W, H))
+        y = torch.tensor(dataset.targets[i_min:i_max]).cuda()
 
-        return x.unsqueeze(1), y
+        return x, y
 
 
 

@@ -6,6 +6,8 @@ import json
 
 import sys
 
+import csv
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -185,6 +187,7 @@ def weight_diff(w_star, w):
     return diff
 
 
+
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -198,12 +201,24 @@ class Trainer:
         self.device = torch.device("cpu" if self.opt.no_cuda else "cuda")
 
         if self.opt.data_mode == "cifar10":
-            self.train_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=True, download=True, transform=ToTensor())
-            self.test_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=False, download=True, transform=ToTensor())
-            # self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
-            self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
-            # self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                     (0.2023, 0.1994, 0.2010)),
+            ])
+            self.train_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            self.test_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
+            # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
+            # self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
+        elif self.opt.data_mode == "cifar100":
+            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=ToTensor())
+            self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=ToTensor())
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
+            # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
+            # self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
         elif self.opt.data_mode == "mnist":
             # MNIST normalizing
             transform = transforms.Compose([
@@ -235,18 +250,26 @@ class Trainer:
         self.loss_fn = nn.CrossEntropyLoss()
 
         self.step = 0
+        self.best_acc = 0
 
         self.experiment = "teacher"
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
             if self.opt.data_mode == "cifar10":
-                self.teacher = networks.ResNet50(in_channels=3).cuda()
+                self.teacher = networks.ResNet18(in_channels=3).cuda()
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
                 # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-                self.student = networks.ResNet50(in_channels=3).cuda()
-                self.baseline = networks.ResNet50(in_channels=3).cuda()
+                self.student = networks.ResNet18(in_channels=3).cuda()
+                self.baseline = networks.ResNet18(in_channels=3).cuda()
+            elif self.opt.data_mode == "cifar100":
+                self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+                # self.teacher.load_state_dict(torch.load('teacher.pth'))
+
+                self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
             else: # mnist / gaussian / moon
                 self.teacher = networks.ResNet18(in_channels=1).cuda()
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
@@ -350,6 +373,16 @@ class Trainer:
 
         return x, y
 
+    def adjust_learning_rate(self, optimizer, epoch):
+        """decrease the learning rate at 100 and 150 epoch"""
+        lr = self.opt.lr
+        if epoch >= 100:
+            lr /= 10
+        if epoch >= 150:
+            lr /= 10
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
     def main(self):
         """Run a single epoch of training and validation
         """
@@ -357,15 +390,22 @@ class Trainer:
         print("Training")
         # self.set_train()
 
+        torch.manual_seed(self.opt.seed)
+
         if self.opt.data_mode == "cifar10":
-            example = networks.ResNet50(in_channels=3).cuda()
-            tmp_student = networks.ResNet50(in_channels=3).cuda()
-            mixup_baseline = networks.ResNet50(in_channels=3).cuda()
+            example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+            tmp_student = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+
+        elif self.opt.data_mode == "cifar100":
+            example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
 
         elif self.opt.data_mode == "mnist":
-            example = networks.ResNet18(in_channels=1).cuda()
-            tmp_student = networks.ResNet18(in_channels=1).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=1).cuda()
+            example = networks.ResNet18(in_channels=1, num_classes=10).cuda()
+            tmp_student = networks.ResNet18(in_channels=1, num_classes=10).cuda()
+            mixup_baseline = networks.ResNet18(in_channels=1, num_classes=10).cuda()
 
         else:
             print("Unrecognized data mode!")
@@ -375,17 +415,23 @@ class Trainer:
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-
         # train example
         self.experiment = "SGD"
+
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
         res_example = []
         res_loss_example = []
         a_example = []
         b_example = []
         w_diff_example = []
         self.step = 0
-        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.eta)
-        example_scheduler = StepLR(example_optim, step_size=30, gamma=0.1)
+        self.best_acc = 0
+        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
                 self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
@@ -393,7 +439,12 @@ class Trainer:
             acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
             res_loss_example.append(test_loss)
             res_example.append(acc)
-            example_scheduler.step()
+
+            self.adjust_learning_rate(example_optim, epoch)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
 
             '''
             example.eval()
@@ -426,11 +477,6 @@ class Trainer:
             # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
             # w_diff_example.append(diff.detach().clone().cpu())
 
-            if acc > 0.6 and epoch == 0:
-                sys.exit()
-
-            example.train()
-
         if self.visualize == False:
             fig = plt.figure()
             plt.plot(res_loss_example, c="b", label="Teacher (CNN)")
@@ -450,7 +496,14 @@ class Trainer:
 
 
         # mixup baseline
-        self.experiment = "Vanilla Mixup"
+        self.experiment = "Vanilla_Mixup"
+
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
         res_mixup = []
         res_loss_mixup = []
         a_mixup = []
@@ -462,6 +515,8 @@ class Trainer:
         total = 0
         mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.eta)
         mixup_baseline_scheduler = StepLR(mixup_baseline_optim, step_size=30, gamma=0.1)
+        self.step = 0
+        self.best_acc = 0
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
                 mixup_baseline.train()
@@ -527,7 +582,12 @@ class Trainer:
             acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
             res_mixup.append(acc)
             res_loss_mixup.append(test_loss)
-            mixup_baseline_scheduler.step()
+
+            self.adjust_learning_rate(mixup_baseline_optim, epoch)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
             '''
             mixup_baseline.eval()
             test = mixup_baseline(X_test.cuda()).cpu()
@@ -568,10 +628,6 @@ class Trainer:
             plt.legend()
             plt.show()
 
-
-        sys.exit()
-
-
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()
         netG.apply(weights_init)
@@ -591,8 +647,6 @@ class Trainer:
         loss_d = []
         w_diff_student = []
         # w, h = generator.linear.weight.shape
-
-        self.step = 0
 
         w_init = self.student.state_dict()
         # new_weight = w_init
@@ -737,7 +791,13 @@ class Trainer:
         # for param in self.student.parameters():
         #    w_student2.append(param.data.clone())
 
-        self.experiment = "Trained Mixup"
+        self.experiment = "Trained_Mixup"
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
         student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         self.student.train()
         self.step = 0
@@ -783,6 +843,10 @@ class Trainer:
             acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
             res_student.append(acc)
             res_loss_student.append(test_loss)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
 
             '''
             self.student.eval()
@@ -1314,6 +1378,11 @@ class Trainer:
             100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
+        if epoch == 0 or acc > self.best_acc:
+            self.save_model(model=model)
+        if acc > self.best_acc:
+            best_acc = acc
+
         return acc, test_loss
 
     def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
@@ -1498,21 +1567,16 @@ class Trainer:
         with open(os.path.join(models_dir, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
 
-    def save_model(self):
+    def save_model(self, model):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+        save_folder = os.path.join(self.log_path, "weights")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
-        for model_name, model in self.models.items():
-            save_path = os.path.join(save_folder, "{}.pth".format(model_name))
-            to_save = model.state_dict()
-            torch.save(to_save, save_path)
-
-        if self.epoch >= self.opt.start_saving_optimizer:
-            save_path = os.path.join(save_folder, "{}.pth".format("adam"))
-            torch.save(self.model_optimizer.state_dict(), save_path)
+        save_path = os.path.join(save_folder, "best_model.pth")
+        to_save = model.state_dict()
+        torch.save(to_save, save_path)
 
     def load_model(self):
         """Load model(s) from disk

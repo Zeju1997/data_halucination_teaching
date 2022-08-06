@@ -1,4 +1,4 @@
-data_mode: cifar10
+data_mode: cifar100
 teaching_mode: omniscient
 same_feat_space: True
 n_iter: 800 # 500 # 200
@@ -23,8 +23,10 @@ save_frequency: 1
 label_dim: 10
 n_critic: 1
 log_interval: 100
-n_classes: 10
-model_name: Blackbox_CIFAR10
+n_classes: 100
+model_name: Blackbox_CIFAR100
+lr: 0.1
+decay: 0.0001
 seed: 1
 channels: 3
 img_size: 32
