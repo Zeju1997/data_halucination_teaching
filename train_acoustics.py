@@ -30,9 +30,7 @@ import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 
-from datasets import MoonDataset
-
-from datasets import BaseDataset
+from datasets import SpectrogramDataset
 
 import networks.cgan as cgan
 import networks.unrolled_optimizer as unrolled
@@ -44,6 +42,8 @@ from sklearn.model_selection import train_test_split
 
 import subprocess
 import glob
+
+import pickle
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
@@ -130,7 +130,7 @@ def mixup_data(x, y, alpha=1.0):
     batch_size = x.shape[0]
     index = torch.randperm(batch_size).cuda()
 
-    if alpha != 1:
+    if alpha > 0:
         lam = np.random.beta(alpha, alpha, size=(x.shape[0]))
         lam = torch.tensor(lam, dtype=torch.float).cuda()
         # mixed_y = lam * y + (1 - lam) * y[index]
@@ -140,7 +140,7 @@ def mixup_data(x, y, alpha=1.0):
         lam = torch.unsqueeze(lam, 3)
         mixed_x = lam * x + (1 - lam) * x[index, :]
     else:
-        lam = np.random.beta(alpha, alpha)
+        lam = 1
         mixed_x = lam * x + (1 - lam) * x[index, :]
 
     y_a, y_b = y, y[index]
@@ -150,7 +150,7 @@ def mixup_data(x, y, alpha=1.0):
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    # loss = torch.mean(loss)
+    loss = torch.mean(loss)
     return loss
 
 mean = (0.1307,)
@@ -1665,3 +1665,33 @@ class Trainer:
                        " | loss: {:.5f} | time elapsed: {} | time left: {}"
         print(print_string.format(self.epoch, batch_idx, samples_per_sec, loss,
                                   sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
+
+
+if __name__ == "__main__":
+    with open('./data/acoustics/test_features.p', 'rb') as f:
+        x = pickle.load(f)
+
+    with open('./data/acoustics/test_scene_labels.p', 'rb') as f:
+        y = pickle.load(f)
+
+    data_train = SpectrogramDataset(x, y)
+    train_loader = DataLoader(data_train, batch_size=1, drop_last=True)
+
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.cuda(), target.long().cuda()
+        target = np.argmax(target.cpu(), axis=1)
+        first_image = np.array(data.cpu(), dtype='float')
+        pixels = first_image.reshape((64, 431))
+        plt.imshow(pixels, cmap='gray')
+        plt.title("Label {}".format(target.item()))
+        plt.show()
+
+        print("lasdjflkajsdf")
+
+        # data, target = data.cuda(), target.long().cuda()
+
+
+    print("§klajkldfjlaksdf")
+    # trainer = Trainer()
+    # trainer.main()
+
