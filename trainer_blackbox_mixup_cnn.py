@@ -29,6 +29,7 @@ import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
+from torch.optim.lr_scheduler import StepLR
 
 from datasets import MoonDataset
 
@@ -37,7 +38,7 @@ from datasets import BaseDataset
 import networks.cgan as cgan
 import networks.unrolled_optimizer as unrolled
 import networks.blackbox_mixup_cnn as blackbox_mixup
-import networks
+# import networks
 
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
@@ -150,7 +151,12 @@ def mixup_data(x, y, alpha=1.0):
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    # loss = torch.mean(loss)
+    return loss
+
+
+def mixup_criterion_batch(criterion, pred, y_a, y_b, lam):
+    loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+    loss = torch.mean(loss)
     return loss
 
 mean = (0.1307,)
@@ -504,6 +510,7 @@ class Trainer:
         w_diff_example = []
         self.step = 0
         example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.eta)
+        example_scheduler = StepLR(example_optim, step_size=50, gamma=0.1)
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
                 self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
@@ -511,6 +518,7 @@ class Trainer:
             acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
             res_loss_example.append(test_loss)
             res_example.append(acc)
+            example_scheduler.step()
 
             '''
             example.eval()
@@ -605,7 +613,7 @@ class Trainer:
                         print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                             epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
                             100. * batch_idx / len(self.train_loader), loss.item()))
-                        self.log(mode="train", name="", value=loss.item(), step=self.step)
+                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
                 '''
                 # w_t = self.student.lin.weight
@@ -684,8 +692,6 @@ class Trainer:
             plt.legend()
             plt.show()
 
-        sys.exit()
-
         # train student
         if self.opt.data_mode == "moon":
             netG = blackbox_mixup.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
@@ -697,7 +703,7 @@ class Trainer:
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0005, betas=(0.9, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), proj_matrix=None)
+        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_loader=self.train_loader, proj_matrix=None)
         adversarial_loss = torch.nn.MSELoss()
         res_student = []
         res_loss_student = []
@@ -831,7 +837,7 @@ class Trainer:
         # plt.close()
         '''
 
-        if self.visualize == True:
+        if self.visualize == False:
             fig = plt.figure()
             # plt.plot(cls_loss, c="b", label="Teacher (CNN)")
             plt.plot(train_loss, c="b", label="Teacher (CNN)")
@@ -848,20 +854,21 @@ class Trainer:
 
         # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         # self.student.load_state_dict(w_init)
-        self.student.load_state_dict(torch.load('eacher_w0.pth'))
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
         # netG.load_state_dict(torch.load('netG.pth'))
 
         w_student2 = []
         for param in self.student.parameters():
             w_student2.append(param.data.clone())
 
+        self.experiment = "Trained Mixup"
         student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
         self.student.train()
-
+        self.step = 0
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
                 self.student.train()
-                for batch_idx, (inputs, targets) in enumerate(train_loader):
+                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
                     inputs, targets = inputs.cuda(), targets.long().cuda()
                     # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
@@ -882,19 +889,22 @@ class Trainer:
                     # plt.show()
 
                     outputs = self.student(mixed_x)
-                    loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
+                    loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
                     # loss = self.loss_fn(outputs, mixed_y.long())
 
                     student_optim.zero_grad()
                     loss.backward()
                     student_optim.step()
 
+                    self.step += 1
                     if batch_idx % self.opt.log_interval == 0:
                         print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(train_loader.dataset),
-                            100. * batch_idx / len(train_loader), loss.item()))
+                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                            100. * batch_idx / len(self.train_loader), loss.item()))
 
-            acc, test_loss = self.test(self.student, test_loader=test_loader)
+                    self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+            acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
             res_student.append(acc)
             res_loss_student.append(test_loss)
 
