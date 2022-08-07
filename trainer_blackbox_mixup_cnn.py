@@ -584,8 +584,6 @@ class Trainer:
             plt.legend()
             plt.show()
 
-        sys.exit()
-
         # train example
         self.experiment = "SGD"
         print("Start training {} ...".format(self.experiment))
@@ -664,8 +662,6 @@ class Trainer:
             plt.ylabel("Accuracy")
             plt.legend()
             plt.show()
-
-        sys.exit()
 
 
         # train student
@@ -1420,7 +1416,7 @@ class Trainer:
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         if epoch == 0 or acc > self.best_acc:
-            self.save_model(model=model)
+            self.save_model(model=model, name=self.experiment)
         if acc > self.best_acc:
             best_acc = acc
 
@@ -1608,14 +1604,14 @@ class Trainer:
         with open(os.path.join(models_dir, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
 
-    def save_model(self, model):
+    def save_model(self, model, name):
         """Save model weights to disk
         """
         save_folder = os.path.join(self.log_path, "weights")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
-        save_path = os.path.join(save_folder, "best_model.pth")
+        save_path = os.path.join(save_folder, "best_model_{}.pth".format(name))
         to_save = model.state_dict()
         torch.save(to_save, save_path)
 
