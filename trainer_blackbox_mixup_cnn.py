@@ -453,7 +453,7 @@ class Trainer:
 
         # mixup baseline
         self.experiment = "Vanilla_Mixup"
-
+        print("Start training {} ...".format(self.experiment))
         logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
@@ -588,7 +588,7 @@ class Trainer:
 
         # train example
         self.experiment = "SGD"
-
+        print("Start training {} ...".format(self.experiment))
         logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
@@ -832,6 +832,7 @@ class Trainer:
         #    w_student2.append(param.data.clone())
 
         self.experiment = "Trained_Mixup"
+        print("Start training {} ...".format(self.experiment))
         logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
