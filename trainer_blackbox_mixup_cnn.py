@@ -218,8 +218,8 @@ class Trainer:
                 transforms.Normalize((0.5071, 0.4865, 0.4409),
                                      (0.2673, 0.2564, 0.2762)),
             ])
-            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=ToTensor())
-            self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=ToTensor())
+            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
             # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
