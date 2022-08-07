@@ -25,6 +25,8 @@ n_critic: 1
 log_interval: 100
 n_classes: 10
 model_name: Blackbox_CIFAR10
+lr: 0.1
+decay: 0.0001
 seed: 1
 channels: 3
 img_size: 32
