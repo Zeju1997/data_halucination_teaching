@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision.models as models
 
 
-class ResNet1(nn.Module):
+class ResNet50(nn.Module):
     def __init__(self, model=18, in_channels=1, num_classes=10, pretrained=False):
         super(ResNet, self).__init__()
         if model == 18:
@@ -200,7 +200,7 @@ def ResNet34(in_channels=3, num_classes=10):
 
 
 def ResNet50(in_channels=3, num_classes=10):
-    return ResNet(model=50, in_channels=in_channels, num_classes=num_classes)
+    return ResNet50(model=50, in_channels=in_channels, num_classes=num_classes)
 
 
 def ResNet101(in_channels=3, num_classes=10):
