@@ -282,9 +282,9 @@ class Trainer:
         val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
         print("val dataset load!")
 
-        with open(os.path.join(self.opt.data_dir, 'validation_features.p'), 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'training_features.p'), 'rb') as f:
             x = pickle.load(f)
-        with open(os.path.join(self.opt.data_dir, 'test_scene_labels.p'), 'rb') as f:
+        with open(os.path.join(self.opt.data_dir, 'training_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
         data_train = SpectrogramDataset(x, y, transform)
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
