@@ -201,25 +201,55 @@ class Trainer:
         self.device = torch.device("cpu" if self.opt.no_cuda else "cuda")
 
         if self.opt.data_mode == "cifar10":
-            transform = transforms.Compose([
+            if self.opt.augment:
+                transform_train = transforms.Compose([
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                         (0.2023, 0.1994, 0.2010)),
+                ])
+            else:
+                transform_train = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                         (0.2023, 0.1994, 0.2010)),
+                ])
+
+            transform_test = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize((0.4914, 0.4822, 0.4465),
                                      (0.2023, 0.1994, 0.2010)),
             ])
-            self.train_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-            self.test_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.train_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=True, download=True, transform=transform_train)
+            self.test_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=False, download=True, transform=transform_test)
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
             # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
             # self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
         elif self.opt.data_mode == "cifar100":
-            transform = transforms.Compose([
+            if self.opt.augment:
+                transform_train = transforms.Compose([
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5071, 0.4865, 0.4409),
+                                         (0.2673, 0.2564, 0.2762)),
+                ])
+            else:
+                transform_train = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5071, 0.4865, 0.4409),
+                                         (0.2673, 0.2564, 0.2762)),
+                ])
+
+            transform_test = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize((0.5071, 0.4865, 0.4409),
                                      (0.2673, 0.2564, 0.2762)),
             ])
-            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-            self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform_train)
+            self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=transform_test)
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
             # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
@@ -420,87 +450,6 @@ class Trainer:
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-        # train example
-        self.experiment = "SGD"
-
-        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-        if not os.path.exists(logname):
-            with open(logname, 'w') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow(['epoch', 'test acc'])
-
-        res_example = []
-        res_loss_example = []
-        a_example = []
-        b_example = []
-        w_diff_example = []
-        self.step = 0
-        self.best_acc = 0
-        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
-
-            acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
-            res_loss_example.append(test_loss)
-            res_example.append(acc)
-
-            self.adjust_learning_rate(example_optim, epoch)
-
-            with open(logname, 'a') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow([epoch, acc])
-
-            '''
-            example.eval()
-            test = example(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
-            a_example.append(a)
-            b_example.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-
-            acc = nb_correct / X_test.size(0)
-            res_example.append(acc)
-            '''
-
-            # w_example = []
-            # for param in example.parameters():
-            #     w_example.append(param.data)
-
-            # diff = weight_diff(w_teacher, w_example)
-            # w_diff_example.append(diff)
-
-            # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
-            # w_diff_example.append(diff.detach().clone().cpu())
-
-        if self.visualize == False:
-            fig = plt.figure()
-            plt.plot(res_loss_example, c="b", label="Teacher (CNN)")
-            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-
-            fig = plt.figure()
-            plt.plot(res_example, c="b", label="Teacher (CNN)")
-            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-
-        sys.exit()
-
 
         # mixup baseline
         self.experiment = "Vanilla_Mixup"
@@ -628,12 +577,96 @@ class Trainer:
         if self.visualize == False:
             fig = plt.figure()
             # plt.plot(w_diff_mixup, c="c", label="Mixup")
-            plt.plot(res_example, c="g", label="SGD")
+            # plt.plot(res_example, c="g", label="SGD")
             plt.plot(res_mixup, c="b", label="Mixup")
             plt.xlabel("Epoch")
             plt.ylabel("Accuracy")
             plt.legend()
             plt.show()
+
+        sys.exit()
+
+        # train example
+        self.experiment = "SGD"
+
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
+        res_example = []
+        res_loss_example = []
+        a_example = []
+        b_example = []
+        w_diff_example = []
+        self.step = 0
+        self.best_acc = 0
+        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+        for epoch in tqdm(range(self.opt.n_epochs)):
+            if epoch != 0:
+                self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
+
+            acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
+            res_loss_example.append(test_loss)
+            res_example.append(acc)
+
+            self.adjust_learning_rate(example_optim, epoch)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
+
+            '''
+            example.eval()
+            test = example(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
+            a_example.append(a)
+            b_example.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                _, predicted = torch.max(test, dim=1)
+                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+
+            acc = nb_correct / X_test.size(0)
+            res_example.append(acc)
+            '''
+
+            # w_example = []
+            # for param in example.parameters():
+            #     w_example.append(param.data)
+
+            # diff = weight_diff(w_teacher, w_example)
+            # w_diff_example.append(diff)
+
+            # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
+            # w_diff_example.append(diff.detach().clone().cpu())
+
+        if self.visualize == False:
+            fig = plt.figure()
+            plt.plot(res_loss_example, c="b", label="Teacher (CNN)")
+            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+
+            fig = plt.figure()
+            plt.plot(res_example, c="b", label="Teacher (CNN)")
+            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+
+        sys.exit()
+
 
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()

@@ -30,3 +30,4 @@ decay: 0.0001
 seed: 1
 channels: 3
 img_size: 32
+augment: True
