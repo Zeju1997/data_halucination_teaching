@@ -262,7 +262,7 @@ class Trainer:
 
     def load_data(self):
         transform = transforms.Compose([
-            transforms.Resize(224),
+            # transforms.Resize(224),
             transforms.ToTensor(),
             # transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -308,7 +308,7 @@ class Trainer:
         w_diff_example = []
         self.step = 0
 
-        model = networks.ResNet18(in_channels=1).cuda()
+        model = networks.ResNet50(in_channels=1, num_classes=10).cuda()
         optimizer = torch.optim.SGD(model.parameters(), lr=self.opt.lr)
         scheduler = StepLR(optimizer, step_size=30, gamma=args.gamma)
         for epoch in tqdm(range(self.opt.n_epochs)):
