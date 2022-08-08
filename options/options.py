@@ -30,6 +30,8 @@ class Options:
         self.parser.add_argument("--n_teacher_runs", type=int, help="name of the teaching mode", default=300)
         self.parser.add_argument("--dim", type=int, help="name of the teaching mode", default=784)
         self.parser.add_argument("--eta", type=float, help="name of the teaching mode", default=2e-3)
+        self.parser.add_argument("--n_unroll", type=int, help="name of the teaching mode", default=1000)
+        self.parser.add_argument("--n_unroll_blocks", type=int, help="name of the teaching mode", default=40)
 
         # conditional GAN
         self.parser.add_argument("--n_epochs", type=int, help="name of the teaching mode", default=40)
