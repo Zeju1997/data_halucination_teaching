@@ -270,7 +270,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         student_parameters = list(self.student.parameters())
 
         self.student.train()
-        self.opt.n_unroll_blocks = 4
         for i in range(self.opt.n_unroll_blocks):
             # w_t = self.student.lin.weight
 
@@ -307,8 +306,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # loss = self.loss_fn(outputs, mixed_y.long())
 
             grad_stu = torch.autograd.grad(outputs=loss,
-                               inputs=student_parameters,
-                               create_graph=True, retain_graph=True)
+                                           inputs=student_parameters,
+                                           create_graph=True, retain_graph=True)
 
             with torch.no_grad():
                 for param, grad in zip(self.student.parameters(), grad_stu):

@@ -426,6 +426,12 @@ class Trainer:
         # self.set_train()
 
         torch.manual_seed(self.opt.seed)
+        # np.random.seed(args.seed)
+        # torch.cuda.set_device(args.gpu)
+        # cudnn.benchmark = True
+        # torch.manual_seed(args.seed)
+        # cudnn.enabled=True
+        # torch.cuda.manual_seed(args.seed)
 
         if self.opt.data_mode == "cifar10":
             example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
@@ -450,13 +456,12 @@ class Trainer:
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()
         netG.apply(weights_init)
 
-        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
-        # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0005, betas=(0.9, 0.999), eps=1e-08, amsgrad=False)
+        # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
+        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0005, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
         unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
         adversarial_loss = torch.nn.MSELoss()
@@ -579,17 +584,6 @@ class Trainer:
                 train_loss.append(loss.item())
                 '''
 
-        '''
-        fig = plt.figure()
-        # plt.plot(cls_loss, c="b", label="Teacher (CNN)")
-        plt.plot(train_loss, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        # plt.close()
-        '''
-
         if self.visualize == False:
             fig = plt.figure()
             # plt.plot(cls_loss, c="b", label="Teacher (CNN)")
@@ -599,6 +593,8 @@ class Trainer:
             plt.legend()
             plt.show()
             # plt.close()
+
+        sys.exit()
 
 
         # w_student1 = []
