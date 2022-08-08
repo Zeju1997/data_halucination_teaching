@@ -499,6 +499,8 @@ class Trainer:
                 cls_loss = cls_loss + student_loss
                 train_loss.append(avg_loss)
 
+                optimizer_G.zero_grad()
+
                 with torch.no_grad():
                     for p, g in zip(netG.parameters(), gradients):
                         p.grad = g
