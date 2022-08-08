@@ -40,6 +40,8 @@ import networks.unrolled_optimizer as unrolled
 import networks.blackbox_mixup_cnn as blackbox_mixup
 import networks
 
+import csv
+
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
@@ -202,6 +204,9 @@ class Trainer:
         self.loss_fn = nn.CrossEntropyLoss()
 
         self.step = 0
+        self.best_acc = 0
+
+        self.device = "A"
 
         self.experiment = "teacher"
 
@@ -260,7 +265,7 @@ class Trainer:
 
         return x, y
 
-    def load_data(self):
+    def load_data(self, device):
         transform = transforms.Compose([
             # transforms.Resize(224),
             transforms.ToTensor(),
@@ -270,24 +275,24 @@ class Trainer:
             x = pickle.load(f)
         with open(os.path.join(self.opt.data_dir, 'test_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-        data_test = SpectrogramDataset(x, y, transform)
-        test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
+        data_test = SpectrogramDataset(x, y, transform, device)
+        test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
         print("test dataset load!")
 
         with open(os.path.join(self.opt.data_dir, 'validation_features.p'), 'rb') as f:
             x = pickle.load(f)
         with open(os.path.join(self.opt.data_dir, 'validation_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-        data_val = SpectrogramDataset(x, y, transform)
-        val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True)
+        data_val = SpectrogramDataset(x, y, transform, device)
+        val_loader = DataLoader(data_val, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
         print("val dataset load!")
 
         with open(os.path.join(self.opt.data_dir, 'training_features.p'), 'rb') as f:
             x = pickle.load(f)
         with open(os.path.join(self.opt.data_dir, 'training_scene_labels.p'), 'rb') as f:
             y = pickle.load(f)
-        data_train = SpectrogramDataset(x, y, transform)
-        train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
+        data_train = SpectrogramDataset(x, y, transform, device)
+        train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
         print("train dataset load!")
 
         return train_loader, val_loader, test_loader
@@ -297,7 +302,7 @@ class Trainer:
         """
         torch.manual_seed(args.seed)
 
-        train_loader, val_loader, test_loader = self.load_data()
+        train_loader, val_loader, test_loader = self.load_data(self.device)
 
         # train example
         self.experiment = "SGD"
@@ -307,6 +312,12 @@ class Trainer:
         b_example = []
         w_diff_example = []
         self.step = 0
+
+        logname = os.path.join(self.log_path, 'results' + '_' + 'ResNet50' + '_' + self.device + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
 
         model = networks.ResNet50(in_channels=1, num_classes=10).cuda()
         optimizer = torch.optim.SGD(model.parameters(), lr=self.opt.lr)
@@ -319,6 +330,10 @@ class Trainer:
             res_loss_example.append(test_loss)
             res_example.append(acc)
             scheduler.step()
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
 
             # data, target = data.cuda(), target.long().cuda()
 
@@ -368,13 +383,6 @@ class Trainer:
     def val(self, model, train_loader, loss_fn, optimizer, epoch):
         model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
-
-            # first_image = np.array(data.cpu(), dtype='float')
-            # pixels = first_image.reshape((28, 28))
-            # plt.imshow(pixels, cmap='gray')
-            # plt.title("Label {}".format(target.item()))
-            # plt.show()
-
             data, target = data.cuda(), target.long().cuda()
             optimizer.zero_grad()
             output = model(data)
@@ -392,6 +400,7 @@ class Trainer:
         test_loss = 0
         correct = 0
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        best_acc = 0
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.float().cuda(), target.long().cuda()
@@ -399,7 +408,7 @@ class Trainer:
                 output = model(data)
 
                 test_loss += loss_fn(output, label).item()  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)
+                pred = output.argmax(dim=1, keepdim=False)
 
                 correct += pred.eq(label).sum().item()# get the index of the max log-probability
                 # correct += pred.eq(target.view_as(pred)).sum().item()
@@ -413,6 +422,11 @@ class Trainer:
             test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
+
+        if epoch == 0 or acc > self.best_acc:
+            self.save_model(model=model, name=self.experiment)
+        if acc > self.best_acc:
+            best_acc = acc
 
         return acc, test_loss
 
@@ -598,21 +612,16 @@ class Trainer:
         with open(os.path.join(models_dir, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
 
-    def save_model(self):
+    def save_model(self, model, name):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+        save_folder = os.path.join(self.log_path, "weights")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
-        for model_name, model in self.models.items():
-            save_path = os.path.join(save_folder, "{}.pth".format(model_name))
-            to_save = model.state_dict()
-            torch.save(to_save, save_path)
-
-        if self.epoch >= self.opt.start_saving_optimizer:
-            save_path = os.path.join(save_folder, "{}.pth".format("adam"))
-            torch.save(self.model_optimizer.state_dict(), save_path)
+        save_path = os.path.join(save_folder, "best_model_{}.pth".format(self.device))
+        to_save = model.state_dict()
+        torch.save(to_save, save_path)
 
     def load_model(self):
         """Load model(s) from disk
@@ -662,7 +671,7 @@ if __name__ == "__main__":
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch_size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--n_epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--n_epochs', type=int, default=70, metavar='N',
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
