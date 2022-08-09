@@ -63,6 +63,10 @@ class Options:
         self.parser.add_argument("--num_workers", type=int, help="number of dataloader workers", default=8)
         self.parser.add_argument("--log_frequency", type=int, help="number of batches between each tensorboard log", default=20)
 
+        self.parser.add_argument("--train_student", type=bool, help="number of batches between each tensorboard log", default=False)
+        self.parser.add_argument("--train_baseline", type=bool, help="number of batches between each tensorboard log", default=False)
+        self.parser.add_argument("--train_sgd", type=bool, help="number of batches between each tensorboard log", default=False)
+
     def parse(self):
         # self.options = self.parser.parse_args()
         # return self.options
