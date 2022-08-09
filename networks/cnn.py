@@ -24,9 +24,9 @@ class CNN(nn.Module):
         :param x: la donnée de size = (batch_size, nb_features) ou (nb_features)
         :return: la sortie du réseau à simple couche
         """
-        x = self.max_pool(self.conv1(x))
-        x = self.max_pool(self.conv2(x))
-        x = self.max_pool(self.conv3(x))
+        x = self.max_pool(self.act(self.conv1(x)))
+        x = self.max_pool(self.act(self.conv2(x)))
+        x = self.max_pool(self.act(self.conv3(x)))
         x = torch.flatten(x, 1)
         x = self.act(self.lin1(x))
         x = self.act(self.lin2(x))
