@@ -476,7 +476,143 @@ class Trainer:
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
 
-        # train example
+        # mixup baseline
+        self.experiment = "Vanilla_Mixup"
+        print("Start training {} ...".format(self.experiment))
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
+        res_mixup = []
+        res_loss_mixup = []
+        a_mixup = []
+        b_mixup = []
+        loss_mixup = []
+        w_diff_mixup = []
+        train_loss = 0
+        correct = 0
+        total = 0
+        mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+        self.step = 0
+        self.best_acc = 0
+        for epoch in tqdm(range(self.opt.n_epochs)):
+            if epoch != 0:
+                mixup_baseline.train()
+                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                    inputs, targets = inputs.cuda(), targets.long().cuda()
+                    mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+
+                    # first_image = np.array(data.cpu(), dtype='float')
+                    # pixels = first_image.reshape((28, 28))
+                    # plt.imshow(pixels, cmap='gray')
+                    # plt.title("Label {}".format(target.item()))
+                    # plt.show()
+
+                    outputs = mixup_baseline(mixed_x)
+                    loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
+                    # loss = self.loss_fn(outputs, mixed_y.long())
+
+                    mixup_baseline_optim.zero_grad()
+                    loss.backward()
+                    mixup_baseline_optim.step()
+
+                    self.step += 1
+
+                    if batch_idx % self.opt.log_interval == 0:
+                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                            100. * batch_idx / len(self.train_loader), loss.item()))
+                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+                '''
+                # w_t = self.student.lin.weight
+
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+
+                alpha = np.random.beta(1.0, 1.0)
+                # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
+                # alpha.requires_grad = True
+
+                mixed_x, targets_a, targets_b = mixup_data(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha)
+                # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
+
+                # inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha, use_cuda)
+
+                mixup_baseline_optim.zero_grad()
+
+                out = mixup_baseline(mixed_x.cuda())
+                loss = mixup_criterion(self.loss_fn, out, targets_a.long(), targets_b.long(), alpha)
+
+                # grad = torch.autograd.grad(outputs=loss, inputs=alpha, retain_graph=True)[0]
+
+                loss.backward()
+                mixup_baseline_optim.step()
+
+                # mixed_y = gt_y_1 * alpha + gt_y_2 * (1 - alpha)
+
+                # mixup_baseline.update(mixed_x, mixed_y)
+                '''
+
+            acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
+            res_mixup.append(acc)
+            res_loss_mixup.append(test_loss)
+
+            self.adjust_learning_rate(mixup_baseline_optim, epoch)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
+            '''
+            mixup_baseline.eval()
+            test = mixup_baseline(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(mixup_baseline, X.max(axis=0), X.min(axis=0))
+            a_mixup.append(a)
+            b_mixup.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                _, predicted = torch.max(test, dim=1)
+                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            res_mixup.append(acc)
+            '''
+            # w_mixup = []
+            # for param in mixup_baseline.parameters():
+            #     w_mixup.append(param.data)
+            # diff = weight_diff(w_teacher, w_mixup)
+            # w_diff_mixup.append(diff)
+
+            # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
+            # w_diff_mixup.append(diff.detach().clone().cpu())
+
+            mixup_baseline.train()
+
+        if self.visualize == False:
+            fig = plt.figure()
+            # plt.plot(w_diff_mixup, c="c", label="Mixup")
+            # plt.plot(res_example, c="g", label="SGD")
+            plt.plot(res_mixup, c="b", label="Mixup")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+
+        sys.exit()
+
+
+
+         # train example
         self.experiment = "SGD"
         print("Start training {} ...".format(self.experiment))
         logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
@@ -554,7 +690,6 @@ class Trainer:
             plt.ylabel("Accuracy")
             plt.legend()
             plt.show()
-
 
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()
@@ -795,140 +930,6 @@ class Trainer:
             #     w_student.append(param.data)
             # diff = weight_diff(w_teacher, w_student)
             # w_diff_student.append(diff)
-
-
-        # mixup baseline
-        self.experiment = "Vanilla_Mixup"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-        if not os.path.exists(logname):
-            with open(logname, 'w') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow(['epoch', 'test acc'])
-
-        res_mixup = []
-        res_loss_mixup = []
-        a_mixup = []
-        b_mixup = []
-        loss_mixup = []
-        w_diff_mixup = []
-        train_loss = 0
-        correct = 0
-        total = 0
-        mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.eta)
-        mixup_baseline_scheduler = StepLR(mixup_baseline_optim, step_size=30, gamma=0.1)
-        self.step = 0
-        self.best_acc = 0
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                mixup_baseline.train()
-                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                    inputs, targets = inputs.cuda(), targets.long().cuda()
-                    mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-
-                    # first_image = np.array(data.cpu(), dtype='float')
-                    # pixels = first_image.reshape((28, 28))
-                    # plt.imshow(pixels, cmap='gray')
-                    # plt.title("Label {}".format(target.item()))
-                    # plt.show()
-
-                    outputs = mixup_baseline(mixed_x)
-                    loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
-                    # loss = self.loss_fn(outputs, mixed_y.long())
-
-                    mixup_baseline_optim.zero_grad()
-                    loss.backward()
-                    mixup_baseline_optim.step()
-
-                    self.step += 1
-
-                    if batch_idx % self.opt.log_interval == 0:
-                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                            100. * batch_idx / len(self.train_loader), loss.item()))
-                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-                '''
-                # w_t = self.student.lin.weight
-
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
-
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
-
-                alpha = np.random.beta(1.0, 1.0)
-                # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
-                # alpha.requires_grad = True
-
-                mixed_x, targets_a, targets_b = mixup_data(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha)
-                # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
-
-                # inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha, use_cuda)
-
-                mixup_baseline_optim.zero_grad()
-
-                out = mixup_baseline(mixed_x.cuda())
-                loss = mixup_criterion(self.loss_fn, out, targets_a.long(), targets_b.long(), alpha)
-
-                # grad = torch.autograd.grad(outputs=loss, inputs=alpha, retain_graph=True)[0]
-
-                loss.backward()
-                mixup_baseline_optim.step()
-
-                # mixed_y = gt_y_1 * alpha + gt_y_2 * (1 - alpha)
-
-                # mixup_baseline.update(mixed_x, mixed_y)
-                '''
-
-            acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
-            res_mixup.append(acc)
-            res_loss_mixup.append(test_loss)
-
-            self.adjust_learning_rate(mixup_baseline_optim, epoch)
-
-            with open(logname, 'a') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow([epoch, acc])
-            '''
-            mixup_baseline.eval()
-            test = mixup_baseline(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(mixup_baseline, X.max(axis=0), X.min(axis=0))
-            a_mixup.append(a)
-            b_mixup.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            res_mixup.append(acc)
-            '''
-            # w_mixup = []
-            # for param in mixup_baseline.parameters():
-            #     w_mixup.append(param.data)
-            # diff = weight_diff(w_teacher, w_mixup)
-            # w_diff_mixup.append(diff)
-
-            # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
-            # w_diff_mixup.append(diff.detach().clone().cpu())
-
-            mixup_baseline.train()
-
-        if self.visualize == False:
-            fig = plt.figure()
-            # plt.plot(w_diff_mixup, c="c", label="Mixup")
-            # plt.plot(res_example, c="g", label="SGD")
-            plt.plot(res_mixup, c="b", label="Mixup")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
 
 
         sys.exit()
