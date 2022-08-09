@@ -299,12 +299,15 @@ class Trainer:
                 self.student = networks.ResNet18(in_channels=3).cuda()
                 self.baseline = networks.ResNet18(in_channels=3).cuda()
             elif self.opt.data_mode == "cifar100":
-                self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                # self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                self.teacher = networks.CNN(in_channels=3, num_classes=100).cuda()
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
                 # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-                self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                # self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                self.student = networks.CNN(in_channels=3, num_classes=100).cuda()
+                # self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                self.baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
             else: # mnist / gaussian / moon
                 self.teacher = networks.ResNet18(in_channels=1).cuda()
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
@@ -439,9 +442,12 @@ class Trainer:
             mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
 
         elif self.opt.data_mode == "cifar100":
-            example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            # example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            example = networks.CNN(in_channels=3, num_classes=100).cuda()
+            # tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            tmp_student = networks.CNN(in_channels=3, num_classes=100).cuda()
+            # mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            mixup_baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
 
         elif self.opt.data_mode == "mnist":
             example = networks.ResNet18(in_channels=1, num_classes=10).cuda()
@@ -455,252 +461,6 @@ class Trainer:
         example.load_state_dict(self.teacher.state_dict())
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
-
-        # train student
-        netG = blackbox_mixup.Generator(self.opt).cuda()
-        netG.apply(weights_init)
-
-        # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
-        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0005, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
-        # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
-        adversarial_loss = torch.nn.MSELoss()
-        res_student = []
-        res_loss_student = []
-        a_student = []
-        b_student = []
-        loss_student = []
-        cls_loss = []
-        loss_g = []
-        loss_d = []
-        w_diff_student = []
-        # w, h = generator.linear.weight.shape
-
-        w_init = self.student.state_dict()
-        # new_weight = w_init
-        train_loss = []
-        for idx in tqdm(range(self.opt.n_unroll)):
-            if idx != 0:
-
-                w_t = netG.state_dict()
-
-                # w_student = []
-                # for param in netG.parameters():
-                #    w_student.append(param.data.clone())
-
-                gradients, avg_loss, student_loss = unrolled_optimizer(w_t, w_init=w_init)
-
-                print("idx", idx, "avg loss:", avg_loss)
-
-                # if avg_loss < 5:
-                    # torch.save(netG.state_dict(), 'netG.pth')
-                    #break
-
-                cls_loss = cls_loss + student_loss
-                train_loss.append(avg_loss)
-
-                optimizer_G.zero_grad()
-
-                with torch.no_grad():
-                    for p, g in zip(netG.parameters(), gradients):
-                        p.grad = g
-
-                optimizer_G.step()
-
-                # w_g = []
-                # for param in netG.parameters():
-                #    w_g.append(param.data.clone())
-
-                # print("asdlfjklasd")
-
-                '''
-                if idx % 100000 == 0:
-
-                    fig = plt.figure()
-                    plt.plot(loss_student, c="b", label="Teacher (CNN)")
-                    plt.xlabel("Epoch")
-                    plt.ylabel("Accuracy")
-                    plt.legend()
-                    plt.show()
-
-
-                # cls_loss = cls_loss + loss_tmp
-                cls_loss = loss_tmp
-
-                loss_student.append(loss.item())
-
-                with torch.no_grad():
-                    for p, g in zip(netG.parameters(), gradients):
-                        p.grad = g
-
-                optimizer_G.step()
-                '''
-                ''''
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
-
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
-
-                x = torch.cat((gt_x_1, gt_x_2), dim=1)
-                alpha = netG(x, gt_y_1.long(), gt_y_2.long())
-
-                mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2
-                # mixed_y = alpha * gt_y_1 + (1 - alpha) * gt_y_2
-
-                optimizer_G.zero_grad()
-                out = self.student(mixed_x)
-                # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), alpha)
-                loss = alpha * self.loss_fn(out, gt_y_1.long()) + (1 - alpha) * self.loss_fn(out, gt_y_2.long())
-                loss = loss.to(torch.float32)
-
-                # grad = torch.autograd.grad(loss, alpha, create_graph=True, retain_graph=True)
-                # grad = torch.autograd.grad(alpha, model_paramters, create_graph=True, retain_graph=True)
-                # grad = torch.autograd.grad(loss, model_paramters, create_graph=True, retain_graph=True)
-
-                loss.backward() # create_graph=True, retain_graph=True)
-                # loss.backward()
-                optimizer_G.step()
-
-                # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
-
-                # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
-
-                # x = torch.cat((gt_x_1, gt_x_2), dim=1)
-                alpha = netG(x, gt_y_1.long(), gt_y_2.long())
-
-                mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2
-
-                student_optim.zero_grad()
-
-                out = self.student(mixed_x)
-                # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), alpha)
-                loss = alpha * self.loss_fn(out, gt_y_1.long()) + (1 - alpha) * self.loss_fn(out, gt_y_2.long())
-                loss = loss.to(torch.float32)
-                loss.backward()
-
-                student_optim.step()
-
-                train_loss.append(loss.item())
-                '''
-
-        if self.visualize == False:
-            fig = plt.figure()
-            # plt.plot(cls_loss, c="b", label="Teacher (CNN)")
-            plt.plot(train_loss, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-            # plt.close()
-
-        sys.exit()
-
-
-        # w_student1 = []
-        # for param in self.student.parameters():
-        #     w_student1.append(param.data.clone())
-
-        # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
-        # self.student.load_state_dict(w_init)
-        self.student.load_state_dict(torch.load('teacher_w0.pth'))
-        # netG.load_state_dict(torch.load('netG.pth'))
-
-        # w_student2 = []
-        # for param in self.student.parameters():
-        #    w_student2.append(param.data.clone())
-
-        self.experiment = "Trained_Mixup"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-        if not os.path.exists(logname):
-            with open(logname, 'w') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow(['epoch', 'test acc'])
-
-        student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
-        self.student.train()
-        self.step = 0
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                self.student.train()
-                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                    inputs, targets = inputs.cuda(), targets.long().cuda()
-                    # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-
-                    index = torch.randperm(inputs.shape[0]).cuda()
-                    lam = netG(inputs, targets.long())
-                    lam = torch.unsqueeze(lam, 2)
-                    lam = torch.unsqueeze(lam, 3)
-                    mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-
-                    targets_a, targets_b = targets, targets[index]
-
-                    # mixed_x, targets_a, targets_b = mixup_data(inputs, gt_x_2, gt_y_1, gt_y_2, alpha)
-
-                    # first_image = np.array(data.cpu(), dtype='float')
-                    # pixels = first_image.reshape((28, 28))
-                    # plt.imshow(pixels, cmap='gray')
-                    # plt.title("Label {}".format(target.item()))
-                    # plt.show()
-
-                    outputs = self.student(mixed_x)
-                    loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
-                    # loss = self.loss_fn(outputs, mixed_y.long())
-
-                    student_optim.zero_grad()
-                    loss.backward()
-                    student_optim.step()
-
-                    self.step += 1
-                    if batch_idx % self.opt.log_interval == 0:
-                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                            100. * batch_idx / len(self.train_loader), loss.item()))
-
-                    self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-            acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-            res_student.append(acc)
-            res_loss_student.append(test_loss)
-
-            with open(logname, 'a') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow([epoch, acc])
-
-            '''
-            self.student.eval()
-            test = self.student(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-            a_student.append(a)
-            b_student.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            res_student.append(acc)
-            '''
-            diff = 0
-            # diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
-            # w_diff_student.append(diff.detach().clone().cpu())
-
-            # w_student = []
-            # for param in self.student.parameters():
-            #     w_student.append(param.data)
-            # diff = weight_diff(w_teacher, w_student)
-            # w_diff_student.append(diff)
-
-        sys.exit()
-
 
         # mixup baseline
         self.experiment = "Vanilla_Mixup"
@@ -914,6 +674,246 @@ class Trainer:
             plt.legend()
             plt.show()
 
+
+        # train student
+        netG = blackbox_mixup.Generator(self.opt).cuda()
+        netG.apply(weights_init)
+
+        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
+        # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
+        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
+        adversarial_loss = torch.nn.MSELoss()
+        res_student = []
+        res_loss_student = []
+        a_student = []
+        b_student = []
+        loss_student = []
+        cls_loss = []
+        loss_g = []
+        loss_d = []
+        w_diff_student = []
+        # w, h = generator.linear.weight.shape
+
+        w_init = self.student.state_dict()
+        # new_weight = w_init
+        train_loss = []
+        for idx in tqdm(range(self.opt.n_unroll)):
+            if idx != 0:
+
+                w_t = netG.state_dict()
+
+                # w_student = []
+                # for param in netG.parameters():
+                #    w_student.append(param.data.clone())
+
+                gradients, avg_loss, student_loss = unrolled_optimizer(w_t, w_init=w_init)
+
+                print("idx", idx, "avg loss:", avg_loss)
+
+                # if avg_loss < 5:
+                    # torch.save(netG.state_dict(), 'netG.pth')
+                    #break
+
+                cls_loss = cls_loss + student_loss
+                train_loss.append(avg_loss)
+
+                optimizer_G.zero_grad()
+
+                with torch.no_grad():
+                    for p, g in zip(netG.parameters(), gradients):
+                        p.grad = g
+
+                optimizer_G.step()
+
+                # w_g = []
+                # for param in netG.parameters():
+                #    w_g.append(param.data.clone())
+
+                # print("asdlfjklasd")
+
+                '''
+                if idx % 100000 == 0:
+
+                    fig = plt.figure()
+                    plt.plot(loss_student, c="b", label="Teacher (CNN)")
+                    plt.xlabel("Epoch")
+                    plt.ylabel("Accuracy")
+                    plt.legend()
+                    plt.show()
+
+
+                # cls_loss = cls_loss + loss_tmp
+                cls_loss = loss_tmp
+
+                loss_student.append(loss.item())
+
+                with torch.no_grad():
+                    for p, g in zip(netG.parameters(), gradients):
+                        p.grad = g
+
+                optimizer_G.step()
+                '''
+                ''''
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+
+                x = torch.cat((gt_x_1, gt_x_2), dim=1)
+                alpha = netG(x, gt_y_1.long(), gt_y_2.long())
+
+                mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2
+                # mixed_y = alpha * gt_y_1 + (1 - alpha) * gt_y_2
+
+                optimizer_G.zero_grad()
+                out = self.student(mixed_x)
+                # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), alpha)
+                loss = alpha * self.loss_fn(out, gt_y_1.long()) + (1 - alpha) * self.loss_fn(out, gt_y_2.long())
+                loss = loss.to(torch.float32)
+
+                # grad = torch.autograd.grad(loss, alpha, create_graph=True, retain_graph=True)
+                # grad = torch.autograd.grad(alpha, model_paramters, create_graph=True, retain_graph=True)
+                # grad = torch.autograd.grad(loss, model_paramters, create_graph=True, retain_graph=True)
+
+                loss.backward() # create_graph=True, retain_graph=True)
+                # loss.backward()
+                optimizer_G.step()
+
+                # i = torch.randint(0, nb_batch, size=(1,)).item()
+                # gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+
+                # i = torch.randint(0, nb_batch, size=(1,)).item()
+                # gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+
+                # x = torch.cat((gt_x_1, gt_x_2), dim=1)
+                alpha = netG(x, gt_y_1.long(), gt_y_2.long())
+
+                mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2
+
+                student_optim.zero_grad()
+
+                out = self.student(mixed_x)
+                # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), alpha)
+                loss = alpha * self.loss_fn(out, gt_y_1.long()) + (1 - alpha) * self.loss_fn(out, gt_y_2.long())
+                loss = loss.to(torch.float32)
+                loss.backward()
+
+                student_optim.step()
+
+                train_loss.append(loss.item())
+                '''
+
+        if self.visualize == False:
+            fig = plt.figure()
+            # plt.plot(cls_loss, c="b", label="Teacher (CNN)")
+            plt.plot(train_loss, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+            # plt.close()
+
+
+        # w_student1 = []
+        # for param in self.student.parameters():
+        #     w_student1.append(param.data.clone())
+
+        # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+        # self.student.load_state_dict(w_init)
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
+        # netG.load_state_dict(torch.load('netG.pth'))
+
+        # w_student2 = []
+        # for param in self.student.parameters():
+        #    w_student2.append(param.data.clone())
+
+        self.experiment = "Trained_Mixup"
+        print("Start training {} ...".format(self.experiment))
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
+
+        student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+        self.student.train()
+        self.step = 0
+        for epoch in tqdm(range(self.opt.n_epochs)):
+            if epoch != 0:
+                self.student.train()
+                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                    inputs, targets = inputs.cuda(), targets.long().cuda()
+                    # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+
+                    index = torch.randperm(inputs.shape[0]).cuda()
+                    lam = netG(inputs, targets.long())
+                    lam = torch.unsqueeze(lam, 2)
+                    lam = torch.unsqueeze(lam, 3)
+                    mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
+
+                    targets_a, targets_b = targets, targets[index]
+
+                    # mixed_x, targets_a, targets_b = mixup_data(inputs, gt_x_2, gt_y_1, gt_y_2, alpha)
+
+                    # first_image = np.array(data.cpu(), dtype='float')
+                    # pixels = first_image.reshape((28, 28))
+                    # plt.imshow(pixels, cmap='gray')
+                    # plt.title("Label {}".format(target.item()))
+                    # plt.show()
+
+                    outputs = self.student(mixed_x)
+                    loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
+                    # loss = self.loss_fn(outputs, mixed_y.long())
+
+                    student_optim.zero_grad()
+                    loss.backward()
+                    student_optim.step()
+
+                    self.step += 1
+                    if batch_idx % self.opt.log_interval == 0:
+                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                            100. * batch_idx / len(self.train_loader), loss.item()))
+
+                    self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+            acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+            res_student.append(acc)
+            res_loss_student.append(test_loss)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
+
+            '''
+            self.student.eval()
+            test = self.student(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+            a_student.append(a)
+            b_student.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                _, predicted = torch.max(test, dim=1)
+                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            res_student.append(acc)
+            '''
+            diff = 0
+            # diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
+            # w_diff_student.append(diff.detach().clone().cpu())
+
+            # w_student = []
+            # for param in self.student.parameters():
+            #     w_student.append(param.data)
+            # diff = weight_diff(w_teacher, w_student)
+            # w_diff_student.append(diff)
 
         sys.exit()
 

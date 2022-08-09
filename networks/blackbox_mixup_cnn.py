@@ -270,7 +270,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         student_parameters = list(self.student.parameters())
 
         self.student.train()
-        for i in range(self.opt.n_unroll_blocks):
+        for n in range(self.opt.n_unroll_blocks):
             # w_t = self.student.lin.weight
 
             # i = torch.randint(0, self.nb_batch, size=(1,)).item()
@@ -316,7 +316,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             loss_stu = loss_stu + loss # .clone()
 
-            student_loss.append(loss.item())
+            # print(n, "After backward pass", torch.cuda.memory_allocated(0))
+
+            student_loss.append(loss.detach().item())
 
             '''
             mixup_baseline_optim.zero_grad()
@@ -473,8 +475,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             '''
         grad_gen = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
+                                       create_graph=False, retain_graph=False)
 
         # w = self.generator.state_dict()
 
