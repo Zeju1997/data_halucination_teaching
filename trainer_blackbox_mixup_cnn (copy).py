@@ -153,7 +153,6 @@ def mixup_data(x, y, alpha=1.0):
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    loss = torch.mean(loss)
     return loss
 
 
@@ -261,14 +260,12 @@ class Trainer:
                 transforms.Normalize((0.5071, 0.4865, 0.4409),
                                      (0.2673, 0.2564, 0.2762)),
             ])
-            dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform_train)
+            self.train_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform_train)
             self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=transform_test)
-
-            self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
-
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size)
+            # self.train_loader = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
+            # self.test_loader = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
         elif self.opt.data_mode == "mnist":
             # MNIST normalizing
             transform = transforms.Compose([
@@ -479,282 +476,7 @@ class Trainer:
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
 
-        # train example
-        self.experiment = "SGD"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-        if not os.path.exists(logname):
-            with open(logname, 'w') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow(['epoch', 'test acc'])
 
-        res_example = []
-        res_loss_example = []
-        a_example = []
-        b_example = []
-        w_diff_example = []
-        self.step = 0
-        self.best_acc = 0
-        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
-
-            acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
-            res_loss_example.append(test_loss)
-            res_example.append(acc)
-
-            self.adjust_learning_rate(example_optim, epoch)
-
-            with open(logname, 'a') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow([epoch, acc])
-
-            '''
-            example.eval()
-            test = example(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
-            a_example.append(a)
-            b_example.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-
-            acc = nb_correct / X_test.size(0)
-            res_example.append(acc)
-            '''
-
-            # w_example = []
-            # for param in example.parameters():
-            #     w_example.append(param.data)
-
-            # diff = weight_diff(w_teacher, w_example)
-            # w_diff_example.append(diff)
-
-            # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
-            # w_diff_example.append(diff.detach().clone().cpu())
-
-        if self.visualize == False:
-            fig = plt.figure()
-            plt.plot(res_loss_example, c="b", label="Teacher (CNN)")
-            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-
-            fig = plt.figure()
-            plt.plot(res_example, c="b", label="Teacher (CNN)")
-            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-
-        sys.exit()
-
-
-        # mixup student
-        self.experiment = "Trained_Mixup"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-        if not os.path.exists(logname):
-            with open(logname, 'w') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow(['epoch', 'test acc'])
-
-        res_mixup = []
-        res_loss_mixup = []
-
-        netG = blackbox_mixup.Generator(self.opt).cuda()
-        netG.apply(weights_init)
-
-        optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
-        # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
-        res_student = []
-        res_loss_student = []
-        cls_loss = []
-
-        w_init = self.student.state_dict()
-        # new_weight = w_init
-        train_loss = []
-
-        student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-        self.step = 0
-        self.best_acc = 0
-
-        loader_eval = iter(self.val_loader)
-        for epoch in tqdm(range(self.opt.n_epochs)):
-            if epoch != 0:
-                mixup_baseline.train()
-                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                    try:
-                        (val_inputs, val_targets) = loader_eval.next()
-                    except:
-                        loader_eval = iter(self.val_loader)
-                        (val_inputs, val_targets) = loader_eval.next()
-
-                    val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
-
-                    netG.train()
-                    lam = netG(val_inputs.cuda(), val_targets.cuda())
-
-                    batch_size = val_inputs.shape[0]
-                    index = torch.randperm(batch_size).cuda()
-
-                    # lam = np.random.beta(alpha, alpha, size=(gt_x.shape[0]))
-                    # lam = torch.tensor(lam, dtype=torch.float).cuda()
-                    # mixed_y = lam * y + (1 - lam) * y[index]
-
-                    # lam = torch.unsqueeze(lam, 1)
-                    lam = torch.unsqueeze(lam, 2)
-                    lam = torch.unsqueeze(lam, 3)
-                    mixed_x = lam * val_inputs + (1 - lam) * val_inputs[index, :]
-
-                    targets_a, targets_b = val_targets, val_targets[index]
-
-                    # inputs, targets = inputs.cuda(), targets.long().cuda()
-                    # mixed_x, targets_a, targets_b, lam = mixup_data(gt_x, gt_y, alpha=1.0)
-
-                    outputs = self.student(mixed_x)
-                    loss = mixup_criterion(self.loss_fn, outputs, targets_a.long(), targets_b.long(), lam)
-                    # loss = self.loss_fn(outputs, mixed_y.long())
-
-                    optimizer_G.zero_grad()
-                    loss.backward()
-                    optimizer_G.step()
-                    netG.eval()
-
-                    inputs, targets = inputs.cuda(), targets.long().cuda()
-                    # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-
-                    self.student.train()
-                    lam = netG(inputs.cuda(), targets.cuda())
-
-                    batch_size = inputs.shape[0]
-                    index = torch.randperm(batch_size).cuda()
-
-                    # lam = np.random.beta(alpha, alpha, size=(gt_x.shape[0]))
-                    # lam = torch.tensor(lam, dtype=torch.float).cuda()
-                    # mixed_y = lam * y + (1 - lam) * y[index]
-
-                    # lam = torch.unsqueeze(lam, 1)
-                    lam = torch.unsqueeze(lam, 2)
-                    lam = torch.unsqueeze(lam, 3)
-                    mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-
-                    targets_a, targets_b = targets, targets[index]
-
-                    outputs = self.student(mixed_x)
-                    loss_stu = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
-                    # loss = self.loss_fn(outputs, mixed_y.long())
-
-                    student_optim.zero_grad()
-                    loss_stu.backward()
-                    student_optim.step()
-                    self.student.eval()
-
-
-                    self.step += 1
-
-                    if batch_idx % self.opt.log_interval == 0:
-                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                            100. * batch_idx / len(self.train_loader), loss.item()))
-                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-                '''
-                # w_t = self.student.lin.weight
-
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
-
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
-
-                alpha = np.random.beta(1.0, 1.0)
-                # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
-                # alpha.requires_grad = True
-
-                mixed_x, targets_a, targets_b = mixup_data(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha)
-                # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
-
-                # inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha, use_cuda)
-
-                mixup_baseline_optim.zero_grad()
-
-                out = mixup_baseline(mixed_x.cuda())
-                loss = mixup_criterion(self.loss_fn, out, targets_a.long(), targets_b.long(), alpha)
-
-                # grad = torch.autograd.grad(outputs=loss, inputs=alpha, retain_graph=True)[0]
-
-                loss.backward()
-                mixup_baseline_optim.step()
-
-                # mixed_y = gt_y_1 * alpha + gt_y_2 * (1 - alpha)
-
-                # mixup_baseline.update(mixed_x, mixed_y)
-                '''
-
-            acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-            res_student.append(acc)
-            res_loss_student.append(test_loss)
-
-            self.adjust_learning_rate(student_optim, epoch)
-            self.adjust_learning_rate(optimizer_G, epoch)
-
-            with open(logname, 'a') as logfile:
-                logwriter = csv.writer(logfile, delimiter=',')
-                logwriter.writerow([epoch, acc])
-            '''
-            mixup_baseline.eval()
-            test = mixup_baseline(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(mixup_baseline, X.max(axis=0), X.min(axis=0))
-            a_mixup.append(a)
-            b_mixup.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            res_mixup.append(acc)
-            '''
-            # w_mixup = []
-            # for param in mixup_baseline.parameters():
-            #     w_mixup.append(param.data)
-            # diff = weight_diff(w_teacher, w_mixup)
-            # w_diff_mixup.append(diff)
-
-            # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
-            # w_diff_mixup.append(diff.detach().clone().cpu())
-
-            mixup_baseline.train()
-
-        if self.visualize == False:
-            fig = plt.figure()
-            # plt.plot(w_diff_mixup, c="c", label="Mixup")
-            # plt.plot(res_example, c="g", label="SGD")
-            plt.plot(res_mixup, c="b", label="Mixup")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.show()
-
-        sys.exit()
 
 
         # train student
@@ -764,9 +486,17 @@ class Trainer:
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
         unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
+        adversarial_loss = torch.nn.MSELoss()
         res_student = []
         res_loss_student = []
+        a_student = []
+        b_student = []
+        loss_student = []
         cls_loss = []
+        loss_g = []
+        loss_d = []
+        w_diff_student = []
+        # w, h = generator.linear.weight.shape
 
         w_init = self.student.state_dict()
         # new_weight = w_init
@@ -1136,7 +866,84 @@ class Trainer:
 
 
 
+         # train example
+        self.experiment = "SGD"
+        print("Start training {} ...".format(self.experiment))
+        logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['epoch', 'test acc'])
 
+        res_example = []
+        res_loss_example = []
+        a_example = []
+        b_example = []
+        w_diff_example = []
+        self.step = 0
+        self.best_acc = 0
+        example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+        for epoch in tqdm(range(self.opt.n_epochs)):
+            if epoch != 0:
+                self.train(example, self.train_loader, self.loss_fn, example_optim, epoch)
+
+            acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
+            res_loss_example.append(test_loss)
+            res_example.append(acc)
+
+            self.adjust_learning_rate(example_optim, epoch)
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([epoch, acc])
+
+            '''
+            example.eval()
+            test = example(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
+            a_example.append(a)
+            b_example.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                _, predicted = torch.max(test, dim=1)
+                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+
+            acc = nb_correct / X_test.size(0)
+            res_example.append(acc)
+            '''
+
+            # w_example = []
+            # for param in example.parameters():
+            #     w_example.append(param.data)
+
+            # diff = weight_diff(w_teacher, w_example)
+            # w_diff_example.append(diff)
+
+            # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
+            # w_diff_example.append(diff.detach().clone().cpu())
+
+        if self.visualize == False:
+            fig = plt.figure()
+            plt.plot(res_loss_example, c="b", label="Teacher (CNN)")
+            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
+
+            fig = plt.figure()
+            plt.plot(res_example, c="b", label="Teacher (CNN)")
+            # plt.plot(w_diff_example, c="b", label="Teacher (CNN)")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.show()
 
 
         # train teacher

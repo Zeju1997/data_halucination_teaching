@@ -314,7 +314,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                     new_param = param.data - 0.001 * grad
                     param.data = new_param
 
-            loss_stu = loss_stu + loss # .clone()
+            # tau = np.exp(-i / 0.95)
+            if n == 0:
+                tau = 1
+            else:
+                tau = 0.95 * tau
+
+
+            loss_stu = loss_stu + tau * loss # .clone()
 
             # print(n, "After backward pass", torch.cuda.memory_allocated(0))
 
@@ -487,6 +494,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # loss_stu = loss_stu * alpha
 
         # grad_stu = torch.autograd.grad(outputs=loss_stu, inputs=model_paramters, create_graph=True, retain_graph=True)
+
+        print(student_loss)
 
         return grad_gen, loss_stu.item(), student_loss #, generated_x, gt_y, g_loss
 
