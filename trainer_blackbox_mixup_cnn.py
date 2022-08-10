@@ -306,6 +306,9 @@ class Trainer:
 
         self.step = 0
         self.best_acc = 0
+        self.best_test_loss = 0
+        self.init_train_loss = 0
+        self.init_test_loss = 0
 
         self.experiment = "teacher"
 
@@ -432,10 +435,12 @@ class Trainer:
     def adjust_learning_rate(self, optimizer, epoch):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
-        if epoch >= 100:
-            lr /= 10
-        if epoch >= 150:
-            lr /= 10
+        if epoch >= 50: # 100
+            # lr /= 10
+            lr = 0.01
+        if epoch >= 75: # 150
+            # lr /= 100
+            lr = 0.001
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
@@ -509,9 +514,18 @@ class Trainer:
             self.best_acc = 0
 
             loader_eval = iter(self.val_loader)
+            avg_train_loss = 0
+            tmp_train_loss = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
+                for param_group in student_optim.param_groups:
+                    print("student lr", param_group['lr'])
+                for param_group in optimizer_G.param_groups:
+                    print("optimizer_G lr", param_group['lr'])
+                print("")
+                print("")
+                print("")
                 if epoch != 0:
-                    mixup_baseline.train()
+                    self.student.train()
                     for batch_idx, (inputs, targets) in enumerate(self.train_loader):
                         try:
                             (val_inputs, val_targets) = loader_eval.next()
@@ -522,7 +536,8 @@ class Trainer:
                         val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
 
                         netG.train()
-                        lam = netG(val_inputs.cuda(), val_targets.cuda())
+                        model_features = self.model_features(avg_train_loss, epoch)
+                        lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features)
 
                         batch_size = val_inputs.shape[0]
                         index = torch.randperm(batch_size).cuda()
@@ -544,6 +559,7 @@ class Trainer:
                         outputs = self.student(mixed_x)
                         loss = mixup_criterion(self.loss_fn, outputs, targets_a.long(), targets_b.long(), lam)
                         # loss = self.loss_fn(outputs, mixed_y.long())
+                        tmp_train_loss = tmp_train_loss + loss.item()
 
                         optimizer_G.zero_grad()
                         loss.backward()
@@ -554,7 +570,7 @@ class Trainer:
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
                         self.student.train()
-                        lam = netG(inputs.cuda(), targets.cuda())
+                        lam = netG(inputs.cuda(), targets.cuda(), model_features)
 
                         batch_size = inputs.shape[0]
                         index = torch.randperm(batch_size).cuda()
@@ -587,7 +603,8 @@ class Trainer:
                                 epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
                                 100. * batch_idx / len(self.train_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
+                    avg_train_loss = tmp_train_loss / len(self.train_loader)
+                    tmp_train_loss = 0
                     '''
                     # w_t = self.student.lin.weight
     
@@ -625,8 +642,13 @@ class Trainer:
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
+                if epoch == 1:
+                    self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
+                    avg_train_loss = self.init_train_loss
+                    self.init_test_loss = test_loss
+                    self.best_test_loss = test_loss
+
                 self.adjust_learning_rate(student_optim, epoch)
-                self.adjust_learning_rate(optimizer_G, epoch)
 
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -668,7 +690,6 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
-
 
         if self.opt.train_student:
             # w_student1 = []
@@ -772,8 +793,6 @@ class Trainer:
                 #     w_student.append(param.data)
                 # diff = weight_diff(w_teacher, w_student)
                 # w_diff_student.append(diff)
-
-
 
         if self.opt.train_sgd:
             # train example
@@ -1750,10 +1769,38 @@ class Trainer:
 
         return acc, test_loss
 
-    def model_feature(self):
+    def avg_loss(self, model, data_loader):
+        model.eval()
+        train_loss = 0
+        correct = 0
+        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        with torch.no_grad():
+            for data, target in data_loader:
+                data, target = data.cuda(), target.cuda()
+                output = model(data)
+
+                train_loss += loss_fn(output, target.long()).item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+        train_loss /= len(data_loader.dataset)
+
+        return train_loss
+
+    def model_features(self, train_loss, epoch):
         current_iter = self.step / (self.opt.n_epochs * len(self.train_loader))
-        avg_training_loss = self.step / (self.opt.n_epochs * len(self.train_loader))
-        best_val_loss = self.best_acc
+
+        if epoch == 1:
+            avg_training_loss = 1.0
+        else:
+            avg_training_loss = train_loss / self.init_train_loss
+
+        if epoch == 1:
+            best_val_loss = 1.0
+        else:
+            best_val_loss = self.best_test_loss / self.init_test_loss
+        model_features = [current_iter, avg_training_loss, best_val_loss]
+        return torch.FloatTensor(model_features).cuda()
 
     def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)

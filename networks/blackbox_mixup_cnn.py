@@ -86,16 +86,29 @@ class Generator(nn.Module):
             nn.Linear(256, 128),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(128, 1),
+            nn.Linear(128, 10),
             nn.Sigmoid()
         )
 
-    def forward(self, img, label):
+        self.fc1 = nn.Linear(10 + 3, 32)
+        self.fc2 = nn.Linear(32, 1)
+
+        self.act = nn.Sigmoid()
+
+    def forward(self, img, label, data):
         # Concatenate label embedding and image to produce input
         # d_in = torch.cat((img1.view(img1.size(0), -1), (img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1))
         d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label)), -1)
-        validity = self.model(d_in)
-        return validity
+        x = self.model(d_in)
+
+        data = data.unsqueeze(0)
+        data = data.repeat(x.shape[0], 1)
+
+        x = torch.cat((x, data), dim=1)
+        x = F.relu(self.fc1(x))
+        x = self.act(self.fc2(x))
+
+        return x
 
 
 class Generator1(nn.Module):

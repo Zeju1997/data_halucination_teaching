@@ -693,6 +693,8 @@ class Trainer:
             res_student.append(acc)
             res_loss_student.append(test_loss)
 
+            self.adjust_learning_rate(student_optim, epoch)
+
             with open(logname, 'a') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')
                 logwriter.writerow([epoch, acc])
