@@ -447,7 +447,7 @@ class Trainer:
     def main(self):
         """Run a single epoch of training and validation
         """
-
+        '''
         from time import time
         import multiprocessing as mp
 
@@ -459,7 +459,7 @@ class Trainer:
                     pass
             end = time()
             print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
-
+        '''
 
         print("Training")
         # self.set_train()
