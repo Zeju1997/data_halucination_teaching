@@ -298,6 +298,9 @@ class Trainer:
 
         self.step = 0
         self.best_acc = 0
+        self.best_test_loss = 0
+        self.init_train_loss = 0
+        self.init_test_loss = 0
 
         self.experiment = "teacher"
 
@@ -624,6 +627,8 @@ class Trainer:
             plt.legend()
             plt.show()
             # plt.close()
+
+        sys.exit()
 
 
         # w_student1 = []
