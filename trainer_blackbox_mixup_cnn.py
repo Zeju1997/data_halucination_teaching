@@ -240,9 +240,9 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
 
         elif self.opt.data_mode == "cifar100":
             if self.opt.augment:
@@ -270,9 +270,9 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
 
         elif self.opt.data_mode == "mnist":
             # MNIST normalizing
@@ -283,8 +283,8 @@ class Trainer:
             self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             # train, valid = random_split(train_dataset, [50000, 10000])
             self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
         elif self.opt.data_mode == "moon":
@@ -447,6 +447,19 @@ class Trainer:
     def main(self):
         """Run a single epoch of training and validation
         """
+
+        from time import time
+        import multiprocessing as mp
+
+        for num_workers in range(0, mp.cpu_count(), 2):
+            train_loader = DataLoader(self.train_dataset, shuffle=True, num_workers=num_workers, batch_size=self.opt.batch_size, pin_memory=True)
+            start = time()
+            for epoch in range(1, 3):
+                for i, data in enumerate(train_loader, 0):
+                    pass
+            end = time()
+            print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
+
 
         print("Training")
         # self.set_train()
