@@ -240,9 +240,9 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False)
 
         elif self.opt.data_mode == "cifar100":
             if self.opt.augment:
@@ -270,9 +270,9 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False)
 
         elif self.opt.data_mode == "mnist":
             # MNIST normalizing
@@ -494,10 +494,7 @@ class Trainer:
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-
-        #test = 2
-        if not self.opt.train_student:
-        #if test == 1:
+        if self.opt.train_student:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -548,32 +545,32 @@ class Trainer:
                             loader_eval = iter(self.val_loader)
                             (val_inputs, val_targets) = loader_eval.next()
 
+                        # ---------------------
+                        #  Train Generator
+                        # ---------------------
+
                         val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
+
+                        val_targets_onehot = torch.FloatTensor(val_inputs.shape[0], 100).cuda()
+                        val_targets_onehot.zero_()
+                        val_targets_onehot.scatter_(1, val_targets.unsqueeze(1), 1)
 
                         netG.train()
                         model_features = self.model_features(avg_train_loss, epoch)
                         lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features)
 
-                        batch_size = val_inputs.shape[0]
-                        index = torch.randperm(batch_size).cuda()
+                        index = torch.randperm(val_inputs.shape[0]).cuda()
 
-                        # lam = np.random.beta(alpha, alpha, size=(gt_x.shape[0]))
-                        # lam = torch.tensor(lam, dtype=torch.float).cuda()
-                        # mixed_y = lam * y + (1 - lam) * y[index]
+                        x_lam = torch.reshape(lam, (val_inputs.shape[0], 1, 1, 1))
+                        y_lam = torch.reshape(lam, (val_inputs.shape[0], 1))
 
-                        # lam = torch.unsqueeze(lam, 1)
-                        lam = torch.unsqueeze(lam, 2)
-                        lam = torch.unsqueeze(lam, 3)
-                        mixed_x = lam * val_inputs + (1 - lam) * val_inputs[index, :]
-
-                        targets_a, targets_b = val_targets, val_targets[index]
-
-                        # inputs, targets = inputs.cuda(), targets.long().cuda()
-                        # mixed_x, targets_a, targets_b, lam = mixup_data(gt_x, gt_y, alpha=1.0)
+                        mixed_x = x_lam * val_inputs + (1 - x_lam) * val_inputs[index, :]
+                        mixed_y = y_lam * val_targets_onehot + (1 - y_lam) * val_targets_onehot[index]
 
                         outputs = self.student(mixed_x)
-                        loss = mixup_criterion(self.loss_fn, outputs, targets_a.long(), targets_b.long(), lam)
-                        # loss = self.loss_fn(outputs, mixed_y.long())
+
+                        loss = self.loss_fn(outputs, mixed_y)
+
                         tmp_train_loss = tmp_train_loss + loss.item()
 
                         optimizer_G.zero_grad()
@@ -581,35 +578,36 @@ class Trainer:
                         optimizer_G.step()
                         netG.eval()
 
+                        # ---------------------
+                        #  Train Student
+                        # ---------------------
+
                         inputs, targets = inputs.cuda(), targets.long().cuda()
-                        # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+
+                        targets_onehot = torch.FloatTensor(inputs.shape[0], 100).cuda()
+                        targets_onehot.zero_()
+                        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
                         self.student.train()
-                        lam = netG(inputs.cuda(), targets.cuda(), model_features)
+                        model_features = self.model_features(avg_train_loss, epoch)
+                        lam = netG(inputs, targets.long(), model_features)
 
-                        batch_size = inputs.shape[0]
-                        index = torch.randperm(batch_size).cuda()
+                        index = torch.randperm(inputs.shape[0]).cuda()
 
-                        # lam = np.random.beta(alpha, alpha, size=(gt_x.shape[0]))
-                        # lam = torch.tensor(lam, dtype=torch.float).cuda()
-                        # mixed_y = lam * y + (1 - lam) * y[index]
+                        x_lam = torch.reshape(lam, (inputs.shape[0], 1, 1, 1))
+                        y_lam = torch.reshape(lam, (inputs.shape[0], 1))
 
-                        # lam = torch.unsqueeze(lam, 1)
-                        lam = torch.unsqueeze(lam, 2)
-                        lam = torch.unsqueeze(lam, 3)
-                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-
-                        targets_a, targets_b = targets, targets[index]
+                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
+                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
                         outputs = self.student(mixed_x)
-                        loss_stu = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
-                        # loss = self.loss_fn(outputs, mixed_y.long())
+
+                        loss_stu = self.loss_fn(outputs, mixed_y)
 
                         student_optim.zero_grad()
                         loss_stu.backward()
                         student_optim.step()
                         self.student.eval()
-
 
                         self.step += 1
 
@@ -733,48 +731,61 @@ class Trainer:
             res_student = []
             res_loss_student = []
 
+            '''
+            batch_size = 5
+            nb_digits = 10
+            # Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
+            y = torch.LongTensor(batch_size,1).random_() % nb_digits
+            # One hot encoding buffer that you create out of the loop and just keep reusing
+            y_onehot = torch.FloatTensor(batch_size, nb_digits)
+
+            # In your for loop
+            y_onehot.zero_()
+            y_onehot.scatter_(1, y, 1)
+
+            print(y)
+            print(y_onehot)
+            '''
+
             student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.student.train()
             self.step = 0
             avg_train_loss = 0
             tmp_train_loss = 0
+            model_paramters = list(self.student.parameters())
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()
                     for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                        n_samples = inputs.shape[0]
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+                        targets_onehot = torch.FloatTensor(n_samples, 100).cuda()
+                        targets_onehot.zero_()
+                        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
-                        index = torch.randperm(inputs.shape[0]).cuda()
+                        index = torch.randperm(n_samples).cuda()
                         model_features = self.model_features(avg_train_loss, epoch)
                         lam = netG(inputs, targets.long(), model_features)
+                        # lam = torch.rand(n_samples, 1).cuda()
 
-                        # lam = np.random.beta(1.0, 1.0, size=(inputs.shape[0], 1, 1, 1))
+                        x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
+                        y_lam = torch.reshape(lam, (n_samples, 1))
 
-                        # lam = np.random.beta(1.0, 1.0)
-                        # lam = torch.tensor(lam).float().cuda()
-                        # print(lam)
-
-
-                        # print("model_features", lam)
-                        lam = torch.unsqueeze(lam, 2)
-                        lam = torch.unsqueeze(lam, 3)
-                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-
-                        targets_a, targets_b = targets, targets[index]
-
-                        # mixed_x, targets_a, targets_b = mixup_data(inputs, gt_x_2, gt_y_1, gt_y_2, alpha)
-
-                        # first_image = np.array(data.cpu(), dtype='float')
-                        # pixels = first_image.reshape((28, 28))
-                        # plt.imshow(pixels, cmap='gray')
-                        # plt.title("Label {}".format(target.item()))
-                        # plt.show()
+                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
+                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
                         outputs = self.student(mixed_x)
-                        loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
-                        # loss = self.loss_fn(outputs, mixed_y.long())
 
+                        loss = self.loss_fn(outputs, mixed_y)
+                        # print("loss2", loss)
+
+                        # targets_a, targets_b = targets, targets[index]
+                        # loss1 = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, y_lam)
+                        # print("loss1", loss1)
+
+                        # loss = self.loss_fn(outputs, mixed_y.long())
+                        # print("loss2", loss)
                         tmp_train_loss = tmp_train_loss + loss.item()
 
                         student_optim.zero_grad()
@@ -948,12 +959,6 @@ class Trainer:
                     for batch_idx, (inputs, targets) in enumerate(self.train_loader):
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-
-                        # first_image = np.array(data.cpu(), dtype='float')
-                        # pixels = first_image.reshape((28, 28))
-                        # plt.imshow(pixels, cmap='gray')
-                        # plt.title("Label {}".format(target.item()))
-                        # plt.show()
 
                         outputs = mixup_baseline(mixed_x)
                         loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)

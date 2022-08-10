@@ -33,4 +33,4 @@ img_size: 32
 augment: True
 # train_student: True
 # train_sgd: True
-# train_baseline: False
+train_baseline: True
