@@ -17,10 +17,10 @@ hidden_dim: 32
 latent_dim: 24
 n_unroll: 100 # 1000
 n_unroll_blocks: 40
-n_epochs: 50
+n_epochs: 200
 start_saving: 1
 save_frequency: 1
-label_dim: 10
+label_dim: 100
 n_critic: 1
 log_interval: 100
 n_classes: 100
@@ -31,3 +31,6 @@ seed: 1
 channels: 3
 img_size: 32
 augment: True
+train_student: True
+train_sgd: False
+train_baseline: False

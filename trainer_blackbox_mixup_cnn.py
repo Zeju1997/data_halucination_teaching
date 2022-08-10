@@ -319,16 +319,13 @@ class Trainer:
                 self.student = networks.CNN(in_channels=3, num_classes=10).cuda()
                 self.baseline = networks.CNN(in_channels=3, num_classes=10).cuda()
             elif self.opt.data_mode == "cifar100":
-                # self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.teacher = networks.CNN(in_channels=3, num_classes=100).cuda()
+                self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
                 self.teacher.apply(initialize_weights)
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
                 # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-                # self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.student = networks.CNN(in_channels=3, num_classes=100).cuda()
-                # self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
+                self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
             else: # mnist / gaussian / moon
                 self.teacher = networks.ResNet18(in_channels=1).cuda()
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
@@ -450,28 +447,21 @@ class Trainer:
         # self.set_train()
 
         torch.manual_seed(self.opt.seed)
-        # np.random.seed(args.seed)
+        np.random.seed(self.opt.seed)
+        torch.cuda.manual_seed(self.opt.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
-        # torch.manual_seed(args.seed)
         # cudnn.enabled=True
-        # torch.cuda.manual_seed(args.seed)
 
         if self.opt.data_mode == "cifar10":
-            example = networks.CNN(in_channels=3, num_classes=10).cuda()
-            # example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            tmp_student = networks.CNN(in_channels=3, num_classes=10).cuda()
-            # tmp_student = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            mixup_baseline = networks.CNN(in_channels=3, num_classes=10).cuda()
-            # mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+            example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+            tmp_student = networks.ResNet18(in_channels=3, num_classes=10).cuda()
+            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
 
         elif self.opt.data_mode == "cifar100":
-            # example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            example = networks.CNN(in_channels=3, num_classes=100).cuda()
-            # tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            tmp_student = networks.CNN(in_channels=3, num_classes=100).cuda()
-            # mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            mixup_baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
+            example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
 
         elif self.opt.data_mode == "mnist":
             example = networks.ResNet18(in_channels=1, num_classes=10).cuda()
@@ -488,7 +478,6 @@ class Trainer:
 
 
         if self.opt.train_student:
-
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -632,7 +621,7 @@ class Trainer:
                     # mixup_baseline.update(mixed_x, mixed_y)
                     '''
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
@@ -670,8 +659,6 @@ class Trainer:
                 # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
                 # w_diff_mixup.append(diff.detach().clone().cpu())
 
-                mixup_baseline.train()
-
             if self.visualize == False:
                 fig = plt.figure()
                 # plt.plot(w_diff_mixup, c="c", label="Mixup")
@@ -681,6 +668,111 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+
+        if self.opt.train_student:
+            # w_student1 = []
+            # for param in self.student.parameters():
+            #     w_student1.append(param.data.clone())
+
+            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+            # self.student.load_state_dict(w_init)
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            netG_path = os.path.join(self.log_path, 'weights/best_model_netG.pth')
+            netG = blackbox_mixup.Generator(self.opt).cuda()
+            netG.load_state_dict(torch.load(netG_path))
+
+            # w_student2 = []
+            # for param in self.student.parameters():
+            #    w_student2.append(param.data.clone())
+
+            self.experiment = "Trained_Mixup_fixed_G"
+            print("Start training {} ...".format(self.experiment))
+            logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+            self.student.train()
+            self.step = 0
+            for epoch in tqdm(range(self.opt.n_epochs)):
+                if epoch != 0:
+                    self.student.train()
+                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+
+                        index = torch.randperm(inputs.shape[0]).cuda()
+                        lam = netG(inputs, targets.long())
+                        lam = torch.unsqueeze(lam, 2)
+                        lam = torch.unsqueeze(lam, 3)
+                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
+
+                        targets_a, targets_b = targets, targets[index]
+
+                        # mixed_x, targets_a, targets_b = mixup_data(inputs, gt_x_2, gt_y_1, gt_y_2, alpha)
+
+                        # first_image = np.array(data.cpu(), dtype='float')
+                        # pixels = first_image.reshape((28, 28))
+                        # plt.imshow(pixels, cmap='gray')
+                        # plt.title("Label {}".format(target.item()))
+                        # plt.show()
+
+                        outputs = self.student(mixed_x)
+                        loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
+                        # loss = self.loss_fn(outputs, mixed_y.long())
+
+                        student_optim.zero_grad()
+                        loss.backward()
+                        student_optim.step()
+
+                        self.step += 1
+                        if batch_idx % self.opt.log_interval == 0:
+                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                100. * batch_idx / len(self.train_loader), loss.item()))
+
+                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                res_student.append(acc)
+                res_loss_student.append(test_loss)
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+
+                '''
+                self.student.eval()
+                test = self.student(X_test.cuda()).cpu()
+    
+                a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+                a_student.append(a)
+                b_student.append(b)
+    
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                    _, predicted = torch.max(test, dim=1)
+                    nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_student.append(acc)
+                '''
+                diff = 0
+                # diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
+                # w_diff_student.append(diff.detach().clone().cpu())
+
+                # w_student = []
+                # for param in self.student.parameters():
+                #     w_student.append(param.data)
+                # diff = weight_diff(w_teacher, w_student)
+                # w_diff_student.append(diff)
+
 
 
         if self.opt.train_sgd:
@@ -1625,7 +1717,7 @@ class Trainer:
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item())
 
-    def test(self, model, test_loader, epoch):
+    def test(self, model, test_loader, epoch, netG=None):
         model.eval()
         test_loss = 0
         correct = 0
@@ -1651,10 +1743,17 @@ class Trainer:
 
         if epoch == 0 or acc > self.best_acc:
             self.save_model(model=model, name=self.experiment)
+            if netG is not None:
+                self.save_model(model=netG, name='netG')
         if acc > self.best_acc:
             best_acc = acc
 
         return acc, test_loss
+
+    def model_feature(self):
+        current_iter = self.step / (self.opt.n_epochs * len(self.train_loader))
+        avg_training_loss = self.step / (self.opt.n_epochs * len(self.train_loader))
+        best_val_loss = self.best_acc
 
     def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
