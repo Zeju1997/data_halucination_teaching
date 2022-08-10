@@ -495,7 +495,7 @@ class Trainer:
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
 
-        if self.opt.train_student:
+        if not self.opt.train_student:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -728,9 +728,14 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
 
+            res_student = []
+            res_loss_student = []
+
             student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
             self.student.train()
             self.step = 0
+            avg_train_loss = 0
+            tmp_train_loss = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()
@@ -739,7 +744,8 @@ class Trainer:
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
-                        lam = netG(inputs, targets.long())
+                        model_features = self.model_features(avg_train_loss, epoch)
+                        lam = netG(inputs, targets.long(), model_features)
                         lam = torch.unsqueeze(lam, 2)
                         lam = torch.unsqueeze(lam, 3)
                         mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
@@ -758,6 +764,8 @@ class Trainer:
                         loss = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, lam)
                         # loss = self.loss_fn(outputs, mixed_y.long())
 
+                        tmp_train_loss = tmp_train_loss + loss.item()
+
                         student_optim.zero_grad()
                         loss.backward()
                         student_optim.step()
@@ -770,9 +778,18 @@ class Trainer:
 
                         self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
+                    avg_train_loss = tmp_train_loss / len(self.train_loader)
+                    tmp_train_loss = 0
+
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
+
+                if epoch == 1:
+                    self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
+                    avg_train_loss = self.init_train_loss
+                    self.init_test_loss = test_loss
+                    self.best_test_loss = test_loss
 
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -910,6 +927,10 @@ class Trainer:
             mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
+            self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     mixup_baseline.train()
