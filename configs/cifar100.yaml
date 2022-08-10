@@ -31,6 +31,6 @@ seed: 1
 channels: 3
 img_size: 32
 augment: True
-train_student: False
-train_sgd: SGD
+train_student: True
+train_sgd: True
 train_baseline: False

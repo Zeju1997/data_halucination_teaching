@@ -67,9 +67,9 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return loss
 
 
-class Generator1(nn.Module):
+class Generator(nn.Module):
     def __init__(self, opt):
-        super(Generator1, self).__init__()
+        super(Generator, self).__init__()
 
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
@@ -111,9 +111,9 @@ class Generator1(nn.Module):
         return x
 
 
-class Generator(nn.Module):
+class Generator1(nn.Module):
     def __init__(self, opt):
-        super(Generator, self).__init__()
+        super(Generator1, self).__init__()
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
