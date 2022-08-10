@@ -495,7 +495,9 @@ class Trainer:
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
 
+        #test = 2
         if not self.opt.train_student:
+        #if test == 1:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -731,7 +733,7 @@ class Trainer:
             res_student = []
             res_loss_student = []
 
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.student.train()
             self.step = 0
             avg_train_loss = 0
@@ -746,6 +748,15 @@ class Trainer:
                         index = torch.randperm(inputs.shape[0]).cuda()
                         model_features = self.model_features(avg_train_loss, epoch)
                         lam = netG(inputs, targets.long(), model_features)
+
+                        # lam = np.random.beta(1.0, 1.0, size=(inputs.shape[0], 1, 1, 1))
+
+                        # lam = np.random.beta(1.0, 1.0)
+                        # lam = torch.tensor(lam).float().cuda()
+                        # print(lam)
+
+
+                        # print("model_features", lam)
                         lam = torch.unsqueeze(lam, 2)
                         lam = torch.unsqueeze(lam, 3)
                         mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
@@ -1800,6 +1811,8 @@ class Trainer:
                 self.save_model(model=netG, name='netG')
         if acc > self.best_acc:
             best_acc = acc
+        if self.best_test_loss > test_loss:
+            self.best_test_loss = test_loss
 
         return acc, test_loss
 
