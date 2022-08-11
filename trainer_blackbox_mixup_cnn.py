@@ -202,6 +202,9 @@ def initialize_weights(m):
           nn.init.constant_(m.bias.data, 0)
 
 
+activation = {}
+
+
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -285,12 +288,16 @@ class Trainer:
             self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
+
         elif self.opt.data_mode == "moon":
             print("Generating moon data ...")
+
         elif self.opt.data_mode == "linearly_seperable":
             print("Generating linearly seperable data ...")
+
         else:
             print("Unrecognized data!")
             sys.exit()
@@ -298,7 +305,7 @@ class Trainer:
         self.get_teacher_student()
 
         self.writers = {}
-        for mode in ["train", "test"]:
+        for mode in ["train", "val", "test"]:
             self.writers[mode] = SummaryWriter(os.path.join(self.log_path, mode))
 
         # self.loss_fn = nn.MSELoss()
@@ -311,6 +318,8 @@ class Trainer:
         self.init_test_loss = 0
 
         self.experiment = "teacher"
+
+        self.query_set_1, self.query_set_2 = self.get_query_set()
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
@@ -444,6 +453,43 @@ class Trainer:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
+    def get_query_set(self):
+        """decrease the learning rate at 100 and 150 epoch"""
+        query_set_1 = torch.empty(self.opt.n_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
+        query_set_2 = torch.empty(self.opt.n_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
+        val_iter = iter(self.val_loader)
+        for i in range(self.opt.n_classes):
+            while True:
+                try:
+                    (inputs, targets) = val_iter.next()
+                except:
+                    val_iter = iter(self.val_loader)
+                    (inputs, targets) = val_iter.next()
+                idx = ((targets == i).nonzero(as_tuple=True)[0])
+                if idx.nelement() == 0:
+                    pass
+                else:
+                    idx = idx[0]
+                    query_set_1[i, :] = inputs[idx, :]
+                    break
+
+        for i in range(self.opt.n_classes):
+            while True:
+                try:
+                    (inputs, targets) = val_iter.next()
+                except:
+                    val_iter = iter(self.val_loader)
+                    (inputs, targets) = val_iter.next()
+                idx = ((targets == i).nonzero(as_tuple=True)[0])
+                if idx.nelement() == 0:
+                    pass
+                else:
+                    idx = idx[0]
+                    query_set_2[i, :] = inputs[idx, :]
+                    break
+
+        return query_set_1.cuda(), query_set_2.cuda()
+
     def main(self):
         """Run a single epoch of training and validation
         """
@@ -459,6 +505,24 @@ class Trainer:
                     pass
             end = time()
             print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
+        
+        import torch
+        from torchvision import transforms
+        import torchvision.datasets as datasets
+        import matplotlib.pyplot as plt
+        from sklearn.cluster import KMeans
+
+
+        kmeans = KMeans(n_clusters=10)
+
+        X = self.val_dataset.dataset.data
+
+        # KMmodel = kmeans.fit(self.val_dataset.data.numpy())
+        KMmodel = kmeans.fit(X)
+        print("cluster centers", kmeans.labels_)
+        print("cluster centers", kmeans.cluster_centers_)
+        sys.exit()
+        
         '''
 
         print("Training")
@@ -471,24 +535,9 @@ class Trainer:
         # cudnn.benchmark = True
         # cudnn.enabled=True
 
-        if self.opt.data_mode == "cifar10":
-            example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            tmp_student = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-
-        elif self.opt.data_mode == "cifar100":
-            example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-
-        elif self.opt.data_mode == "mnist":
-            example = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-            tmp_student = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-
-        else:
-            print("Unrecognized data mode!")
-            sys.exit()
+        example = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        tmp_student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        mixup_baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         example.load_state_dict(self.teacher.state_dict())
         tmp_student.load_state_dict(self.teacher.state_dict())
@@ -528,6 +577,8 @@ class Trainer:
             loader_eval = iter(self.val_loader)
             avg_train_loss = 0
             tmp_train_loss = 0
+            feat_sim = 0
+            self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
             for epoch in tqdm(range(self.opt.n_epochs)):
                 for param_group in student_optim.param_groups:
                     print("student lr", param_group['lr'])
@@ -557,7 +608,8 @@ class Trainer:
 
                         netG.train()
                         model_features = self.model_features(avg_train_loss, epoch)
-                        lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features)
+
+                        lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim)
 
                         index = torch.randperm(val_inputs.shape[0]).cuda()
 
@@ -567,9 +619,14 @@ class Trainer:
                         mixed_x = x_lam * val_inputs + (1 - x_lam) * val_inputs[index, :]
                         mixed_y = y_lam * val_targets_onehot + (1 - y_lam) * val_targets_onehot[index]
 
-                        outputs = self.student(mixed_x)
+                        outputs_mixed = self.student(mixed_x)
 
-                        loss = self.loss_fn(outputs, mixed_y)
+                        loss_mixed = self.loss_fn(outputs_mixed, mixed_y)
+
+                        outputs_normal = self.student(val_inputs)
+                        loss_normal = self.loss_fn(outputs_normal, val_targets)
+
+                        loss = - (loss_normal - loss_mixed)
 
                         tmp_train_loss = tmp_train_loss + loss.item()
 
@@ -590,7 +647,7 @@ class Trainer:
 
                         self.student.train()
                         model_features = self.model_features(avg_train_loss, epoch)
-                        lam = netG(inputs, targets.long(), model_features)
+                        lam = netG(inputs, targets.long(), model_features, feat_sim)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
 
@@ -614,10 +671,25 @@ class Trainer:
                         if batch_idx % self.opt.log_interval == 0:
                             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                                 epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                                100. * batch_idx / len(self.train_loader), loss.item()))
-                            self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-                    avg_train_loss = tmp_train_loss / len(self.train_loader)
-                    tmp_train_loss = 0
+                                100. * batch_idx / len(self.train_loader), loss_stu.item()), '\t',
+                                'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
+                                100. * batch_idx / len(self.val_loader), loss.item()))
+                            self.log(mode="train", name="loss_student", value=loss_stu.item(), step=self.step)
+                            self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
+
+                        if self.step % self.opt.n_unroll_blocks == 0:
+                            avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
+                            tmp_train_loss = 0
+
+                            _ = self.student(self.query_set_1)
+                            act1 = activation['latent'].squeeze()
+                            _ = self.student(self.query_set_2)
+                            act2 = activation['latent'].squeeze()
+                            cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+                            feat_sim = cos(act1, act2)
+                    # avg_train_loss = tmp_train_loss / len(self.train_loader)
+                    # tmp_train_loss = 0
                     '''
                     # w_t = self.student.lin.weight
     
@@ -654,6 +726,13 @@ class Trainer:
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
+
+                _ = self.student(self.query_set_1)
+                act1 = activation['latent'].squeeze()
+                _ = self.student(self.query_set_2)
+                act2 = activation['latent'].squeeze()
+                cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+                feat_sim = cos(act1, act2)
 
                 if epoch == 1:
                     self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
@@ -703,6 +782,8 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+        sys.exit()
 
         if self.opt.train_student:
             # w_student1 = []
@@ -800,8 +881,11 @@ class Trainer:
 
                         self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-                    avg_train_loss = tmp_train_loss / len(self.train_loader)
-                    tmp_train_loss = 0
+                        if self.step % self.opt.n_unroll_blocks == 0:
+                            avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
+                            tmp_train_loss = 0
+                    # avg_train_loss = tmp_train_loss / len(self.train_loader)
+                    # tmp_train_loss = 0
 
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
@@ -1730,6 +1814,11 @@ class Trainer:
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
             '''
+
+    def get_activation(self, name):
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
 
     def data_sampler(self, X, y, i):
         i_min = i * self.opt.batch_size

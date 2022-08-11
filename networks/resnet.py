@@ -189,10 +189,12 @@ class ResNet(nn.Module):
         return out
 
 
+# def ResNet18(in_channels=3, num_classes=10):
+    # return ResNet(model=18, in_channels=in_channels, num_classes=num_classes)
+    # return ResNet(PreActBlock, [2,2,2,2])
 
 def ResNet18(in_channels=3, num_classes=10):
-    # return ResNet(model=18, in_channels=in_channels, num_classes=num_classes)
-    return ResNet(PreActBlock, [2,2,2,2])
+    return ResNet_ACOUSTICS(model=18, in_channels=in_channels, num_classes=num_classes)
 
 
 def ResNet34(in_channels=3, num_classes=10):

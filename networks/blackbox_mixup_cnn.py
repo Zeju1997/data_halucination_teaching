@@ -75,7 +75,7 @@ class Generator(nn.Module):
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = self.opt.label_dim + int(np.prod(self.img_shape))
+        in_channels = self.opt.label_dim + int(np.prod(self.img_shape)) + self.opt.n_classes
 
         self.model = nn.Sequential(
             nn.Linear(in_channels, 512),
@@ -95,10 +95,11 @@ class Generator(nn.Module):
 
         self.act = nn.Sigmoid()
 
-    def forward(self, img, label, data):
+    def forward(self, img, label, data, feat_sim):
         # Concatenate label embedding and image to produce input
         # d_in = torch.cat((img1.view(img1.size(0), -1), (img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1))
-        d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label)), -1)
+        feat = feat_sim.unsqueeze(0).repeat(img.shape[0], 1)
+        d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label), feat), -1)
         x = self.model(d_in)
 
         data = data.unsqueeze(0)
