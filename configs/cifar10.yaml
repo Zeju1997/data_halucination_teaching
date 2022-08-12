@@ -34,3 +34,4 @@ augment: True
 # train_student: True
 # train_sgd: False
 # train_baseline: False
+n_query_classes: 3
