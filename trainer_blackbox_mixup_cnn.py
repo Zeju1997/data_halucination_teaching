@@ -346,7 +346,12 @@ class Trainer:
                 torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
                 # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
+                path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
+                # print(path)
+                # sys.exit()
+
                 self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
+                # self.student.load_state_dict(torch.load(path))
                 self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
                 self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
             else: # mnist / gaussian / moon
@@ -395,7 +400,7 @@ class Trainer:
         else:
             print("Unrecognized teacher!")
             sys.exit()
-        self.student.load_state_dict(self.teacher.state_dict())
+        # self.student.load_state_dict(self.teacher.state_dict())
         self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
@@ -503,7 +508,7 @@ class Trainer:
 
     def get_query_set(self):
         """decrease the learning rate at 100 and 150 epoch"""
-        n_samples = 20
+        n_samples = 10
         query_set = torch.zeros(self.opt.n_query_classes, n_samples, self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         sample_classes = np.random.choice(self.opt.n_classes, self.opt.n_query_classes)
@@ -721,7 +726,7 @@ class Trainer:
                             tmp_train_loss = 0
 
                             feat_sim = self.query_model()
-                            print(feat_sim)
+                            print(feat_sim.mean())
 
                     # avg_train_loss = tmp_train_loss / len(self.train_loader)
                     # tmp_train_loss = 0
@@ -763,6 +768,7 @@ class Trainer:
                 res_loss_student.append(test_loss)
 
                 feat_sim = self.query_model()
+                print(feat_sim.mean())
 
                 if epoch == 1:
                     self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
@@ -1174,12 +1180,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
-
-
         sys.exit()
-
-
 
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()
@@ -1866,18 +1867,24 @@ class Trainer:
         feat_sim = torch.empty(len(classes))
 
         cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-
         for i, cls in enumerate(classes):
             a, b = cls[0], cls[1]
 
             _ = self.student(self.query_set[a, :])
-            # act1 = activation['latent'].squeeze()
-            act1 = activation['latent'].mean(0).squeeze()
+            act1 = activation['latent'].squeeze()
+            # act1 = activation['latent'].mean(0).squeeze()
+
+            act1_norm = (act1 - act1.mean(0)) / act1.std(0)
+
             _ = self.student(self.query_set[b, :])
-            # act2 = activation['latent'].squeeze()
-            act2 = activation['latent'].mean(0).squeeze()
-            # feat_sim[i] = HSIC(act1, act2)
-            cos_sim = cos(act1, act2)
+            act2 = activation['latent'].squeeze()
+
+            # act2 = activation['latent'].mean(0).squeeze()
+
+            act2_norm = (act2 - act2.mean(0)) / act2.std(0)
+
+            # feat_sim[i] = HSIC(act1_norm, act2_norm)
+            # cos_sim = cos(act1, act2)
             feat_sim[i] = torch.mean(cos_sim)
 
         # _ = self.student(self.query_set_1)

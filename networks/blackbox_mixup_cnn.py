@@ -78,9 +78,9 @@ class Generator(nn.Module):
         in_channels = self.opt.label_dim + int(np.prod(self.img_shape))
 
         self.model = nn.Sequential(
-            nn.Linear(in_channels, 512),
+            nn.Linear(in_channels, 1024),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 256),
+            nn.Linear(1024, 256),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(256, 128),
