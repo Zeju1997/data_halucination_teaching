@@ -333,34 +333,17 @@ class Trainer:
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
-            if self.opt.data_mode == "cifar10":
-                self.teacher = networks.CNN(in_channels=3, num_classes=10).cuda()
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
+            self.teacher = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            self.teacher.apply(initialize_weights)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+            # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-                self.student = networks.CNN(in_channels=3, num_classes=10).cuda()
-                self.baseline = networks.CNN(in_channels=3, num_classes=10).cuda()
-            elif self.opt.data_mode == "cifar100":
-                self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.teacher.apply(initialize_weights)
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
+            path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
 
-                path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
-                # print(path)
-                # sys.exit()
-
-                self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                # self.student.load_state_dict(torch.load(path))
-                self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-                self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            else: # mnist / gaussian / moon
-                self.teacher = networks.ResNet18(in_channels=1).cuda()
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
-
-                self.student = networks.ResNet18(in_channels=1).cuda()
-                self.baseline = networks.ResNet18(in_channels=1).cuda()
+            self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            # self.student.load_state_dict(torch.load(path))
+            self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
+            self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         elif self.opt.teaching_mode == "surrogate":
             if self.opt.data_mode == "cifar10":
@@ -645,7 +628,7 @@ class Trainer:
 
                         val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
 
-                        val_targets_onehot = torch.FloatTensor(val_inputs.shape[0], 100).cuda()
+                        val_targets_onehot = torch.FloatTensor(val_inputs.shape[0], self.opt.n_classes).cuda()
                         val_targets_onehot.zero_()
                         val_targets_onehot.scatter_(1, val_targets.unsqueeze(1), 1)
 
@@ -684,7 +667,7 @@ class Trainer:
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        targets_onehot = torch.FloatTensor(inputs.shape[0], 100).cuda()
+                        targets_onehot = torch.FloatTensor(inputs.shape[0], self.opt.n_classes).cuda()
                         targets_onehot.zero_()
                         targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
@@ -875,7 +858,7 @@ class Trainer:
                         n_samples = inputs.shape[0]
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-                        targets_onehot = torch.FloatTensor(n_samples, 100).cuda()
+                        targets_onehot = torch.FloatTensor(n_samples, self.opt.n_classes).cuda()
                         targets_onehot.zero_()
                         targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
@@ -1874,17 +1857,17 @@ class Trainer:
             act1 = activation['latent'].squeeze()
             # act1 = activation['latent'].mean(0).squeeze()
 
-            act1_norm = (act1 - act1.mean(0)) / act1.std(0)
+            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
 
             _ = self.student(self.query_set[b, :])
             act2 = activation['latent'].squeeze()
 
             # act2 = activation['latent'].mean(0).squeeze()
 
-            act2_norm = (act2 - act2.mean(0)) / act2.std(0)
+            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
 
             # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            # cos_sim = cos(act1, act2)
+            cos_sim = cos(act1, act2)
             feat_sim[i] = torch.mean(cos_sim)
 
         # _ = self.student(self.query_set_1)
