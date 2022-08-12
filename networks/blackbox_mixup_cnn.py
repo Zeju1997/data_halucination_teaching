@@ -89,9 +89,10 @@ class Generator(nn.Module):
             nn.Linear(128, self.opt.n_classes),
             # nn.Sigmoid()
         )
-        feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
+        # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
+        feat_dim = self.opt.n_query_classes
 
-        self.fc1 = nn.Linear(self.opt.n_classes + len(feat_dim), 32)
+        self.fc1 = nn.Linear(self.opt.n_classes + feat_dim, 32)
         self.fc2 = nn.Linear(32, 10)
 
         self.fc3 = nn.Linear(10 + 3, 32)

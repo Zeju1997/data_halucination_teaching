@@ -206,6 +206,11 @@ def initialize_weights(m):
           nn.init.kaiming_uniform_(m.weight.data)
           nn.init.constant_(m.bias.data, 0)
 
+def off_diagonal(x):
+    # return a flattened view of the off-diagonal elements of a square matrix
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 activation = {}
 
@@ -328,8 +333,8 @@ class Trainer:
 
         self.experiment = "teacher"
 
-        # self.query_set_1, self.query_set_2 = self.get_query_set()
-        self.query_set = self.get_query_set()
+        self.query_set_1, self.query_set_2 = self.get_query_set()
+        # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
@@ -341,7 +346,7 @@ class Trainer:
             path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
 
             self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-            # self.student.load_state_dict(torch.load(path))
+            self.student.load_state_dict(torch.load(path))
             self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
             self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
@@ -452,10 +457,10 @@ class Trainer:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def get_query_set1(self):
+    def get_query_set(self):
         """decrease the learning rate at 100 and 150 epoch"""
-        query_set_1 = torch.empty(self.opt.n_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
-        query_set_2 = torch.empty(self.opt.n_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
+        query_set_1 = torch.empty(self.opt.n_query_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
+        query_set_2 = torch.empty(self.opt.n_query_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
         val_iter = iter(self.val_loader)
         for i in range(self.opt.n_classes):
             while True:
@@ -489,7 +494,7 @@ class Trainer:
 
         return query_set_1.cuda(), query_set_2.cuda()
 
-    def get_query_set(self):
+    def get_query_set2(self):
         """decrease the learning rate at 100 and 150 epoch"""
         n_samples = 10
         query_set = torch.zeros(self.opt.n_query_classes, n_samples, self.opt.channels, self.opt.img_size, self.opt.img_size)
@@ -552,6 +557,8 @@ class Trainer:
         
         '''
 
+        print(self.opt)
+
         print("Training")
         # self.set_train()
 
@@ -606,13 +613,6 @@ class Trainer:
             tmp_train_loss = 0
             feat_sim = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
-                for param_group in student_optim.param_groups:
-                    print("student lr", param_group['lr'])
-                for param_group in optimizer_G.param_groups:
-                    print("optimizer_G lr", param_group['lr'])
-                print("")
-                print("")
-                print("")
                 if epoch != 0:
                     self.student.train()
                     for batch_idx, (inputs, targets) in enumerate(self.train_loader):
@@ -647,12 +647,12 @@ class Trainer:
 
                         outputs_mixed = self.student(mixed_x)
 
-                        loss_mixed = self.loss_fn(outputs_mixed, mixed_y)
+                        loss = self.loss_fn(outputs_mixed, mixed_y)
 
-                        outputs_normal = self.student(val_inputs)
-                        loss_normal = self.loss_fn(outputs_normal, val_targets)
+                        # outputs_normal = self.student(val_inputs)
+                        # loss_normal = self.loss_fn(outputs_normal, val_targets)
 
-                        loss = - (loss_normal - loss_mixed)
+                        # loss = - (loss_normal - loss_mixed)
 
                         tmp_train_loss = tmp_train_loss + loss.item()
 
@@ -1850,6 +1850,7 @@ class Trainer:
         feat_sim = torch.empty(len(classes))
 
         cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+        '''
         for i, cls in enumerate(classes):
             a, b = cls[0], cls[1]
 
@@ -1869,6 +1870,41 @@ class Trainer:
             # feat_sim[i] = HSIC(act1_norm, act2_norm)
             cos_sim = cos(act1, act2)
             feat_sim[i] = torch.mean(cos_sim)
+        '''
+        _ = self.student(self.query_set_1)
+        act1 = activation['latent'].squeeze()
+        _ = self.student(self.query_set_2)
+        act2 = activation['latent'].squeeze()
+        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        feat_sim = cos(act1, act2)
+
+        return feat_sim.cuda()
+
+
+    def query_model1(self):
+        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
+        feat_sim = torch.empty(len(classes))
+
+        # m = nn.BatchNorm1d(512, affine=False).cuda()
+
+        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+        for i, cls in enumerate(classes):
+            a, b = cls[0], cls[1]
+
+            _ = self.student(self.query_set[a, :])
+            act1 = activation['latent'].squeeze()
+            # act1_norm = m(act1)
+            # act1 = activation['latent'].mean(0).squeeze()
+
+            _ = self.student(self.query_set[b, :])
+            act2 = activation['latent'].squeeze()
+            # act2_norm = m(act2)
+            # act2 = activation['latent'].mean(0).squeeze()
+
+            # feat_sim[i] = HSIC(act1_norm, act2_norm)
+            cos_sim = cos(act1, act2)
+            feat_sim[i] = torch.mean(cos_sim)
+
 
         # _ = self.student(self.query_set_1)
         # act1 = activation['latent'].squeeze()
@@ -1876,7 +1912,7 @@ class Trainer:
         # act2 = activation['latent'].squeeze()
         # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
         # feat_sim = cos(act1, act2)
-
+        print(feat_sim)
         return feat_sim.cuda()
 
 
