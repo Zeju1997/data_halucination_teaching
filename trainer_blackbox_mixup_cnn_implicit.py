@@ -633,25 +633,27 @@ class Trainer:
 
                         val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
 
-                        # val_targets_onehot = torch.FloatTensor(val_inputs.shape[0], self.opt.n_classes).cuda()
-                        # val_targets_onehot.zero_()
-                        # val_targets_onehot.scatter_(1, val_targets.unsqueeze(1), 1)
+                        val_targets_onehot = torch.FloatTensor(val_inputs.shape[0], self.opt.n_classes).cuda()
+                        val_targets_onehot.zero_()
+                        val_targets_onehot.scatter_(1, val_targets.unsqueeze(1), 1)
 
                         netG.train()
                         model_features = self.model_features(avg_train_loss, epoch)
 
-                        val_lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim)
-                        val_lam = val_lam.mean(0)
+                        lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim)
+                        # print(model_features, feat_sim)
 
                         index = torch.randperm(val_inputs.shape[0]).cuda()
-                        targets_a, targets_b = val_targets, val_targets[index]
-                        mixed_x = val_lam * val_inputs + (1 - val_lam) * val_inputs[index, :]
 
-                        val_outputs = self.student(mixed_x)
+                        x_lam = torch.reshape(lam, (val_inputs.shape[0], 1, 1, 1))
+                        y_lam = torch.reshape(lam, (val_inputs.shape[0], 1))
 
-                        loss = val_lam * self.loss_fn(val_outputs, targets_a) + (1 - val_lam) * self.loss_fn(val_outputs, targets_b)
+                        mixed_x = x_lam * val_inputs + (1 - x_lam) * val_inputs[index, :]
+                        mixed_y = y_lam * val_targets_onehot + (1 - y_lam) * val_targets_onehot[index]
 
-                        # loss = self.loss_fn(outputs_mixed, mixed_y)
+                        outputs_mixed = self.student(mixed_x)
+
+                        loss = self.loss_fn(outputs_mixed, mixed_y)
 
                         # outputs_normal = self.student(val_inputs)
                         # loss_normal = self.loss_fn(outputs_normal, val_targets)
@@ -671,28 +673,25 @@ class Trainer:
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        # targets_onehot = torch.FloatTensor(inputs.shape[0], self.opt.n_classes).cuda()
-                        # targets_onehot.zero_()
-                        # targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
+                        targets_onehot = torch.FloatTensor(inputs.shape[0], self.opt.n_classes).cuda()
+                        targets_onehot.zero_()
+                        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
                         self.student.train()
                         model_features = self.model_features(avg_train_loss, epoch)
                         lam = netG(inputs, targets.long(), model_features, feat_sim)
-                        lam = lam.mean(0)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
 
-                        # x_lam = torch.reshape(lam, (inputs.shape[0], 1, 1, 1))
-                        # y_lam = torch.reshape(lam, (inputs.shape[0], 1))
+                        x_lam = torch.reshape(lam, (inputs.shape[0], 1, 1, 1))
+                        y_lam = torch.reshape(lam, (inputs.shape[0], 1))
 
-                        targets_a, targets_b = targets, targets[index]
-
-                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-                        # mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
+                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
+                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
                         outputs = self.student(mixed_x)
 
-                        loss_stu = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+                        loss_stu = self.loss_fn(outputs, mixed_y)
 
                         student_optim.zero_grad()
                         loss_stu.backward()
@@ -884,18 +883,17 @@ class Trainer:
                         model_features = self.model_features(avg_train_loss, epoch)
 
                         lam = netG(inputs, targets.long(), model_features, feat_sim)
-                        lam = lam.mean(0)
                         # lam = torch.rand(n_samples, 1).cuda()
 
-                        # x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
-                        # y_lam = torch.reshape(lam, (n_samples, 1))
+                        x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
+                        y_lam = torch.reshape(lam, (n_samples, 1))
 
-                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-                        targets_a, targets_b = targets, targets[index]
+                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
+                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
                         outputs = self.student(mixed_x)
 
-                        loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+                        loss = self.loss_fn(outputs, mixed_y)
                         # print("loss2", loss)
 
                         # targets_a, targets_b = targets, targets[index]

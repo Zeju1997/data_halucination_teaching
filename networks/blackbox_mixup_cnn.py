@@ -67,7 +67,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return loss
 
 
-class Generator(nn.Module):
+class Generator1(nn.Module):
     def __init__(self, opt):
         super(Generator, self).__init__()
 
@@ -110,7 +110,7 @@ class Generator(nn.Module):
         return x
 
 
-class Generator2(nn.Module):
+class Generator(nn.Module):
     def __init__(self, opt):
         super(Generator, self).__init__()
 
@@ -137,9 +137,7 @@ class Generator2(nn.Module):
 
         self.fc1 = nn.Linear(self.opt.n_classes + feat_dim, 32)
         self.fc2 = nn.Linear(32, 10)
-
-        self.fc3 = nn.Linear(10 + 3, 32)
-        self.fc4 = nn.Linear(32, 1)
+        self.fc3 = nn.Linear(10 + 3, 1)
 
         self.act = nn.Sigmoid()
 
@@ -156,9 +154,7 @@ class Generator2(nn.Module):
 
         feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
         x = torch.cat((x, feat_model), dim=1)
-        x = F.relu(self.fc3(x))
-
-        x = self.act(self.fc4(x))
+        x = self.act(self.fc3(x))
 
         return x
 
