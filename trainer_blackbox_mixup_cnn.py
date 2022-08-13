@@ -330,6 +330,7 @@ class Trainer:
         self.best_test_loss = 0
         self.init_train_loss = 0
         self.init_test_loss = 0
+        self.init_feat_sim = 0
 
         self.experiment = "teacher"
 
@@ -343,10 +344,10 @@ class Trainer:
             torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
             # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-            path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
+            # path = os.path.join(self.log_path, 'weights/best_model_Vanilla_Mixup.pth')
 
             self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-            self.student.load_state_dict(torch.load(path))
+            # self.student.load_state_dict(torch.load(path))
             self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
             self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
@@ -388,7 +389,7 @@ class Trainer:
         else:
             print("Unrecognized teacher!")
             sys.exit()
-        # self.student.load_state_dict(self.teacher.state_dict())
+        self.student.load_state_dict(self.teacher.state_dict())
         self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
@@ -607,6 +608,10 @@ class Trainer:
             student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            self.init_feat_sim = 0
 
             loader_eval = iter(self.val_loader)
             avg_train_loss = 0
@@ -708,7 +713,7 @@ class Trainer:
                             avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
                             tmp_train_loss = 0
 
-                            feat_sim = self.query_model()
+                            feat_sim = self.query_model() / self.init_feat_sim
                             print(feat_sim.mean())
 
                     # avg_train_loss = tmp_train_loss / len(self.train_loader)
@@ -751,7 +756,10 @@ class Trainer:
                 res_loss_student.append(test_loss)
 
                 feat_sim = self.query_model()
-                print(feat_sim.mean())
+                if epoch == 0:
+                    self.init_feat_sim = feat_sim
+                    feat_sim = 1.0
+                print(feat_sim)
 
                 if epoch == 1:
                     self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
@@ -848,6 +856,11 @@ class Trainer:
             student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.student.train()
             self.step = 0
+            self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            self.init_feat_sim = 0
             avg_train_loss = 0
             tmp_train_loss = 0
             model_paramters = list(self.student.parameters())
@@ -864,6 +877,7 @@ class Trainer:
 
                         index = torch.randperm(n_samples).cuda()
                         model_features = self.model_features(avg_train_loss, epoch)
+
                         lam = netG(inputs, targets.long(), model_features, feat_sim)
                         # lam = torch.rand(n_samples, 1).cuda()
 
@@ -902,7 +916,7 @@ class Trainer:
                             avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
                             tmp_train_loss = 0
 
-                            feat_sim = self.query_model()
+                            feat_sim = self.query_model() / self.init_feat_sim
                     # avg_train_loss = tmp_train_loss / len(self.train_loader)
                     # tmp_train_loss = 0
 
@@ -911,6 +925,10 @@ class Trainer:
                 res_loss_student.append(test_loss)
 
                 feat_sim = self.query_model()
+
+                if epoch == 0:
+                    self.init_feat_sim = feat_sim
+                    feat_sim = 1.0
 
                 if epoch == 1:
                     self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
@@ -1845,7 +1863,7 @@ class Trainer:
 
         return x, y
 
-    def query_model(self):
+    def query_model1(self):
         classes = torch.combinations(torch.arange(self.opt.n_query_classes))
         feat_sim = torch.empty(len(classes))
 
@@ -1881,7 +1899,55 @@ class Trainer:
         return feat_sim.cuda()
 
 
-    def query_model1(self):
+    def query_model(self):
+        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
+        feat_sim = torch.empty(len(classes))
+
+        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+
+        m = nn.BatchNorm1d(512, affine=False).cuda()
+        '''
+        for i, cls in enumerate(classes):
+            a, b = cls[0], cls[1]
+
+            _ = self.student(self.query_set[a, :])
+            act1 = activation['latent'].squeeze()
+            # act1 = activation['latent'].mean(0).squeeze()
+
+            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
+
+            _ = self.student(self.query_set[b, :])
+            act2 = activation['latent'].squeeze()
+
+            # act2 = activation['latent'].mean(0).squeeze()
+
+            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
+
+            # feat_sim[i] = HSIC(act1_norm, act2_norm)
+            cos_sim = cos(act1, act2)
+            feat_sim[i] = torch.mean(cos_sim)
+        '''
+        _ = self.student(self.query_set_1)
+        act1 = activation['latent'].squeeze()
+        act1_norm = m(act1)
+        _ = self.student(self.query_set_2)
+        act2 = activation['latent'].squeeze()
+        act2_norm = m(act2)
+
+        c = act1_norm.T @ act2_norm
+        c.div_(self.opt.n_query_classes)
+
+        on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+        off_diag = off_diagonal(c).pow_(2).sum()
+        feat_sim_loss = on_diag + 0.0051 * off_diag
+
+        # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        # feat_sim = cos(act1, act2)
+
+        return feat_sim_loss.cuda()
+
+
+    def query_model3(self):
         classes = torch.combinations(torch.arange(self.opt.n_query_classes))
         feat_sim = torch.empty(len(classes))
 

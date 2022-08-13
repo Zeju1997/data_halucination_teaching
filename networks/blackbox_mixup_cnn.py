@@ -86,6 +86,49 @@ class Generator(nn.Module):
             nn.Linear(256, 128),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(128, 10),
+            # nn.Sigmoid()
+        )
+        # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
+        feat_dim = self.opt.n_query_classes
+
+        self.fc1 = nn.Linear(10 + 4, 1)
+
+        self.act = nn.Sigmoid()
+
+    def forward(self, img, label, feat_model, feat_sim):
+        # Concatenate label embedding and image to produce input
+        # d_in = torch.cat((img1.view(img1.size(0), -1), (img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1))
+        d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label)), -1)
+        x = self.model(d_in)
+
+        feat_sim = torch.tensor(feat_sim).unsqueeze(0).repeat(img.shape[0], 1)
+        feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
+        x = torch.cat((x, feat_model, feat_sim.cuda()), dim=1)
+        x = self.act(self.fc1(x))
+
+        return x
+
+
+class Generator2(nn.Module):
+    def __init__(self, opt):
+        super(Generator, self).__init__()
+
+        self.opt = opt
+        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
+        self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
+
+        in_channels = self.opt.label_dim + int(np.prod(self.img_shape))
+
+        self.model = nn.Sequential(
+            nn.Linear(in_channels, 1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(1024, 256),
+            nn.Dropout(0.4),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(256, 128),
+            nn.Dropout(0.4),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(128, self.opt.n_classes),
             # nn.Sigmoid()
         )
