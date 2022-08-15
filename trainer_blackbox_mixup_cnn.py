@@ -218,7 +218,7 @@ activation = {}
 class Trainer:
     def __init__(self, options):
         self.opt = options
-        self.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
 
         self.visualize = True
 
@@ -320,7 +320,7 @@ class Trainer:
 
         self.writers = {}
         for mode in ["train", "val", "test"]:
-            self.writers[mode] = SummaryWriter(os.path.join(self.log_path, mode))
+            self.writers[mode] = SummaryWriter(os.path.join(self.opt.log_path, mode))
 
         # self.loss_fn = nn.MSELoss()
         self.loss_fn = nn.CrossEntropyLoss()
@@ -334,17 +334,19 @@ class Trainer:
 
         self.experiment = "teacher"
 
-        self.query_set_1, self.query_set_2 = self.get_query_set()
+        # self.query_set_1, self.query_set_2 = self.get_query_set()
         # self.query_set = self.get_query_set()
+        features, labels = self.get_query_set()
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
             self.teacher = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
             self.teacher.apply(initialize_weights)
+
             torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
             # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-            # path = os.path.join(self.log_path, 'weights/best_model_SGD.pth')
+            # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
             self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
             # self.student.load_state_dict(torch.load(path))
@@ -458,7 +460,7 @@ class Trainer:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def get_query_set(self):
+    def get_query_set3(self):
         """decrease the learning rate at 100 and 150 epoch"""
         query_set_1 = torch.empty(self.opt.n_query_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
         query_set_2 = torch.empty(self.opt.n_query_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
@@ -494,6 +496,24 @@ class Trainer:
                     break
 
         return query_set_1.cuda(), query_set_2.cuda()
+
+    def get_query_set(self):
+        """decrease the learning rate at 100 and 150 epoch"""
+        query_set = torch.empty(self.opt.n_query_classes, self.opt.channels, self.opt.img_size, self.opt.img_size)
+
+        val_iter = iter(self.val_loader)
+
+        try:
+            (inputs, targets) = val_iter.next()
+        except:
+            val_iter = iter(self.val_loader)
+            (inputs, targets) = val_iter.next()
+
+        outputs = self.student(inputs.cuda())
+
+        features = activation['latent']
+
+        return features.cuda(), targets.cuda()
 
     def get_query_set2(self):
         """decrease the learning rate at 100 and 150 epoch"""
@@ -582,7 +602,7 @@ class Trainer:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -639,6 +659,10 @@ class Trainer:
 
                         netG.train()
                         model_features = self.model_features(avg_train_loss, epoch)
+
+                        feat, labels = self.get_query_set()
+                        self.estimator.update_CV(feat, labels)
+                        cv_matrix = self.estimator.CoVariance.detach()
 
                         val_lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim)
                         val_lam = val_lam.mean(0)
@@ -757,6 +781,10 @@ class Trainer:
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
+                feat, labels = self.get_query_set()
+                self.estimator.update_CV(feat, labels)
+                cv_matrix = self.estimator.CoVariance.detach()
+
                 feat_sim = self.query_model()
                 if epoch == 0:
                     self.init_feat_sim = feat_sim
@@ -823,7 +851,7 @@ class Trainer:
             # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
             # self.student.load_state_dict(w_init)
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            netG_path = os.path.join(self.log_path, 'weights/best_model_netG.pth')
+            netG_path = os.path.join(self.opt.log_path, 'weights/best_model_netG.pth')
             netG = blackbox_mixup.Generator(self.opt).cuda()
             netG.load_state_dict(torch.load(netG_path))
 
@@ -833,7 +861,7 @@ class Trainer:
 
             self.experiment = "Trained_Mixup_fixed_G"
             print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -982,7 +1010,7 @@ class Trainer:
             # train example
             self.experiment = "SGD"
             print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1062,7 +1090,7 @@ class Trainer:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1215,7 +1243,7 @@ class Trainer:
             # ax2.ylabel("Loss")
             ax2.legend(loc="upper right")
 
-            save_folder = os.path.join(self.log_path, "imgs")
+            save_folder = os.path.join(self.opt.log_path, "imgs")
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
 
@@ -1514,7 +1542,7 @@ class Trainer:
 
         fig.suptitle('Epoch {}'.format(epoch), fontsize=16)
 
-        save_folder = os.path.join(self.log_path, "imgs")
+        save_folder = os.path.join(self.opt.log_path, "imgs")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
@@ -1538,7 +1566,7 @@ class Trainer:
         im = np.reshape(samples, (samples.shape[0], *img_shape))
         im = torch.from_numpy(im)
 
-        save_folder = os.path.join(self.log_path, "imgs")
+        save_folder = os.path.join(self.opt.log_path, "imgs")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
@@ -1656,7 +1684,7 @@ class Trainer:
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with
         """
-        models_dir = os.path.join(self.log_path, "models")
+        models_dir = os.path.join(self.opt.log_path, "models")
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
         to_save = self.opt.__dict__.copy()
@@ -1667,7 +1695,7 @@ class Trainer:
     def save_model(self, model, name):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "weights")
+        save_folder = os.path.join(self.opt.log_path, "weights")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 

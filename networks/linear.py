@@ -20,3 +20,16 @@ class LinearClassifier(nn.Module):
         """
         out = self.lin(x)
         return self.sig(out)
+
+
+class FullLayer(nn.Module):
+    '''explicitly define the full connected layer'''
+
+    def __init__(self, feature_dim, n_classes):
+        super(FullLayer, self).__init__()
+        self.class_num = n_classes
+        self.fc = nn.Linear(feature_dim, n_classes)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x

@@ -45,7 +45,7 @@ def init_weights(m):
 class Trainer:
     def __init__(self, options):
         self.opt = options
-        self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+        self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
 
         self.models = {}
         self.parameters_to_train = []
@@ -500,7 +500,7 @@ class Trainer:
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with
         """
-        models_dir = os.path.join(self.log_path, "models")
+        models_dir = os.path.join(self.opt.log_path, "models")
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
         to_save = self.opt.__dict__.copy()
@@ -511,7 +511,7 @@ class Trainer:
     def save_model(self):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+        save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(self.epoch))
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 

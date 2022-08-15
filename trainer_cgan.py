@@ -107,7 +107,7 @@ def to_matrix(l, n):
 class Trainer:
     def __init__(self, options):
         self.opt = options
-        self.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
 
         self.visualize = True
 
@@ -152,7 +152,7 @@ class Trainer:
 
         self.writers = {}
         for mode in ["train", "val"]:
-            self.writers[mode] = SummaryWriter(os.path.join(self.log_path, mode))
+            self.writers[mode] = SummaryWriter(os.path.join(self.opt.log_path, mode))
 
     def get_teacher_student(self):
         if self.opt.teaching_mode == "omniscient":
@@ -506,7 +506,7 @@ class Trainer:
                 # im = im.unsqueeze(1)
                 # im = np.transpose(im, (1, 2, 0))
 
-                save_folder = os.path.join(self.log_path, "imgs")
+                save_folder = os.path.join(self.opt.log_path, "imgs")
                 if not os.path.exists(save_folder):
                     os.makedirs(save_folder)
 
@@ -840,7 +840,7 @@ class Trainer:
                 else:
                     self.make_results_img(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix)
 
-                save_folder = os.path.join(self.log_path, "models", "weights_{}".format(epoch))
+                save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):
                     os.makedirs(save_folder)
 
@@ -1013,7 +1013,7 @@ class Trainer:
         im = np.reshape(samples, (samples.shape[0], *img_shape))
         im = torch.from_numpy(im)
 
-        save_folder = os.path.join(self.log_path, "imgs")
+        save_folder = os.path.join(self.opt.log_path, "imgs")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
@@ -1072,7 +1072,7 @@ class Trainer:
         ax2.set_title("Test Set Accuracy")
         #ax2.set_aspect('equal')
 
-        save_folder = os.path.join(self.log_path, "imgs")
+        save_folder = os.path.join(self.opt.log_path, "imgs")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
@@ -1268,7 +1268,7 @@ class Trainer:
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with
         """
-        models_dir = os.path.join(self.log_path, "models")
+        models_dir = os.path.join(self.opt.log_path, "models")
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
         to_save = self.opt.__dict__.copy()
@@ -1279,7 +1279,7 @@ class Trainer:
     def save_model(self):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+        save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(self.epoch))
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
