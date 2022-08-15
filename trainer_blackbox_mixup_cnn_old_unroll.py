@@ -562,10 +562,10 @@ class Trainer:
                 '''
                 ''''
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
 
                 x = torch.cat((gt_x_1, gt_x_2), dim=1)
                 alpha = netG(x, gt_y_1.long(), gt_y_2.long())
@@ -588,10 +588,10 @@ class Trainer:
                 optimizer_G.step()
 
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                # gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
 
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                # gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
 
                 # x = torch.cat((gt_x_1, gt_x_2), dim=1)
                 alpha = netG(x, gt_y_1.long(), gt_y_2.long())
@@ -714,10 +714,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
@@ -791,10 +791,10 @@ class Trainer:
                 # w_t = self.student.lin.weight
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
 
                 alpha = np.random.beta(1.0, 1.0)
                 # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
@@ -839,10 +839,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
@@ -914,10 +914,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
 
@@ -975,13 +975,13 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
 
                 # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                # nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                # nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
@@ -1010,14 +1010,14 @@ class Trainer:
         w_diff_baseline = []
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
-                i = self.teacher.select_example(self.baseline, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
+                i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
 
                 i_min = i * self.opt.batch_size
                 i_max = (i + 1) * self.opt.batch_size
 
                 best_data = X_train[i_min:i_max].cuda()
-                best_label = y_train[i_min:i_max].cuda()
+                best_label = Y_train[i_min:i_max].cuda()
 
                 selected_data = best_data.detach().clone().cpu().numpy()
                 selected_label = best_label.detach().clone().cpu().numpy()
@@ -1039,10 +1039,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc_base = nb_correct / X_test.size(0)
@@ -1115,7 +1115,7 @@ class Trainer:
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         # optimizer_G = torch.optim.SGD(netG.parameters(), lr=self.opt.eta)
         student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
-        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), proj_matrix=None)
+        unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=Y_train.cuda(), proj_matrix=None)
         adversarial_loss = torch.nn.MSELoss()
         res_student = []
         res_loss_student = []
@@ -1143,10 +1143,10 @@ class Trainer:
             if idx != 0:
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
 
                 x = torch.cat((gt_x_1, gt_x_2), dim=1)
                 alpha = netG(x, gt_y_1.long(), gt_y_2.long())
@@ -1169,10 +1169,10 @@ class Trainer:
                 optimizer_G.step()
 
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                # gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
 
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                # gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
 
                 # x = torch.cat((gt_x_1, gt_x_2), dim=1)
                 alpha = netG(x, gt_y_1.long(), gt_y_2.long())
@@ -1235,7 +1235,7 @@ class Trainer:
 
                 '''
                 y = torch.randint(0, 2, (1,), dtype=torch.float).cuda()
-                b = y_train.cuda() == y
+                b = Y_train.cuda() == y
                 indices = b.nonzero()
                 idx = torch.randint(0, len(indices), (1,))
                 gt_x = X_train[indices[idx].squeeze(0)].cuda()
@@ -1245,14 +1245,14 @@ class Trainer:
                 i_max = (i + 1) * self.opt.batch_size
 
                 gt_x_1 = X_train[i_min:i_max].cuda()
-                gt_y_1 = y_train[i_min:i_max].cuda()
+                gt_y_1 = Y_train[i_min:i_max].cuda()
 
                 i = torch.randint(0, nb_batch, size=(1,)).item()
                 i_min = i * self.opt.batch_size
                 i_max = (i + 1) * self.opt.batch_size
 
                 gt_x_2 = X_train[i_min:i_max].cuda()
-                gt_y_2 = y_train[i_min:i_max].cuda()
+                gt_y_2 = Y_train[i_min:i_max].cuda()
 
                 # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                 # z = Variable(torch.randn(gt_x.shape)).cuda()
@@ -1306,10 +1306,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 _, predicted = torch.max(test, dim=1)
-                nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)

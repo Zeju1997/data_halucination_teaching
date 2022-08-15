@@ -105,7 +105,7 @@ def __example_difficulty__(student, X, y):
     out = student(X)
 
     loss = student.loss_fn(out, y)
-    loss.backward(retain_graph=True, create_graph=True)
+    loss.backward(retain_graph=True)
 
     # test = grad(loss, X)
 
@@ -152,7 +152,7 @@ def __example_usefulness__(student, w_star, X, y):
 
     loss = student.loss_fn(out, y)
 
-    loss.backward(retain_graph=True, create_graph=True)
+    loss.backward(retain_graph=True)
 
     # layer gradient recovery
     res = student.lin.weight.grad
@@ -364,8 +364,6 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     yy = []
     data_trajectory = []
     init_point = torch.zeros(batch_size, X.shape[1]).cuda()
-    # init_point.requires_grad = True
-    # optim = torch.optim.Adam([init_point], lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
     # init_point = X.mean(dim=0).unsqueeze(0)
 
@@ -379,33 +377,26 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
     vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
 
-    s1 = []
     for t in range(gd_n):
         lr = student.optim.param_groups[0]["lr"]
         example_difficulty = ExampleDifficulty(student, lr, label_new)
         example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
 
-        # TODO: Try use autograd
-        '''
-        optim.zero_grad()
-        score_loss = example_difficulty(init_point) + example_usefulness(init_point)
-        score_loss.backward()
-        s1.append(score_loss.item())
-        optim.step()
-
-        point = init_point.detach().clone().cpu().numpy()
-        data_trajectory.append(point)
-        xx.append(point[0, 0])
-        yy.append(point[0, 1])
-        zz.append(score_loss.item())
-        '''
-
         score_loss = ScoreLoss(example_difficulty, example_usefulness)
+
+        # score = score_loss(data_new)
 
         eps = np.sqrt(np.finfo(float).eps)
         eps_list = [np.sqrt(200) * eps] * X.shape[1]
         grad = approx_fprime(init_point, score_loss, eps_list)
         grad = torch.Tensor(grad).cuda()
+
+        #print("grad", grad)
+
+        # grad = nd.Gradient(score_loss)(data_new.cpu().detach().numpy())
+        # grad = torch.Tensor(grad).cuda()
+
+        # print(t, grad)
 
         # build a solution one variable at a time
         for i in range(bounds.shape[0]):
@@ -433,6 +424,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
                     vhat[i] = max(vhat[i], v[i])
                     # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
                     update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
 
                 # escape local minima?
                 #if torch.norm(grad) == 0:
@@ -540,8 +532,6 @@ def __generate_example_both__(teacher, student, X, y, batch_size, lr_factor, gd_
     xxx = []
     yyy = []
     zzz = []
-
-    # student_optim =
 
     # nb_batch = 1
     for i in range(nb_batch):

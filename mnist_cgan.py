@@ -62,16 +62,16 @@ nb_train = 10000
 nb_test = 200
 
 X_train = torch.tensor(X[:nb_train], dtype=torch.float)
-y_train = torch.tensor(Y[:nb_train], dtype=torch.float)
+Y_train = torch.tensor(Y[:nb_train], dtype=torch.float)
 X_test = torch.tensor(X[nb_train:nb_train + nb_test], dtype=torch.float)
-y_test = torch.tensor(Y[nb_train:nb_train + nb_test], dtype=torch.float)
+Y_test = torch.tensor(Y[nb_train:nb_train + nb_test], dtype=torch.float)
 
 # proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
 # X_train = X_train @ proj_matrix
 # X_test = X_test @ proj_matrix
 
-data_train = BaseDataset(X_train, y_train)
-data_test = BaseDataset(X_test, y_test)
+data_train = BaseDataset(X_train, Y_train)
+data_test = BaseDataset(X_test, Y_test)
 train_loader = torch.utils.data.DataLoader(data_train, batch_size=batch_size)
 test_loader = torch.utils.data.DataLoader(data_test, batch_size=batch_size)
 

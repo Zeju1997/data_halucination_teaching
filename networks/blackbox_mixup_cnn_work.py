@@ -394,9 +394,9 @@ def forward(self, weight, w_star=None, w_init=None):
                 # out_stu = self.student(generated_x)
                 # out_stu = self.student(mixed_x)
                  # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                # gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
-                # gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                # gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
                 # x = torch.cat((gt_x_1, gt_x_2), dim=1)
                 # alpha = self.generator(x, gt_y_1.long(), gt_y_2.long())
                 # mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2

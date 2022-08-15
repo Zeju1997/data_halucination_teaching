@@ -753,10 +753,10 @@ class Trainer:
                     # w_t = self.student.lin.weight
     
                     i = torch.randint(0, nb_batch, size=(1,)).item()
-                    gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                    gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
     
                     i = torch.randint(0, nb_batch, size=(1,)).item()
-                    gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                    gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
     
                     alpha = np.random.beta(1.0, 1.0)
                     # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
@@ -801,10 +801,10 @@ class Trainer:
     
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                     _, predicted = torch.max(test, dim=1)
-                    nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                    nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
-                    nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 else:
                     sys.exit()
                 acc = nb_correct / X_test.size(0)
@@ -872,10 +872,10 @@ class Trainer:
     
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                     _, predicted = torch.max(test, dim=1)
-                    nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                    nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
-                    nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 else:
                     sys.exit()
     
@@ -963,10 +963,10 @@ class Trainer:
                     # w_t = self.student.lin.weight
     
                     i = torch.randint(0, nb_batch, size=(1,)).item()
-                    gt_x_1, gt_y_1 = self.data_sampler(X_train, y_train, i)
+                    gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
     
                     i = torch.randint(0, nb_batch, size=(1,)).item()
-                    gt_x_2, gt_y_2 = self.data_sampler(X_train, y_train, i)
+                    gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
     
                     alpha = np.random.beta(1.0, 1.0)
                     # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
@@ -1011,10 +1011,10 @@ class Trainer:
     
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                     _, predicted = torch.max(test, dim=1)
-                    nb_correct = predicted.eq(y_test.data).cpu().sum().float()
+                    nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
-                    nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 else:
                     sys.exit()
                 acc = nb_correct / X_test.size(0)

@@ -398,35 +398,35 @@ class Trainer:
 
         if self.opt.data_mode == "cifar10":
             X_train = torch.tensor(X[:self.opt.nb_train])
-            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.long)
+            Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.long)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test])
-            y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
+            Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
             X_train_im = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
-            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
+            Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test_im = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
-            y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
             proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
             X_train = X_train_im @ proj_matrix
             X_test = X_test_im @ proj_matrix
 
-            data_train_im = BaseDataset(X_train_im, y_train)
-            data_test_im = BaseDataset(X_test_im, y_test)
+            data_train_im = BaseDataset(X_train_im, Y_train)
+            data_test_im = BaseDataset(X_test_im, Y_test)
             train_loader_im = DataLoader(data_train_im, batch_size=self.opt.batch_size, drop_last=True)
             test_loader_im = DataLoader(data_test_im, batch_size=self.opt.batch_size, drop_last=True)
 
         else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
-            y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
+            Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
-            y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
             proj_matrix = torch.eye(X.shape[1])
 
-        data_train = BaseDataset(X_train, y_train)
-        data_test = BaseDataset(X_test, y_test)
+        data_train = BaseDataset(X_train, Y_train)
+        data_test = BaseDataset(X_test, Y_test)
         train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
         test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
 
@@ -438,17 +438,17 @@ class Trainer:
                 for i in range(nb_batch):
                     i_min = i * self.opt.batch_size
                     i_max = (i + 1) * self.opt.batch_size
-                    self.teacher.update(X_train[i_min:i_max].cuda(), y_train[i_min:i_max].cuda())
+                    self.teacher.update(X_train[i_min:i_max].cuda(), Y_train[i_min:i_max].cuda())
 
             self.teacher.eval()
             test = self.teacher(X_test.cuda()).cpu()
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
@@ -485,7 +485,7 @@ class Trainer:
                 i_max = (i + 1) * self.opt.batch_size
 
                 data = X_train[i_min:i_max].cuda()
-                label = y_train[i_min:i_max].cuda()
+                label = Y_train[i_min:i_max].cuda()
 
                 random_data = data.detach().clone().cpu().numpy()
                 random_label = label.detach().clone().cpu().numpy()
@@ -507,10 +507,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
 
@@ -530,14 +530,14 @@ class Trainer:
         w_diff_baseline = []
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
-                i = self.teacher.select_example(self.baseline, X_train.cuda(), y_train.cuda(), self.opt.batch_size)
+                i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
 
                 i_min = i * self.opt.batch_size
                 i_max = (i + 1) * self.opt.batch_size
 
                 best_data = X_train[i_min:i_max].cuda()
-                best_label = y_train[i_min:i_max].cuda()
+                best_label = Y_train[i_min:i_max].cuda()
 
                 selected_data = best_data.detach().clone().cpu().numpy()
                 selected_label = best_label.detach().clone().cpu().numpy()
@@ -559,10 +559,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc_base = nb_correct / X_test.size(0)
@@ -590,7 +590,7 @@ class Trainer:
         optimizer_D = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
         optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
 
-        unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=y_train.cuda(), proj_matrix=proj_matrix)
+        unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), y=Y_train.cuda(), proj_matrix=proj_matrix)
 
         adversarial_loss = torch.nn.MSELoss()
 
@@ -637,7 +637,7 @@ class Trainer:
                     # i_max = (i + 1) * self.opt.batch_size
 
                     # gt_x = X_train[i_min:i_max].cuda()
-                    # generated_labels = y_train[i_min:i_max].cuda()
+                    # generated_labels = Y_train[i_min:i_max].cuda()
 
                     # x = torch.cat((w_stu, w_stu-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
                     # generated_samples = netG(x)
@@ -709,7 +709,7 @@ class Trainer:
                         i_max = (i + 1) * self.opt.batch_size
 
                         gt_x = X_train[i_min:i_max].cuda()
-                        y = y_train[i_min:i_max].cuda()
+                        y = Y_train[i_min:i_max].cuda()
 
                         # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                         z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
@@ -738,10 +738,10 @@ class Trainer:
 
                     if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                         tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                        nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                        nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                     elif self.opt.data_mode == "cifar10":
                         tmp = torch.max(test, dim=1).indices
-                        nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                        nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                     else:
                         sys.exit()
                     acc = nb_correct / X_test.size(0)
@@ -774,7 +774,7 @@ class Trainer:
 
                 '''
                 y = torch.randint(0, 2, (1,), dtype=torch.float).cuda()
-                b = y_train.cuda() == y
+                b = Y_train.cuda() == y
                 indices = b.nonzero()
                 idx = torch.randint(0, len(indices), (1,))
                 gt_x = X_train[indices[idx].squeeze(0)].cuda()
@@ -784,7 +784,7 @@ class Trainer:
                 i_max = (i + 1) * self.opt.batch_size
 
                 gt_x = X_train[i_min:i_max].cuda()
-                gt_y = y_train[i_min:i_max].cuda()
+                gt_y = Y_train[i_min:i_max].cuda()
 
                 # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                 z = Variable(torch.randn(gt_x.shape)).cuda()
@@ -819,10 +819,10 @@ class Trainer:
 
             if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
                 tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             else:
                 sys.exit()
             acc = nb_correct / X_test.size(0)
@@ -969,7 +969,7 @@ class Trainer:
 
     def main(self):
         X_test = next(iter(self.test_loader))[0].numpy()
-        y_test = next(iter(self.test_loader))[1].numpy()
+        Y_test = next(iter(self.test_loader))[1].numpy()
 
         accuracies = []
         for epoch in tqdm(range(100)):
@@ -1018,7 +1018,7 @@ class Trainer:
         '''
             test = self.teacher(X_test.cuda()).cpu()
             tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             accuracies.append(nb_correct / X_test.size(0))
 
         plt.plot(accuracies, c="b", label="Teacher (CNN)")

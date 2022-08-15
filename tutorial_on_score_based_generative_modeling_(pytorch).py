@@ -342,12 +342,12 @@ X = X[randomize]
 Y = Y[randomize]
 
 X_train = torch.tensor(X[:nb_train], dtype=torch.float)
-y_train = torch.tensor(Y[:nb_train], dtype=torch.float)
+Y_train = torch.tensor(Y[:nb_train], dtype=torch.float)
 X_test = torch.tensor(X[nb_train:nb_train + nb_test], dtype=torch.float)
-y_test = torch.tensor(Y[nb_train:nb_train + nb_test], dtype=torch.float)
+Y_test = torch.tensor(Y[nb_train:nb_train + nb_test], dtype=torch.float)
 
-data_train = BaseDataset(X_train, y_train)
-data_test = BaseDataset(X_test, y_test)
+data_train = BaseDataset(X_train, Y_train)
+data_test = BaseDataset(X_test, Y_test)
 train_loader = DataLoader(data_train, batch_size=batch_size, drop_last=True)
 test_loader = DataLoader(data_test, batch_size=batch_size, drop_last=True)
 
