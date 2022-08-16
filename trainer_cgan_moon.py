@@ -16,7 +16,6 @@ import torch.nn as nn
 import json
 import os
 import networks
-import data
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
@@ -26,11 +25,9 @@ from torchvision.utils import save_image, make_grid
 from train_utils import *
 from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
-import teachers.surrogate_teacher as surrogate
-import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-import data.dataset_loader as data_loader
+
 
 from datasets import BaseDataset
 
