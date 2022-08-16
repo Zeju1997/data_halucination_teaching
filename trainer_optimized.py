@@ -75,6 +75,9 @@ def plot_classifier(model, max, min):
 class Trainer:
     def __init__(self, options):
         self.opt = options
+
+        self.opt.model_name = "optimized_" + self.opt.data_mode
+
         self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
 
         self.visualize = True
@@ -198,8 +201,8 @@ class Trainer:
             # create new data set with class 1 as 0 and class 2 as 1
             f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
             X = X[f]
-            y = Y[f]
-            y = np.where(y == self.opt.class_1, 0, 1)
+            Y = Y[f]
+            Y = np.where(Y == self.opt.class_1, 0, 1)
 
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
@@ -216,7 +219,7 @@ class Trainer:
                 fig = plt.figure(figsize=(8, 5))
                 a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
                 plt.plot(a, b, '-r', label='y=wx+b')
-                plt.scatter(X[:, 0], X[:, 1], c=y)
+                plt.scatter(X[:, 0], X[:, 1], c=Y)
                 plt.title('Gaussian Data')
                 #plt.show()
                 plt.close()
@@ -236,7 +239,7 @@ class Trainer:
                 fig = plt.figure(figsize=(8, 5))
                 a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
                 plt.plot(a, b, '-r', label='y=wx+b')
-                plt.scatter(X[:, 0], X[:, 1], c=y)
+                plt.scatter(X[:, 0], X[:, 1], c=Y)
                 plt.title('Moon Data')
                 #plt.show()
                 plt.close()
@@ -299,14 +302,15 @@ class Trainer:
         # ---------------------
         #  Train Teacher
         # ---------------------
-
+        print("Training Teacher ...")
         accuracies = []
-        # self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[80, 160], gamma=0.1)
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[25], gamma=0.1)
         for n in tqdm(range(self.opt.n_teacher_runs)):
             if n != 0:
                 for i in range(nb_batch):
                     i_min = i * self.opt.batch_size
                     i_max = (i + 1) * self.opt.batch_size
+
                     self.teacher.update(X_train[i_min:i_max].cuda(), Y_train[i_min:i_max].cuda())
             self.teacher.eval()
             test = self.teacher(X_test.cuda()).cpu()
@@ -323,25 +327,29 @@ class Trainer:
             accuracies.append(acc)
             print("Accuracy:", acc)
 
+            self.scheduler.step()
+
             if acc > 0.6 and n == 0:
                 sys.exit()
 
         w_star = self.teacher.lin.weight
 
-        if self.visualize == True:
+        if self.visualize == False:
             fig = plt.figure()
             plt.plot(accuracies, c="b", label="Teacher (CNN)")
             plt.xlabel("Epoch")
             plt.ylabel("Accuracy")
             plt.legend()
-            plt.close()
+            # plt.close()
+            plt.show()
 
             fig = plt.figure(figsize=(8, 5))
             a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
             plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=y)
+            plt.scatter(X[:, 0], X[:, 1], c=Y)
             plt.title('Initial Classifer Weight')
-            plt.close()
+            # plt.close()
+            plt.show()
 
         teacher_acc = accuracies[-1]
 
@@ -349,7 +357,7 @@ class Trainer:
         #  Train Student
         # ---------------------
 
-        res_i = [1] * 200
+        res_i = [1] * 500
 
         res_student = []
         a_student = []
@@ -485,6 +493,7 @@ class Trainer:
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
+
 
         if self.visualize == True:
             fig, (ax1, ax2) = plt.subplots(1, 2)

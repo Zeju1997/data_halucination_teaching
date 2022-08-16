@@ -4,10 +4,10 @@ same_feat_space: True
 n_iter: 300 # 800 # 1500
 learning_rate: 1e-4
 batch_size: 1
-nb_train: 500
+nb_train: 1000
 nb_test: 200
 dim: 2
-n_teacher_runs: 20
+n_teacher_runs: 30
 class_1: 0
 class_2: 1
 lr_factor: 100000
@@ -15,7 +15,7 @@ gd_n: 300
 optim: Adam
 hidden_dim: 8
 latent_dim: 2
-n_unroll: 2000 # 1000
+n_unroll: 1000 # 2000 # 1000
 n_unroll_blocks: 40
 n_epochs: 20 # 50
 start_saving: 0

@@ -522,6 +522,10 @@ class Trainer:
         sys.exit()
         '''
 
+        # ---------------------
+        #  Train Teacher
+        # ---------------------
+
         # train teacher
         accuracies = []
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[80, 160], gamma=0.1)
@@ -548,22 +552,11 @@ class Trainer:
             print("Accuracy:", acc)
             self.scheduler.step()
 
-        if self.visualize == True:
-            fig = plt.figure()
-            plt.plot(accuracies, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.close()
-
-            fig = plt.figure(figsize=(8, 5))
-            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=Y)
-            plt.title('Initial Classifer Weight')
-            plt.close()
-
         w_star = self.teacher.lin.weight
+
+        # ---------------------
+        #  Train SGD
+        # ---------------------
 
         # train example
         res_example = []
@@ -623,6 +616,10 @@ class Trainer:
         # plt.show()
         plt.close()
 
+        # ---------------------
+        #  Train IMT
+        # ---------------------
+        '''
         # train baseline
         res_baseline = []
         a_baseline = []
@@ -675,6 +672,10 @@ class Trainer:
             sys.stdout.flush()
 
         print("Base line trained\n")
+        '''
+        # ---------------------
+        #  Train Student
+        # ---------------------
 
         # train student
         netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
@@ -1132,7 +1133,7 @@ class Trainer:
         writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
         writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
 
-    def main(self):
+    def main1(self):
         X_test = next(iter(self.test_loader))[0].numpy()
         Y_test = next(iter(self.test_loader))[1].numpy()
 

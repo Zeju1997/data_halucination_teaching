@@ -105,6 +105,9 @@ def to_matrix(l, n):
 class Trainer:
     def __init__(self, options):
         self.opt = options
+
+        self.opt.model_name = "unrolled_" + self.opt.data_mode
+
         self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
 
         self.visualize = True
@@ -242,8 +245,8 @@ class Trainer:
             # create new data set with class 1 as 0 and class 2 as 1
             f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
             X = X[f]
-            y = Y[f]
-            y = np.where(y == self.opt.class_1, 0, 1)
+            Y = Y[f]
+            Y = np.where(Y == self.opt.class_1, 0, 1)
 
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
@@ -397,7 +400,7 @@ class Trainer:
         # ---------------------
 
         # train example
-        res_example = []
+        res_sgd = []
         a_example = []
         b_example = []
         w_diff_sgd = []
@@ -438,7 +441,7 @@ class Trainer:
                 sys.exit()
 
             acc = nb_correct / X_test.size(0)
-            res_example.append(acc)
+            res_sgd.append(acc)
 
             diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
@@ -456,11 +459,7 @@ class Trainer:
                 i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
                 # i = torch.randint(0, nb_batch, size=(1,)).item()
 
-                i_min = i * self.opt.batch_size
-                i_max = (i + 1) * self.opt.batch_size
-
-                best_data = X_train[i_min:i_max].cuda()
-                best_label = Y_train[i_min:i_max].cuda()
+                best_data, best_label = self.data_sampler(X_train, Y_train, i)
 
                 selected_data = best_data.detach().clone().cpu().numpy()
                 selected_label = best_label.detach().clone().cpu().numpy()
@@ -504,12 +503,15 @@ class Trainer:
         # ---------------------
 
         if self.opt.data_mode == "mnist":
-            generator = unrolled.Generator(self.teacher, tmp_student, X_train.shape[1], self.opt.hidden_dim).cuda()
+            netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
+            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=self.proj_matrix)
         else:
-            generator = unrolled.Generator(self.teacher, tmp_student, X_train.shape[1], self.opt.hidden_dim).cuda()
-        generator.apply(weights_init)
-        optimizer = torch.optim.Adam(generator.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
-        unrolled_optimizer = unrolled.UnrolledOptimizer(nblocks=self.opt.n_unroll_blocks, teacher=self.teacher, student=tmp_student, generator=generator, X=X_train.cuda(), y=Y_train.cuda(), batch_size=self.opt.batch_size)
+            netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
+            unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
+
+        netG.apply(weights_init)
+        optimizer = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+
         res_student = []
         a_student = []
         b_student = []
@@ -518,69 +520,22 @@ class Trainer:
         # w, h = generator.linear.weight.shape
 
         generated_samples = np.zeros(2)
-        # train generator
-
-        # alpha = 0.02
-        # beta1 = 0.9
-        # beta2 = 0.999
-        # initialize first and second moments
-        # m = torch.zeros((w, h)).cuda()
-        # v = torch.zeros((w, h)).cuda()
 
         w_init = self.student.lin.weight
         # for idx in tqdm(range(self.opt.n_iter)):
         for idx in tqdm(range(self.opt.n_unroll)):
             if idx != 0:
 
-                w_t = generator.state_dict()
+                w_t = netG.state_dict()
                 gradients, loss = unrolled_optimizer(w_t, w_star, w_init)
 
                 loss_student.append(loss.item())
 
                 with torch.no_grad():
-                    for p, g in zip(generator.parameters(), gradients):
+                    for p, g in zip(netG.parameters(), gradients):
                         p.grad = g
 
                 optimizer.step()
-
-
-                '''
-                with torch.no_grad():
-                    for p, g in zip(generator.parameters(), gradients_w):
-                        p.grad = g
-
-                optimizer.step()
-                
-                grad = gradients[0]
-                eps = np.sqrt(np.finfo(float).eps)
-                m = beta1 * m + (1.0 - beta1) * grad
-                v = beta2 * v + (1.0 - beta2) * grad**2
-                m_hat = m / (1.0 - beta1**(idx+1))
-                v_hat = v / (1.0 - beta2**(idx+1))
-                update = torch.Tensor([alpha]).cuda() * m_hat / torch.sqrt(v_hat) + eps
-
-                with torch.no_grad():
-                    for param in generator.parameters():
-                        param = param - update
-
-                for j in range(w):
-                    for k in range(h):
-                        # adam: convergence problem!
-                        # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
-                        m[j, k] = beta1 * m[j, k] + (1.0 - beta1) * grad[j, k]
-                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
-                        v[j, k] = beta2 * v[j, k] + (1.0 - beta2) * grad[j, k]**2
-                        # mhat(t) = m(t) / (1 - beta1(t))
-                        mhat = m[j, k] / (1.0 - beta1**(idx+1))
-                        # vhat(t) = v(t) / (1 - beta2(t))
-                        vhat = v[j, k] / (1.0 - beta2**(idx+1))
-                        # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
-                        update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
-
-                        with torch.no_grad():
-                            for param in generator.parameters():
-                                param[j, k] = param[j, k] - update
-                '''
 
         plt.plot(loss_student, c='b', label="loss")
         plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
@@ -602,25 +557,21 @@ class Trainer:
                 gt_x = X_train[indices[idx].squeeze(0)].cuda()
                 '''
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                i_min = i * self.opt.batch_size
-                i_max = (i + 1) * self.opt.batch_size
+                gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
 
-                gt_x = X_train[i_min:i_max].cuda()
-                y = Y_train[i_min:i_max].cuda()
+                z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
-                # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-
-                x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                generated_sample = generator(x)
+                x = torch.cat((w_t, w_t-w_star, z), dim=1)
+                generated_sample = netG(x, gt_y)
 
                 if idx == 1:
                     generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                    generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
+                    generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
                 else:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                    generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
+                    generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
 
-                self.student.update(generated_sample, y)
+                self.student.update(generated_sample, gt_y)
 
                 #self.student(generated_sample)
                 #out = self.student(generated_sample)
@@ -715,6 +666,15 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
+    def data_sampler(self, X, Y, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = X[i_min:i_max].cuda()
+        y = Y[i_min:i_max].cuda()
+
+        return x, y
 
 
     def train(self):
