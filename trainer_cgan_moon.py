@@ -126,7 +126,7 @@ class Trainer:
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            torch.save(self.teacher.state_dict(), 'pretrained/teacher_w0.pth')
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
             # self.teacher.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
 
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
@@ -136,8 +136,8 @@ class Trainer:
             # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
             # self.student = omniscient.StudentClassifier(self.opt.dim)
 
-        self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
-        self.baseline.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
+        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
     def set_train(self):
         """Convert all models to training mode
@@ -786,7 +786,7 @@ class Trainer:
                 b_student = []
                 w_diff_student = []
 
-                self.student.load_state_dict(torch.load('pretrained/teacher_w0.pth'))
+                self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
                 generated_samples = np.zeros(2)
                 for idx in tqdm(range(self.opt.n_iter)):
