@@ -279,6 +279,7 @@ class Trainer:
             train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
 
+            '''
             idx = (train_dataset.targets == self.opt.class_1) | (train_dataset.targets == self.opt.class_2)
             train_dataset.targets = train_dataset.targets[idx]
             train_dataset.data = train_dataset.data[idx]
@@ -286,7 +287,7 @@ class Trainer:
             indices = np.random.choice(len(train_dataset), self.opt.nb_train)
             train_dataset.data = train_dataset.data[indices]
             train_dataset.targets = train_dataset.targets[indices]
-
+            
             idx = (test_dataset.targets == self.opt.class_1) | (test_dataset.targets == self.opt.class_2)
             test_dataset.targets = test_dataset.targets[idx]
             test_dataset.data = test_dataset.data[idx]
@@ -294,19 +295,13 @@ class Trainer:
             indices = np.random.choice(len(test_dataset), self.opt.nb_train)
             test_dataset.data = test_dataset.data[indices]
             test_dataset.targets = test_dataset.targets[indices]
-
-            train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
-            test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
-
             '''
+
             loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
             X = next(iter(loader))[0].numpy()
             Y = next(iter(loader))[1].numpy()
-            (N, W, H) = train_dataset.data.shape
-            dim = W*H
-            sgd_example = utils.BaseLinear(self.opt.dim)
 
-            X = X.reshape((N, dim))
+            sgd_example = utils.BaseLinear(self.opt.dim)
 
             # create new data set with class 1 as 0 and class 2 as 1
             f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
@@ -319,7 +314,6 @@ class Trainer:
             np.random.shuffle(randomize)
             X = X[randomize]
             Y = Y[randomize]
-            '''
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             tmp_student = utils.BaseLinear(self.opt.dim)
@@ -409,6 +403,8 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
+
+
             '''
             train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
@@ -427,11 +423,6 @@ class Trainer:
             X_test = X_test.float() @ proj_matrix
             '''
 
-            X_train = train_dataset.data
-            X_test = test_dataset.data
-            Y_train = torch.tensor(train_dataset.targets, dtype=torch.float)
-            Y_test = torch.tensor(test_dataset.targets, dtype=torch.float)
-
             '''
             for i in range(50):
                 tensor_image = X_test[i].squeeze()
@@ -441,18 +432,17 @@ class Trainer:
 
                 print("aklsdfj")
             '''
-            (N, W, H) = X_train.shape
-            dim = W*H
-            X_train = X_train.reshape((N, dim))
 
-            (N, W, H) = X_test.shape
-            dim = W*H
-            X_test = X_test.reshape((N, dim))
+            X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
+            Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
+            X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            # X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
-            # Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
-            # X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
-            # Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            data_train = BaseDataset(X_train, Y_train)
+            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+
+            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
             img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
             proj_matrix = torch.empty(int(np.prod(img_shape)), self.opt.dim).normal_(mean=0, std=0.1)
@@ -571,8 +561,6 @@ class Trainer:
 
             acc = nb_correct / X_test.size(0)
             res_sgd.append(acc)
-
-            print("Accuracies", acc)
 
             diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
