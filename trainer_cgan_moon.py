@@ -14,8 +14,6 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 import json
-import os
-import networks
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
