@@ -106,9 +106,9 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "unrolled_" + self.opt.data_mode
+        self.opt.model_name = "whitebox_unrolled_" + self.opt.data_mode
 
-        self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
 
         self.visualize = True
 

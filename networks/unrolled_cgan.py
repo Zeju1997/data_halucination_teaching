@@ -87,7 +87,8 @@ class Generator(nn.Module):
         # self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
+        in_channels = self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -271,6 +272,145 @@ class UnrolledOptimizer(nn.Module):
         self.optim_blocks = nn.ModuleList()
 
         self.loss_fn = nn.MSELoss()
+        self.adversarial_loss = nn.BCELoss()
+
+        self.teacher = teacher
+        self.student = student
+        self.generator = generator
+
+        self.X = X
+        self.Y = Y
+
+        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
+
+        self.proj_matrix = proj_matrix
+
+    def data_sampler(self, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = self.X[i_min:i_max].cuda()
+        y = self.Y[i_min:i_max].cuda()
+
+        # y = y.to(torch.int64)
+
+        return x, y
+
+    def forward(self, weight, w_star, w_init, netD, generated_samples, generated_labels_fill, real):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
+
+        with torch.no_grad():
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            self.generator.load_state_dict(weight)
+            for param1 in self.student.parameters():
+                param1 = w_init
+            for param2 in self.teacher.parameters():
+                param2 = w_star
+
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
+
+        new_weight = w_init
+
+        # Loss measures generator's ability to fool the discriminator
+        # valid = Variable(torch.cuda.FloatTensor(self.batch_size, 1).fill_(1.0), requires_grad=False)
+
+        w_t = self.student.lin.weight
+
+        # i = torch.randint(0, self.nb_batch, size=(1,)).item()
+        # gt_x, generated_labels = self.data_sampler(i)
+
+        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+
+        w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
+        x = torch.cat((w, z), dim=1)
+
+
+
+        generated_samples = self.generator(z, generated_labels_onehot)
+        # generated_samples = generated_samples.view(self.opt.batch_size, -1)
+        # generated_samples_proj = generated_samples @ self.proj_matrix.cuda()
+
+        # validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
+        validity = netD(generated_samples, generated_labels_filled)
+        g_loss = self.adversarial_loss(validity, valid)
+
+        model_paramters = list(self.generator.parameters())
+
+        for i in range(self.opt.n_unroll_blocks):
+            w_t = self.student.lin.weight
+
+            i = torch.randint(0, self.nb_batch, size=(1,)).item()
+            gt_x, gt_y = self.data_sampler(i)
+            gt_y_onehot = onehot[gt_y.long()].cuda()
+
+            # Sample noise and labels as generator input
+            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
+            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+
+            w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, z), dim=1)
+            generated_x = self.generator(z, gt_y_onehot)
+            generated_x = generated_x.view(self.opt.batch_size, -1)
+
+            generated_x_proj = generated_x @ self.proj_matrix.cuda()
+
+            # self.student.train()
+            out = self.student(generated_x_proj)
+
+            loss = self.loss_fn(out, gt_y.float())
+            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
+            # new_weight = self.student.lin.weight - 0.001 * grad[0]
+            new_weight = new_weight - 0.001 * grad[0]
+            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
+            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+
+            # tau = np.exp(-i / 0.95)
+            if i != -1:
+                tau = 1
+            else:
+                tau = 0.95 * tau
+
+            # self.student.eval()
+            out_stu = self.teacher(generated_x_proj)
+            # out_stu = self.student(generated_x)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+
+        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
+
+        # g_loss = - torch.mean(validity)
+
+        loss_stu = g_loss # + loss_stu + w_loss
+
+        grad_stu = torch.autograd.grad(outputs=loss_stu,
+                                       inputs=model_paramters,
+                                       create_graph=False, retain_graph=False)
+
+        # ratio = g_loss / loss_stu
+        # print("ratio", ratio)
+
+        return grad_stu, loss_stu, g_loss, z_out
+
+
+class UnrolledOptimizer_working(nn.Module):
+    """
+    Args:
+        - nscale : number of scales
+        - alpha : scale factor in the softmax in the expansion (rho in the paper)
+        - nblock : number of stages (K in the paper)
+        - K : kernel size
+    """
+    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix):
+        super(UnrolledOptimizer, self).__init__()
+
+        self.opt = opt
+
+        self.optim_blocks = nn.ModuleList()
+
+        self.loss_fn = nn.MSELoss()
         # self.adversarial_loss = nn.BCELoss()
         self.adversarial_loss = nn.MSELoss()
 
@@ -399,7 +539,7 @@ class UnrolledOptimizer(nn.Module):
         validity = netD(generated_samples, generated_labels_filled)
         g_loss = self.adversarial_loss(validity, valid)
 
-        loss_stu = loss_stu + w_loss + g_loss
+        loss_stu = g_loss # + loss_stu + w_loss +
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,

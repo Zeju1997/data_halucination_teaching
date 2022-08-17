@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 from trainer_blackbox_implicit_cnn import Trainer
-# from trainer_unrolled import Trainer
-from trainer_cgan_moon import Trainer
+from trainer_blackbox import Trainer
+# from trainer_optimized import Trainer
 from options.options import Options
 import os
 import argparse

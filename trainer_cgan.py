@@ -698,6 +698,9 @@ class Trainer:
 
         img_shape = (1, 28, 28)
 
+        # Loss weight for gradient penalty
+        lambda_gp = 10
+
         w_init = self.student.lin.weight
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
@@ -867,138 +870,26 @@ class Trainer:
         if self.visualize == False:
             self.make_results_video(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student)
 
-        sys.exit()
-
-        # Root directory for dataset
-        batch_size = 64
-        img_size = 28
-        channels = 1
-        sample_interval = 400
-        workers = 8
-
-        transform = transforms.Compose([
-            transforms.Resize(img_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
-        ])
-
-        dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=workers)
-
-        # Decide which device we want to run on
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        # Plot some training images
-        real_batch = next(iter(dataloader))
-
-        if self.visualize == True:
-            plt.figure(figsize=(8,8))
-            plt.axis("off")
-            plt.title("Training Images")
-            plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
-            plt.show()
-
-        adversarial_loss = torch.nn.MSELoss()
-
-        # Create the generator
-        netG = cgan.Generator(self.opt).cuda()
-        netD = cgan.Discriminator(self.opt).cuda()
-
-        optimizer_D = optim.Adam(netD.parameters(), lr=self.opt.lr, betas=(self.opt.b1, self.opt.b2))
-        optimizer_G = optim.Adam(netG.parameters(), lr=self.opt.lr, betas=(self.opt.b1, self.opt.b2))
-
-        for epoch in range(self.opt.n_epochs):
-            for i, (imgs, labels) in enumerate(dataloader):
-
-                batch_size = imgs.shape[0]
-
-                # Adversarial ground truths
-                valid = Variable(torch.cuda.FloatTensor(batch_size, 1).fill_(1.0), requires_grad=False)
-                fake = Variable(torch.cuda.FloatTensor(batch_size, 1).fill_(0.0), requires_grad=False)
-
-                # Configure input
-                real_imgs = Variable(imgs.type(torch.cuda.FloatTensor))
-                labels = Variable(labels.type(torch.cuda.LongTensor))
-
-                # -----------------
-                #  Train Generator
-                # -----------------
-
-                optimizer_G.zero_grad()
-
-                # Sample noise and labels as generator input
-                z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (batch_size, self.opt.latent_dim))))
-
-                self.opt.n_classes = 2
-                indices = np.random.randint(2, size=batch_size).astype(int)
-                classes = np.array([self.opt.class_1, self.opt.class_2])
-                labels = classes[indices]
-                gen_labels = Variable(torch.cuda.LongTensor(labels))
-                labels = Variable(torch.cuda.LongTensor(labels))
-                # gen_labels = Variable(torch.cuda.LongTensor(np.random.randint(0, self.opt.n_classes, batch_size)))
-
-                # Generate a batch of images
-                gen_imgs = netG(z, gen_labels)
-
-                # Loss measures generator's ability to fool the discriminator
-                validity = netD(gen_imgs, gen_labels)
-                g_loss = adversarial_loss(validity, valid)
-
-                g_loss.backward()
-                optimizer_G.step()
-
-                # ---------------------
-                #  Train Discriminator
-                # ---------------------
-
-                optimizer_D.zero_grad()
-
-                # Loss for real images
-                validity_real = netD(real_imgs, labels)
-                d_real_loss = adversarial_loss(validity_real, valid)
-
-                # Loss for fake images
-                validity_fake = netD(gen_imgs.detach(), gen_labels)
-                d_fake_loss = adversarial_loss(validity_fake, fake)
-
-                # Total discriminator loss
-                d_loss = (d_real_loss + d_fake_loss) / 2
-
-                d_loss.backward()
-                optimizer_D.step()
-
-                self.step = self.step + 1
-
-                print(
-                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                    % (epoch, self.opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item())
-                )
-
-                batches_done = epoch * len(dataloader) + i
-                if batches_done % sample_interval == 0:
-                    self.sample_image(netG, n_row=10, batches_done=batches_done)
-
-        visualize = True
-        if visualize:
-            n_row = 5
-            # Sample noise
-            z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, (n_row ** 2, self.opt.latent_dim))))
-            # Get labels ranging from 0 to n_classes for n rows
-            # labels = np.array([num for _ in range(n_row) for num in range(n_row)])
-            indices = np.random.randint(2, size=25).astype(int)
-            # classes = np.array([self.opt.class_1, self.opt.class_2])
-            classes = np.array([0, 1])
-            labels = classes[indices]
-            labels = Variable(torch.cuda.LongTensor(labels))
-            gen_imgs = netG(z, labels)
-            im = np.transpose(gen_imgs[1, :, :, :].detach().cpu().numpy(), (1, 2, 0))
-
-            # Plot the fake images from the last epoch
-            plt.figure(figsize=(8,8))
-            plt.axis("off")
-            plt.title("Fake Images, Label", )
-            plt.imshow(im[:, :, 0], cmap="gray")
-            plt.show()
+    def compute_gradient_penalty(self, D, real_samples, fake_samples):
+        """Calculates the gradient penalty loss for WGAN GP"""
+        # Random weight term for interpolation between real and fake samples
+        alpha = torch.Tensor(np.random.random((real_samples.size(0), 1, 1, 1)))
+        # Get random interpolation between real and fake samples
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+        d_interpolates = D(interpolates)
+        fake = Variable(torch.Tensor(real_samples.shape[0], 1).fill_(1.0), requires_grad=False)
+        # Get gradient w.r.t. interpolates
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
 
     def make_results_img(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
         # unproj_matrix = np.linalg.pinv(proj_matrix)

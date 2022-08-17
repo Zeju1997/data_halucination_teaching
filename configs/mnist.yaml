@@ -3,9 +3,9 @@ teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300 # 800 # 500 # 200
 learning_rate: 1e-3
-batch_size: 1 # 256
-nb_train: 1000 # 5000
-nb_test: 200 # 500
+batch_size: 1 # 128
+nb_train: 1000 # 10000
+nb_test: 100 # 1000
 dim: 24 # 784 # 24
 n_teacher_runs: 30
 class_1: 3
@@ -14,10 +14,10 @@ gd_n: 300 # 1000
 lr_factor: 2
 optim: AMSGrad
 hidden_dim: 32
-latent_dim: 24
+latent_dim: 76 # 24
 n_unroll: 1000 # 1000
-n_unroll_blocks: 40
-n_epochs: 50
+n_unroll_blocks: 2 # 40
+n_epochs: 50 # 35
 start_saving: 0
 save_frequency: 1
 label_dim: 10
