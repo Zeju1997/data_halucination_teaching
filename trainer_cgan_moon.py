@@ -236,50 +236,51 @@ class Trainer:
 
             # MNIST normalizing
             transform = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize([0.5], [0.5])
-                               ])
+                                            transforms.Normalize([0.5], [0.5])
+            ])
 
             train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
 
+            '''
             idx = (train_dataset.targets == self.opt.class_1) | (train_dataset.targets == self.opt.class_2)
             train_dataset.targets = train_dataset.targets[idx]
             train_dataset.data = train_dataset.data[idx]
             train_dataset.targets = np.where(train_dataset.targets == self.opt.class_1, 0, 1)
-            train_dataset.data = train_dataset.data[:self.opt.nb_train]
-            train_dataset.targets = train_dataset.targets[:self.opt.nb_train]
-
+            indices = np.random.choice(len(train_dataset), self.opt.nb_train)
+            train_dataset.data = train_dataset.data[indices]
+            train_dataset.targets = train_dataset.targets[indices]
+            
             idx = (test_dataset.targets == self.opt.class_1) | (test_dataset.targets == self.opt.class_2)
             test_dataset.targets = test_dataset.targets[idx]
             test_dataset.data = test_dataset.data[idx]
             test_dataset.targets = np.where(test_dataset.targets == self.opt.class_1, 0, 1)
-            test_dataset.data = test_dataset.data[:self.opt.nb_test]
-            test_dataset.targets = test_dataset.targets[:self.opt.nb_test]
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-
+            indices = np.random.choice(len(test_dataset), self.opt.nb_train)
+            test_dataset.data = test_dataset.data[indices]
+            test_dataset.targets = test_dataset.targets[indices]
             '''
+
             loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
             X = next(iter(loader))[0].numpy()
             Y = next(iter(loader))[1].numpy()
-            # X = train_dataset.data.numpy()
-            # Y = train_dataset.targets.numpy()
 
-            (N, W, H) = train_dataset.data.shape
-            dim = W*H
             sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-            # baseline = utils.BaseLinear(self.opt.dim)
-
-            # X = X.reshape((N, dim))
 
             # create new data set with class 1 as 0 and class 2 as 1
             f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
             X = X[f]
             Y = Y[f]
             Y = np.where(Y == self.opt.class_1, 0, 1)
-            '''
+
+            # Shuffle datasets
+            randomize = np.arange(X.shape[0])
+            np.random.shuffle(randomize)
+            X = X[randomize]
+            Y = Y[randomize]
+
+            sgd_example = utils.BaseLinear(self.opt.dim)
+            tmp_student = utils.BaseLinear(self.opt.dim)
+
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
 
@@ -365,32 +366,44 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
+            '''
+            train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
+
+            X_train = train_dataset.data
+            X_test = test_dataset.data
+            Y_train = torch.tensor(train_dataset.targets, dtype=torch.float)
+            Y_test = torch.tensor(test_dataset.targets, dtype=torch.float)
+
+            X_train = X_train.view(X_train.shape[0], -1)
+            X_test = X_test.view(X_test.shape[0], -1)
+
+            img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
+            proj_matrix = torch.empty(int(np.prod(img_shape)), self.opt.dim).normal_(mean=0, std=0.1)
+            X_train = X_train.float() @ proj_matrix
+            X_test = X_test.float() @ proj_matrix
+            '''
 
             '''
-            train_loader = DataLoader(train_data, batch_size=self.opt.batch_size, drop_last=True)
-            test_loader = DataLoader(train_data, batch_size=self.opt.batch_size, drop_last=True)
+            for i in range(50):
+                tensor_image = X_test[i].squeeze()
+                plt.imshow(tensor_image)
+                print(Y_test[i])
+                plt.show()
+
+                print("aklsdfj")
+            '''
 
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            X_train = X[:self.opt.nb_train]
-            Y_train = Y[:self.opt.nb_train]
-            X_test = X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test]
-            Y_test = Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test]
-            '''
+            data_train = BaseDataset(X_train, Y_train)
+            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
 
-            train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True)
-            test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True)
-
-            X_train = train_dataset.data
-            X_test = test_dataset.data
-            Y_train = torch.tensor(train_dataset.targets, dtype=torch.float)
-            Y_test = torch.tensor(test_dataset.targets, dtype=torch.float)
-            
-            X_train = X_train.view(X_train.shape[0], -1)
-            X_test = X_test.view(X_test.shape[0], -1)
+            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
             img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
             proj_matrix = torch.empty(int(np.prod(img_shape)), self.opt.dim).normal_(mean=0, std=0.1)
@@ -716,9 +729,8 @@ class Trainer:
 
         netG.apply(weights_init)
         netD.apply(weights_init)
-        # optimizer_D = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+
         optimD = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
         optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
         self.step = 0
@@ -740,7 +752,7 @@ class Trainer:
         fake = torch.zeros((self.opt.batch_size, 1)).cuda()
 
         # Fix noise for testing generator and visualization
-        z_test = torch.randn(4, self.opt.latent_dim).cuda()
+        z_test = torch.randn(self.opt.n_classes**2, self.opt.latent_dim).cuda()
 
         # List of values, which will be used for plotting purpose
         D_losses = []
@@ -750,7 +762,7 @@ class Trainer:
 
         # number of training steps done on discriminator
         step = 0
-        for epoch in range(self.opt.n_epochs):
+        for epoch in tqdm(range(self.opt.n_epochs)):
             epoch_D_losses = []
             epoch_G_losses = []
             epoch_Dx = []
@@ -764,23 +776,66 @@ class Trainer:
                 step += 1
 
                 ############################
+                # Update G network: maximize log(D(G(z)))
+                ###########################
+
+                # if Ksteps of Discriminator training are done, update generator
+                '''
+                netG.zero_grad()
+
+                z_out = netD(generated_samples, generated_labels_fill)
+                g_loss = adversarial_loss(z_out, real)
+
+                w_t = netG.state_dict()
+                gradients, generator_loss, G_loss, z_out = unrolled_optimizer(w_t, w_star, w_init, netD, generated_samples, generated_labels_fill, real, g_loss)
+                loss_student.append(generator_loss.item())
+
+                with torch.no_grad():
+                    for p, g in zip(netG.parameters(), gradients):
+                        p.grad = g
+
+                # G_loss.backward()
+                optimG.step()
+                '''
+
+                generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
+                generated_labels_onehot = onehot[generated_labels].cuda()
+                generated_labels_fill = fill[generated_labels].cuda()
+
+                netG.zero_grad()
+                w_t = netG.state_dict()
+                gradients, generator_loss, G_loss, z_out, generated_samples = unrolled_optimizer(w_t, w_star, w_init, netD, generated_labels, real)
+                loss_student.append(generator_loss.item())
+
+                with torch.no_grad():
+                    for p, g in zip(netG.parameters(), gradients):
+                        p.grad = g
+
+                '''
+                z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+
+
+                generated_samples = netG(z, generated_labels_onehot)
+
+                z_out = netD(generated_samples, generated_labels_fill)
+                G_loss = adversarial_loss(z_out, real)
+                '''
+
+                epoch_DGz.append(z_out.mean().item())
+                epoch_G_losses.append(G_loss.item())
+
+
+                # G_loss.backward()
+                optimG.step()
+
+                ############################
                 # Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
 
                 real_labels_fill = fill[real_labels].cuda()
                 real_preds = netD(real_samples, real_labels_fill)
-                D_real_loss = adversarial_loss(real_preds, real) # d_real_loss
+                D_real_loss = adversarial_loss(real_preds, real)
 
-                z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
-                generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
-                generated_labels_onehot = onehot[generated_labels].cuda()
-                generated_labels_fill = fill[generated_labels].cuda()
-
-                w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
-                x = torch.cat((w, z), dim=1)
-
-                # generated_samples = netG(z, generated_labels_onehot)
-                generated_samples = netG(z, generated_labels_onehot)
                 fake_preds = netD(generated_samples.detach(), generated_labels_fill)
                 D_fake_loss = adversarial_loss(fake_preds, fake)
                 D_loss = D_real_loss + D_fake_loss
@@ -793,30 +848,6 @@ class Trainer:
                 D_loss.backward()
                 optimD.step()
 
-                ############################
-                # Update G network: maximize log(D(G(z)))
-                ###########################
-
-                # if Ksteps of Discriminator training are done, update generator
-                if step % 1 == 0:
-
-                    w_t = netG.state_dict()
-                    gradients, generator_loss, generated_samples, generated_labels, G_loss, z_out = unrolled_optimizer(w_t, w_star, w_init, netD, generated_samples, generated_labels_fill, real)
-                    loss_student.append(generator_loss.item())
-
-                    with torch.no_grad():
-                        for p, g in zip(netG.parameters(), gradients):
-                            p.grad = g
-
-
-                    # z_out = netD(generated_samples, generated_labels_fill)
-                    # G_loss = adversarial_loss(z_out, real)
-                    epoch_DGz.append(z_out.mean().item())
-                    epoch_G_losses.append(G_loss.item())
-
-                    netG.zero_grad()
-                    G_loss.backward()
-                    optimG.step()
             else:
                 # calculate average value for one epoch
                 D_losses.append(sum(epoch_D_losses)/len(epoch_D_losses))
@@ -844,11 +875,14 @@ class Trainer:
                         gt_y_onehot = onehot[gt_y.long()].cuda()
 
                         # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+                        # z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim-))).cuda()
 
                         # w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
-                        # x = torch.cat((w, z), dim=1)
-                        generated_sample = netG(z, gt_y_onehot)
+                        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+                        w = torch.cat((w_t, w_t-w_star), dim=1)
+                        w = w.repeat(self.opt.batch_size, 1)
+                        x = torch.cat((w, z), dim=1)
+                        generated_sample = netG(x, gt_y_onehot)
 
                         if self.opt.data_mode == "moon":
                             if idx == 1:
@@ -895,7 +929,11 @@ class Trainer:
 
                     netG.eval()
                     with torch.no_grad():
-                        fake_test = netG(z_test, test_labels_onehot).cpu()
+                        w_t = self.student.lin.weight
+                        w = torch.cat((w_t, w_t-w_star), dim=1)
+                        w = w.repeat(self.opt.n_classes**2, 1)
+                        x = torch.cat((w, z_test), dim=1)
+                        fake_test = netG(x, test_labels_onehot).cpu()
                         torchvision.utils.save_image(fake_test, img_path, nrow=10, padding=0, normalize=True)
                     netG.train()
 
@@ -920,7 +958,6 @@ class Trainer:
                 save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
                 to_save = netD.state_dict()
                 torch.save(to_save, save_path)
-
 
 
         plt.figure(figsize=(10,5))

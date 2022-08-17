@@ -526,7 +526,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # out = self.student(mixed_x)
             out = self.student(generated_x_proj)
 
-            # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), lam)
             loss = self.loss_fn(out, gt_y.float())
 
             grad = torch.autograd.grad(loss,

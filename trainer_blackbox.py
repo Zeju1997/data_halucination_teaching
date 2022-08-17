@@ -393,8 +393,6 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
-
-
             '''
             train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
@@ -429,7 +427,7 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
             data_train = BaseDataset(X_train, Y_train)
-            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size_gan, drop_last=True, shuffle=True)
 
             X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
             X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
@@ -567,8 +565,8 @@ class Trainer:
         for t in tqdm(range(self.opt.n_iter)):
             self.baseline.train()
             if t != 0:
-                i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
-                # i = torch.randint(0, nb_batch, size=(1,)).item()
+                # i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
+                i = torch.randint(0, nb_batch, size=(1,)).item()
 
                 i_min = i * self.opt.batch_size
                 i_max = (i + 1) * self.opt.batch_size
@@ -620,6 +618,8 @@ class Trainer:
         #  Train Student
         # ---------------------
 
+        self.opt.batch_size = 32
+
         adversarial_loss = torch.nn.BCELoss()
 
         if self.opt.data_mode == "moon":
@@ -667,6 +667,7 @@ class Trainer:
         # number of training steps done on discriminator
         step = 0
         for epoch in tqdm(range(self.opt.n_epochs)):
+
             epoch_D_losses = []
             epoch_G_losses = []
             epoch_Dx = []
@@ -702,6 +703,8 @@ class Trainer:
                 optimG.step()
                 '''
 
+                self.opt.batch_size = 32
+
                 generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
                 generated_labels_onehot = onehot[generated_labels].cuda()
                 generated_labels_fill = fill[generated_labels].cuda()
@@ -728,6 +731,7 @@ class Trainer:
                 epoch_DGz.append(z_out.mean().item())
                 epoch_G_losses.append(G_loss.item())
 
+                self.opt.batch_size = 32
 
                 # G_loss.backward()
                 optimG.step()
@@ -770,6 +774,9 @@ class Trainer:
                 self.student.load_state_dict(torch.load('teacher_w0.pth'))
                 netG.eval()
                 generated_samples = np.zeros(2)
+
+                self.opt.batch_size = 1
+
                 for idx in tqdm(range(self.opt.n_iter)):
                     if idx != 0:
                         w_t = self.student.lin.weight
@@ -856,7 +863,6 @@ class Trainer:
                 save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
                 to_save = netD.state_dict()
                 torch.save(to_save, save_path)
-
 
         plt.figure(figsize=(10,5))
         plt.title("Discriminator and Generator loss during Training")

@@ -88,7 +88,7 @@ class Generator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = self.opt.latent_dim
+        in_channels = self.opt.latent_dim + teacher.lin.weight.size(1) + student.lin.weight.size(1)
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -296,9 +296,17 @@ class UnrolledOptimizer(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, generated_samples, generated_labels_fill, real):
+    def forward(self, weight, w_star, w_init, netD, generated_labels, real):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
+
+        # convert labels to onehot encoding
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+        # reshape labels to image size, with number of labels as channel
+        fill = torch.zeros([self.opt.n_classes, self.opt.n_classes, self.opt.img_size, self.opt.img_size])
+        for i in range(self.opt.n_classes):
+            fill[i, i, :, :] = 1
 
         with torch.no_grad():
             # for param1 in self.generator.parameters():
@@ -315,28 +323,7 @@ class UnrolledOptimizer(nn.Module):
 
         new_weight = w_init
 
-        # Loss measures generator's ability to fool the discriminator
-        # valid = Variable(torch.cuda.FloatTensor(self.batch_size, 1).fill_(1.0), requires_grad=False)
-
-        w_t = self.student.lin.weight
-
-        # i = torch.randint(0, self.nb_batch, size=(1,)).item()
-        # gt_x, generated_labels = self.data_sampler(i)
-
-        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-
-        w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
-        x = torch.cat((w, z), dim=1)
-
-
-
-        generated_samples = self.generator(z, generated_labels_onehot)
-        # generated_samples = generated_samples.view(self.opt.batch_size, -1)
-        # generated_samples_proj = generated_samples @ self.proj_matrix.cuda()
-
-        # validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-        validity = netD(generated_samples, generated_labels_filled)
-        g_loss = self.adversarial_loss(validity, valid)
+        n = 0
 
         model_paramters = list(self.generator.parameters())
 
@@ -351,18 +338,22 @@ class UnrolledOptimizer(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
+            w = torch.cat((w_t, w_t-w_star), dim=1)
+            w = w.repeat(self.opt.batch_size, 1)
             x = torch.cat((w, z), dim=1)
-            generated_x = self.generator(z, gt_y_onehot)
+            generated_x = self.generator(x, gt_y_onehot)
             generated_x = generated_x.view(self.opt.batch_size, -1)
-
             generated_x_proj = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
             out = self.student(generated_x_proj)
 
             loss = self.loss_fn(out, gt_y.float())
-            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
+
+            grad = torch.autograd.grad(loss,
+                                       self.student.lin.weight,
+                                       create_graph=True, retain_graph=True)
+
             # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
             self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
@@ -381,9 +372,21 @@ class UnrolledOptimizer(nn.Module):
 
         w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
 
-        # g_loss = - torch.mean(validity)
+        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+        w = torch.cat((w_t, w_t-w_star), dim=1)
+        w = w.repeat(self.opt.batch_size, 1)
+        x = torch.cat((w, z), dim=1)
 
-        loss_stu = g_loss # + loss_stu + w_loss
+        # generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
+        generated_labels_onehot = onehot[generated_labels].cuda()
+        generated_labels_fill = fill[generated_labels].cuda()
+
+        generated_samples = self.generator(x, generated_labels_onehot)
+
+        z_out = netD(generated_samples, generated_labels_fill)
+        g_loss = self.adversarial_loss(z_out, real)
+
+        loss_stu = g_loss + loss_stu + w_loss
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
@@ -392,7 +395,7 @@ class UnrolledOptimizer(nn.Module):
         # ratio = g_loss / loss_stu
         # print("ratio", ratio)
 
-        return grad_stu, loss_stu, g_loss, z_out
+        return grad_stu, loss_stu, g_loss, z_out, generated_samples
 
 
 class UnrolledOptimizer_working(nn.Module):
