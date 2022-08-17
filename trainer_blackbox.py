@@ -14,30 +14,20 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 import json
-import os
-import networks
-import data
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
-from torchvision.transforms import ToTensor
-import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from train_utils import *
-from eval import EvalMetrics
+
 import teachers.omniscient_teacher as omniscient
-import teachers.surrogate_teacher as surrogate
-import teachers.imitation_teacher as imitation
+
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-import data.dataset_loader as data_loade
 
-from datasets import MoonDataset
 
 from datasets import BaseDataset
 
-import networks.cgan as cgan
-import networks.unrolled_optimizer as unrolled
 import networks.blackbox_optimizer as blackbox
 
 from sklearn.datasets import make_moons, make_classification
