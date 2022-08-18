@@ -388,15 +388,15 @@ class UnrolledOptimizer(nn.Module):
         z_out = netD(generated_samples, generated_labels_fill)
         g_loss = self.adversarial_loss(z_out, real)
 
-        if epoch < 10:
-            tau = 1
+        if epoch > 5:
+            tau = 0
         else:
-            tau = 0.95 ** epoch
+            tau = 0.01
 
-        loss_stu = loss_stu + w_loss + g_loss * (1 - tau)
+        loss_stu = loss_stu + w_loss + g_loss * tau
 
-        # ratio = g_loss.item() / loss_stu.item()
-        # print("ratio", ratio)
+        ratio = g_loss.item() * tau / loss_stu.item()
+        print("ratio", ratio)
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
