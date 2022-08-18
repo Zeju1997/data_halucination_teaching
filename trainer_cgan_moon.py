@@ -195,9 +195,9 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        torch.manual_seed(self.opt.seed)
-        np.random.seed(self.opt.seed)
-        torch.cuda.manual_seed(self.opt.seed)
+        # torch.manual_seed(self.opt.seed)
+        # np.random.seed(self.opt.seed)
+        # torch.cuda.manual_seed(self.opt.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
         # cudnn.enabled=True
@@ -612,6 +612,7 @@ class Trainer:
         a_example = []
         b_example = []
         w_diff_sgd = []
+        sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 i = torch.randint(0, nb_batch, size=(1,)).item()
@@ -662,6 +663,7 @@ class Trainer:
         a_baseline = []
         b_baseline = []
         w_diff_baseline = []
+        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
                 i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)

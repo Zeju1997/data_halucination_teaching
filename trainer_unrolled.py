@@ -179,9 +179,9 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        torch.manual_seed(self.opt.seed)
-        np.random.seed(self.opt.seed)
-        torch.cuda.manual_seed(self.opt.seed)
+        # torch.manual_seed(self.opt.seed)
+        # np.random.seed(self.opt.seed)
+        # torch.cuda.manual_seed(self.opt.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
         # cudnn.enabled=True

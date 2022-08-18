@@ -16,7 +16,7 @@ lr_factor: 2
 optim: AMSGrad
 hidden_dim: 32
 latent_dim: 24 # 24
-n_unroll: 1000 # 1000
+n_unroll: 2000 # 1000
 n_unroll_blocks: 40 # 40
 n_epochs: 50 # 35
 start_saving: 0
