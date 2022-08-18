@@ -22,7 +22,7 @@ def __example_difficulty__(student, X, y):
     # student.lin.weight.retain_grad()
 
     out = student(X)
-    loss = student.loss_fn(out, y)
+    loss = student.loss_fn(out.squeeze(1), y)
     loss.backward()
 
     # layer gradient recovery
@@ -54,7 +54,7 @@ def __example_usefulness__(student, w_star, X, y):
     # student.lin.weight.retain_grad()
 
     out = student(X)
-    loss = student.loss_fn(out, y)
+    loss = student.loss_fn(out.squeeze(1), y)
 
     loss.backward()
 

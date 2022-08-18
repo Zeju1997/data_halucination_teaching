@@ -11,7 +11,8 @@ class BaseLinear(linear.LinearClassifier):
     """
     def __init__(self, n_in):
         super(BaseLinear, self).__init__(n_in)
-        self.loss_fn = nn.MSELoss()
+        # self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
         self.cuda()
         self.eta = 1e-3
         self.optim = torch.optim.SGD(self.parameters(), lr=self.eta)
@@ -26,7 +27,7 @@ class BaseLinear(linear.LinearClassifier):
         self.train()
         self.optim.zero_grad()
         out = self(X)
-        loss = self.loss_fn(out, y)
+        loss = self.loss_fn(out.squeeze(1), y)
         loss.backward()
         self.optim.step()
 

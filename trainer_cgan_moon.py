@@ -769,7 +769,8 @@ class Trainer:
             epoch_Dx = []
             epoch_DGz = []
             # iterate through data loader generator object
-            for images, labels in train_loader:
+            gen_losses = 0
+            for images, labels in tqdm(train_loader):
 
                 real_samples = images.cuda() # real_samples
                 real_labels = labels.long()
@@ -805,8 +806,9 @@ class Trainer:
 
                 netG.zero_grad()
                 w_t = netG.state_dict()
-                gradients, generator_loss, G_loss, z_out, generated_samples = unrolled_optimizer(w_t, w_star, w_init, netD, generated_labels, real)
-                loss_student.append(generator_loss.item())
+                gradients, generator_loss, G_loss, z_out, generated_samples = unrolled_optimizer(w_t, w_star, w_init, netD, generated_labels, real, epoch)
+                # loss_student.append(generator_loss.item())
+                gen_losses = gen_losses + generator_loss.item() / nb_batch
 
                 with torch.no_grad():
                     for p, g in zip(netG.parameters(), gradients):
@@ -850,6 +852,16 @@ class Trainer:
                 optimD.step()
 
             else:
+                loss_student.append(gen_losses)
+
+                plt.plot(loss_student, c='b', label="loss")
+                plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+                plt.xlabel("Iteration")
+                plt.ylabel("Loss")
+                plt.legend()
+                plt.show()
+
+
                 # calculate average value for one epoch
                 D_losses.append(sum(epoch_D_losses)/len(epoch_D_losses))
                 G_losses.append(sum(epoch_G_losses)/len(epoch_G_losses))

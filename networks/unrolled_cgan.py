@@ -296,7 +296,7 @@ class UnrolledOptimizer(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, generated_labels, real):
+    def forward(self, weight, w_star, w_init, netD, generated_labels, real, epoch):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -360,15 +360,17 @@ class UnrolledOptimizer(nn.Module):
             # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
 
             # tau = np.exp(-i / 0.95)
+            '''
             if i != -1:
                 tau = 1
             else:
                 tau = 0.95 * tau
+            '''
 
             # self.student.eval()
             out_stu = self.teacher(generated_x_proj)
             # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y)
 
         w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
 
@@ -386,7 +388,15 @@ class UnrolledOptimizer(nn.Module):
         z_out = netD(generated_samples, generated_labels_fill)
         g_loss = self.adversarial_loss(z_out, real)
 
-        loss_stu = g_loss + loss_stu + w_loss
+        if epoch < 10:
+            tau = 1
+        else:
+            tau = 0.95 ** epoch
+
+        loss_stu = loss_stu + w_loss + g_loss * (1 - tau)
+
+        # ratio = g_loss.item() / loss_stu.item()
+        # print("ratio", ratio)
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
