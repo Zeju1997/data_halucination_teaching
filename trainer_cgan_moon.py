@@ -649,10 +649,11 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_sgd.append(acc)
 
-            print("Accuracy", acc)
-
             diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
+
+            print("w diff", diff)
+
 
         # ---------------------
         #  Train IMT
@@ -701,10 +702,10 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_baseline.append(acc)
 
-            print("Accuracy", acc)
-
             diff = torch.linalg.norm(w_star - self.baseline.lin.weight, ord=2) ** 2
             w_diff_baseline.append(diff.detach().clone().cpu())
+
+            print("w diff", diff)
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
