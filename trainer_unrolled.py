@@ -443,7 +443,7 @@ class Trainer:
             diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
 
-        print("Accuracies", acc)
+        print("w diff", diff)
 
         # ---------------------
         #  Train IMT Baseline
@@ -490,10 +490,10 @@ class Trainer:
             acc_base = nb_correct / X_test.size(0)
             res_baseline.append(acc_base)
 
-            print("Accuracies", acc_base)
-
             diff = torch.linalg.norm(w_star - self.baseline.lin.weight, ord=2) ** 2
             w_diff_baseline.append(diff.detach().clone().cpu())
+
+            print("w diff", diff)
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
@@ -607,6 +607,8 @@ class Trainer:
             # diff = self.teacher.lin.weight - example.lin.weight
             diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
             w_diff_student.append(diff.detach().clone().cpu())
+
+            print("w diff", diff)
 
         if self.visualize == True:
             fig, (ax1, ax2) = plt.subplots(1, 2)
