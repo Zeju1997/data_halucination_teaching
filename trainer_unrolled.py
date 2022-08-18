@@ -629,9 +629,9 @@ class Trainer:
             ax2.set_ylabel("Distance between $w^t$ and $w^*$")
             #ax2.set_aspect('equal')
 
-            # plt.savefig('results_mnist_final.jpg')
-            # plt.close()
-            plt.show()
+            plt.savefig('results_mnist_final.jpg')
+            plt.close()
+            # plt.show()
 
         if self.visualize == False:
             a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
