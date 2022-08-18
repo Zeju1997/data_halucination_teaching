@@ -103,8 +103,6 @@ def __select_example__(teacher, student, X, y, batch_size):
             min_score = s
             arg_min = i
 
-    print("arg min", arg_min, "s", s)
-
     return arg_min
 
 

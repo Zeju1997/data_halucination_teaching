@@ -193,7 +193,7 @@ class UnrolledOptimizer(nn.Module):
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
             # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-            x = torch.cat((w_t, w_t-w_star, z), dim=1)
+            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
             generated_x = self.generator(x, gt_y)
 
             generated_x_proj = generated_x @ self.proj_matrix.cuda()

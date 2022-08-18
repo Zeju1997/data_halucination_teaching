@@ -125,14 +125,14 @@ class Trainer:
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
+
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
 
             # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
             # self.student = omniscient.StudentClassifier(self.opt.dim)
-
-        self.student.load_state_dict(self.teacher.state_dict())
-        self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
         """Convert all models to training mode
@@ -223,7 +223,7 @@ class Trainer:
             # MNIST normalizing
             transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,)),
+                transforms.Normalize((0.5,), (0.5,)), # transforms.Normalize((0.1307,), (0.3081,)),
             ])
             train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
@@ -404,6 +404,7 @@ class Trainer:
         a_example = []
         b_example = []
         w_diff_sgd = []
+        sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 i = torch.randint(0, nb_batch, size=(1,)).item()
@@ -446,6 +447,8 @@ class Trainer:
             diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
 
+        print("Accuracies", acc)
+
         # ---------------------
         #  Train IMT Baseline
         # ---------------------
@@ -454,6 +457,7 @@ class Trainer:
         a_baseline = []
         b_baseline = []
         w_diff_baseline = []
+        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
                 i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
@@ -490,6 +494,8 @@ class Trainer:
             acc_base = nb_correct / X_test.size(0)
             res_baseline.append(acc_base)
 
+            print("Accuracies", acc_base)
+
             diff = torch.linalg.norm(w_star - self.baseline.lin.weight, ord=2) ** 2
             w_diff_baseline.append(diff.detach().clone().cpu())
 
@@ -504,11 +510,12 @@ class Trainer:
 
         if self.opt.data_mode == "mnist":
             netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=self.proj_matrix)
+            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
         else:
             netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
             unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
 
+        netG.train()
         netG.apply(weights_init)
         optimizer = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
@@ -545,6 +552,7 @@ class Trainer:
         plt.show()
 
         loss111 = []
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 w_t = self.student.lin.weight
@@ -561,8 +569,11 @@ class Trainer:
 
                 z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
-                x = torch.cat((w_t, w_t-w_star, z), dim=1)
+                x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                 generated_sample = netG(x, gt_y)
+
+                if self.opt.data_mode == "mnist":
+                    generated_sample = generated_sample @ proj_matrix.cuda()
 
                 if idx == 1:
                     generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
