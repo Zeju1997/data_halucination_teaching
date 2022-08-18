@@ -16,7 +16,6 @@ import torch.nn as nn
 import json
 import os
 import networks
-import data
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
@@ -30,9 +29,6 @@ import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-import data.dataset_loader as data_loade
-
-from datasets import MoonDataset
 
 import networks.cgan as cgan
 import networks.unrolled_optimizer as unrolled
