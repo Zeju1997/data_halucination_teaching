@@ -181,6 +181,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         self.loss_fn = nn.CrossEntropyLoss()
 
         self.adversarial_loss = nn.MSELoss()
+        self.cross_entropy = nn.CrossEntropyLoss()
 
         # self.teacher = teacher
         # self.student = student
@@ -192,7 +193,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
 
         # self.proj_matrix = proj_matrix
-
 
     def optimize_latent_features(self, fc, z, labels):
         """Run the style transfer."""
@@ -249,18 +249,22 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         z_optimized = self.optimize_latent_features(fc, z.detach().clone(), targets)
 
+        out = fc(z_optimized)
+
         # ---------------------
         #  Reconstruct Images from Feature Space
         # ---------------------
 
-        targets_onehot = torch.FloatTensor(targets.shape[0], self.opt.n_classes).cuda()
-        targets_onehot.zero_()
-        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
+        loss = self.cross_entropy(out, targets)
 
-        generated_inputs = self.F_inverse(model=model, netG=netG, input=inputs, class_vector=targets_onehot, features_ini=z_optimized)
+        # targets_onehot = torch.FloatTensor(targets.shape[0], self.opt.n_classes).cuda()
+        # targets_onehot.zero_()
+        # targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
 
-        return generated_inputs
+        # generated_inputs = self.F_inverse(model=model, netG=netG, input=inputs, class_vector=targets_onehot, features_ini=z_optimized)
 
+        # return generated_inputs
+        return loss
 
     def F_inverse1(self, model, netG, input, class_vector, features_ini, cov_matrix):
         truncation = 1

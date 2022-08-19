@@ -644,9 +644,9 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        torch.manual_seed(self.opt.seed)
-        np.random.seed(self.opt.seed)
-        torch.cuda.manual_seed(self.opt.seed)
+        # torch.manual_seed(self.opt.seed)
+        # np.random.seed(self.opt.seed)
+        # torch.cuda.manual_seed(self.opt.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
         # cudnn.enabled=True
@@ -717,11 +717,12 @@ class Trainer:
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
                         # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
-                        generated_inputs = unrolled_optimizer(self.student, self.student_fc, netG, inputs, targets)
+                        loss = unrolled_optimizer(self.student, self.student_fc, netG, inputs, targets)
 
                         self.student.train()
-                        outputs = self.student(generated_inputs)
-                        loss = self.loss_fn(outputs, targets.long())
+
+                        # outputs = self.student(generated_inputs)
+                        # loss = self.loss_fn(outputs, targets.long())
 
                         student_optim.zero_grad()
                         loss.backward()
@@ -740,13 +741,14 @@ class Trainer:
                                 100. * batch_idx / len(self.val_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
+                        '''
                         if self.step % self.opt.n_unroll_blocks == 0:
                             avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
                             tmp_train_loss = 0
 
                             feat_sim = self.query_model() / self.init_feat_sim
                             print(feat_sim.mean())
-
+                        '''
                     # avg_train_loss = tmp_train_loss / len(self.train_loader)
                     # tmp_train_loss = 0
                     '''
