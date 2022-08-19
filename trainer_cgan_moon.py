@@ -760,6 +760,7 @@ class Trainer:
 
         indices = np.random.choice(X_train.shape[0], self.opt.n_classes**2)
         x_test = X_train[indices].cuda()
+        x_test = x_test / torch.norm(x_test)
 
         # List of values, which will be used for plotting purpose
         D_losses = []
@@ -893,6 +894,7 @@ class Trainer:
                         i = torch.randint(0, nb_batch, size=(1,)).item()
                         gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
                         gt_y_onehot = onehot[gt_y.long()].cuda()
+                        gt_x = gt_x / torch.norm(gt_x)
 
                         # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                         # z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim-))).cuda()
