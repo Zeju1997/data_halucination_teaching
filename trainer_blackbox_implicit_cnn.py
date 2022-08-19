@@ -286,6 +286,9 @@ class EstimatorCV():
 class Trainer:
     def __init__(self, options):
         self.opt = options
+
+        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode
+
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
 
         self.visualize = True
@@ -363,7 +366,7 @@ class Trainer:
             # MNIST normalizing
             transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,)),
+                transforms.Normalize((0.5,), (0.5,)), # transforms.Normalize((0.1307,), (0.3081,)),
             ])
             self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             # train, valid = random_split(train_dataset, [50000, 10000])
@@ -408,70 +411,30 @@ class Trainer:
         # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
-        if self.opt.teaching_mode == "omniscient":
-            self.teacher = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-            self.teacher.apply(initialize_weights)
-            self.teacher_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            self.teacher_fc.apply(initialize_weights)
-            torch.save(self.teacher.state_dict(), 'teacher_fc_w0.pth')
 
-            # self.teacher.load_state_dict(torch.load('teacher.pth'))
+        self.teacher = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher.apply(initialize_weights)
+        self.teacher_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
+        torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+        self.teacher_fc.apply(initialize_weights)
+        torch.save(self.teacher.state_dict(), 'teacher_fc_w0.pth')
 
-            # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
+        # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-            self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-            self.student_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
-            # self.student.load_state_dict(torch.load(path))
-            # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-            self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-            self.baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
+        # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-            # load teacher weights
-            self.student.load_state_dict(self.teacher.state_dict())
-            self.student_fc.load_state_dict(self.teacher_fc.state_dict())
-            self.baseline.load_state_dict(self.teacher.state_dict())
-            self.baseline_fc.load_state_dict(self.teacher_fc.state_dict())
+        self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
+        # self.student.load_state_dict(torch.load(path))
+        # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
+        self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
-        elif self.opt.teaching_mode == "surrogate":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-                else:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateLinearTeacher(self.opt.dim)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-                else:
-                    self.teacher = surrogate.SurrogateDiffLinearTeacher(self.opt.dim, 24, normal_dist=True)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-        elif self.opt.teaching_mode == "imitation":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    tmp = next(iter(self.train_loader))[0]
-                    fst_x = torch.Tensor(tmp[torch.randint(0, tmp.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-                else:
-                    fst_x = torch.Tensor(data[torch.randint(0, data.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationLinearTeacher(self.opt.dim, fst_x)
-                    self.student = utils.BaseLinear(self.opt.dim)
-                else:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationDiffLinearTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-        else:
-            print("Unrecognized teacher!")
-            sys.exit()
-
+        # load teacher weights
+        self.student.load_state_dict(self.teacher.state_dict())
+        self.student_fc.load_state_dict(self.teacher_fc.state_dict())
+        self.baseline.load_state_dict(self.teacher.state_dict())
+        self.baseline_fc.load_state_dict(self.teacher_fc.state_dict())
 
     def set_train(self):
         """Convert all models to training mode
@@ -695,6 +658,7 @@ class Trainer:
             train_loss = []
 
             student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
             self.best_test_loss = 0
@@ -707,7 +671,7 @@ class Trainer:
             tmp_train_loss = 0
             feat_sim = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
-                if epoch < 100:
+                if epoch < 50:
                     self.train(self.student, self.student_fc, self.loader, self.loss_fn, student_optim, epoch)
 
                 else:
@@ -784,7 +748,7 @@ class Trainer:
                     # mixup_baseline.update(mixed_x, mixed_y)
                     '''
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, netG=netG)
+                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
@@ -1269,15 +1233,17 @@ class Trainer:
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item())
 
-    def test(self, model, test_loader, epoch, netG=None):
+    def test(self, model, fc, test_loader, epoch, netG=None):
         model.eval()
+        fc.eval()
         test_loss = 0
         correct = 0
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.cuda(), target.cuda()
-                output = model(data)
+                z = model(data)
+                output = fc(z)
 
                 test_loss += loss_fn(output, target.long()).item()  # sum up batch loss
                 pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability

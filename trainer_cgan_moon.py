@@ -599,7 +599,7 @@ class Trainer:
             plt.scatter(X[:, 0], X[:, 1], c=Y)
             plt.title('Initial Classifer Weight')
             plt.close()
-
+        self.opt.model_name = "whitebox_unrolled_cgan_" + self.opt.data_mode
         w_star = self.teacher.lin.weight
         w_star = w_star / torch.norm(w_star)
 

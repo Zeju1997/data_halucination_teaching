@@ -33,5 +33,4 @@ if __name__ == "__main__":
     opts.set_defaults(**config)
 
     trainer = Trainer(opts.parse_args())
-    #trainer.train()
     trainer.main()
