@@ -424,7 +424,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
         g_loss = self.adversarial_loss(validity, valid)
 
-        loss_stu = loss_stu + w_loss + g_loss
+        # loss_stu = loss_stu + w_loss + g_loss
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
@@ -573,11 +573,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         z_out = netD(generated_samples, generated_labels_fill)
         g_loss = self.adversarial_loss(z_out, real)
 
-        alpha = 1
+        alpha = 0.001
         # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
         # loss_stu = loss_stu * alpha
-        loss_final = loss_stu + g_loss
+        loss_final = loss_stu + alpha * g_loss
         # loss_final = g_loss
+
+        ratio = alpha * g_loss.item() / loss_final.item()
+        print("ratio", ratio)
 
         grad_stu = torch.autograd.grad(outputs=loss_final,
                                        inputs=model_paramters,

@@ -12,7 +12,37 @@ from torch.autograd import Variable
 import numpy as np
 
 
-class Generator_old_mnist(nn.Module):
+def mixup_data(gt_x, generated_x, gt_y, generated_y, alpha=1.0, use_cuda=True):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+        # lam = 1
+    else:
+        lam = 1
+
+    '''
+    batch_size = gt_x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    '''
+    y_a = gt_y
+    y_b = generated_y
+    mixed_x = lam * gt_x + (1 - lam) * generated_x
+
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+    return loss.to(torch.float32)
+
+
+class Generator1(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator, self).__init__()
 
@@ -20,7 +50,7 @@ class Generator_old_mnist(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
+        in_channels = student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]
@@ -48,7 +78,7 @@ class Generator_old_mnist(nn.Module):
         return img
 
 
-class Discriminator_old_mnist(nn.Module):
+class Discriminator1(nn.Module):
     def __init__(self, opt):
         super(Discriminator, self).__init__()
 
@@ -66,7 +96,7 @@ class Discriminator_old_mnist(nn.Module):
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(256, 1),
-            # nn.Sigmoid()
+            nn.Sigmoid()
         )
 
     def forward(self, img, labels):
@@ -88,7 +118,7 @@ class Generator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = self.opt.latent_dim + teacher.lin.weight.size(1) + student.lin.weight.size(1)
+        in_channels = student.lin.weight.size(1) + self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -216,20 +246,23 @@ class Generator_moon(nn.Module):
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
 
         self.input_fc = nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False)
         self.hidden_fc = nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False)
         self.output_fc = nn.Linear(self.opt.hidden_dim*2, self.opt.dim, bias=False)
         # self.activation = nn.LeakyReLU(0.1)
         self.activation = nn.ReLU()
-        # self.activation = nn.Tanh()
+        self.out_activation = nn.Sigmoid()
 
     def forward(self, z, label):
         x = torch.cat((z, self.label_embedding(label.to(torch.int64))), dim=1)
         x = self.activation(self.input_fc(x))
         x = self.activation(self.hidden_fc(x))
-        return self.output_fc(x)
+        x = self.output_fc(x)
+        # x = self.out_activation(x) * 4 - 2
+        return x
 
 
 class Discriminator_moon(nn.Module):
@@ -254,9 +287,7 @@ class Discriminator_moon(nn.Module):
         return validity
 
 
-
-
-class UnrolledOptimizer(nn.Module):
+class UnrolledBlackBoxOptimizer_moon(nn.Module):
     """
     Args:
         - nscale : number of scales
@@ -265,155 +296,7 @@ class UnrolledOptimizer(nn.Module):
         - K : kernel size
     """
     def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix):
-        super(UnrolledOptimizer, self).__init__()
-
-        self.opt = opt
-
-        self.optim_blocks = nn.ModuleList()
-
-        self.loss_fn = nn.MSELoss()
-        self.adversarial_loss = nn.BCELoss()
-
-        self.teacher = teacher
-        self.student = student
-        self.generator = generator
-
-        self.X = X
-        self.Y = Y
-
-        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
-
-        self.proj_matrix = proj_matrix
-
-    def data_sampler(self, i):
-        i_min = i * self.opt.batch_size
-        i_max = (i + 1) * self.opt.batch_size
-
-        x = self.X[i_min:i_max].cuda()
-        y = self.Y[i_min:i_max].cuda()
-
-        # y = y.to(torch.int64)
-
-        return x, y
-
-    def forward(self, weight, w_star, w_init, netD, generated_labels, real, epoch):
-        # self.generator.linear.weight = weight
-        # self.student.lin.weight = w_init
-
-        # convert labels to onehot encoding
-        cls = torch.arange(self.opt.n_classes)
-        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
-        # reshape labels to image size, with number of labels as channel
-        fill = torch.zeros([self.opt.n_classes, self.opt.n_classes, self.opt.img_size, self.opt.img_size])
-        for i in range(self.opt.n_classes):
-            fill[i, i, :, :] = 1
-
-        with torch.no_grad():
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        new_weight = w_init
-
-        n = 0
-
-        model_paramters = list(self.generator.parameters())
-
-        for i in range(self.opt.n_unroll_blocks):
-            w_t = self.student.lin.weight
-            w_t = w_t / torch.norm(w_t)
-
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = self.data_sampler(i)
-            gt_y_onehot = onehot[gt_y.long()].cuda()
-            gt_x = gt_x / torch.norm(gt_x)
-
-            # Sample noise and labels as generator input
-            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-
-            w = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
-            w = w.repeat(self.opt.batch_size, 1)
-            # x = torch.cat((w, z), dim=1)
-            generated_x = self.generator(w, gt_y_onehot)
-            generated_x = generated_x.view(self.opt.batch_size, -1)
-            generated_x_proj = generated_x @ self.proj_matrix.cuda()
-
-            # self.student.train()
-            out = self.student(generated_x_proj)
-
-            loss = self.loss_fn(out, gt_y.float())
-
-            grad = torch.autograd.grad(loss,
-                                       self.student.lin.weight,
-                                       create_graph=True, retain_graph=True)
-
-            # new_weight = self.student.lin.weight - 0.001 * grad[0]
-            new_weight = new_weight - 0.001 * grad[0]
-            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
-
-            # tau = np.exp(-i / 0.95)
-            '''
-            if i != -1:
-                tau = 1
-            else:
-                tau = 0.95 * tau
-            '''
-
-            # self.student.eval()
-            out_stu = self.teacher(generated_x_proj)
-            # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y)
-
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
-
-        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
-        w = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
-        w = w.repeat(self.opt.batch_size, 1)
-        # x = torch.cat((w, z), dim=1)
-
-        # generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
-        generated_labels_onehot = onehot[generated_labels].cuda()
-        generated_labels_fill = fill[generated_labels].cuda()
-
-        generated_samples = self.generator(w, generated_labels_onehot)
-
-        z_out = netD(generated_samples, generated_labels_fill)
-        g_loss = self.adversarial_loss(z_out, real)
-
-        tau = 0.0002
-
-        loss_stu = loss_stu + w_loss + g_loss * tau
-
-        # ratio = g_loss.item() * tau / loss_stu.item()
-        # print("ratio", ratio)
-
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=False, retain_graph=False)
-
-        return grad_stu, loss_stu, g_loss, z_out, generated_samples
-
-
-class UnrolledOptimizer_working(nn.Module):
-    """
-    Args:
-        - nscale : number of scales
-        - alpha : scale factor in the softmax in the expansion (rho in the paper)
-        - nblock : number of stages (K in the paper)
-        - K : kernel size
-    """
-    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix):
-        super(UnrolledOptimizer, self).__init__()
+        super(UnrolledBlackBoxOptimizer_moon, self).__init__()
 
         self.opt = opt
 
@@ -445,15 +328,9 @@ class UnrolledOptimizer_working(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, valid):
+    def forward(self, weight, w_star, w_init, netD=None, valid=None):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
-
-        # convert labels to onehot encoding
-        cls = torch.arange(self.opt.n_classes)
-        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
-        # reshape labels to image size, with number of labels as channel
-        fill = torch.zeros([self.opt.n_classes, self.opt.n_classes, self.opt.img_size, self.opt.img_size])
 
         with torch.no_grad():
             # for param1 in self.generator.parameters():
@@ -477,7 +354,6 @@ class UnrolledOptimizer_working(nn.Module):
 
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
-            gt_y_onehot = onehot[gt_y.long()].cuda()
 
             # Sample noise and labels as generator input
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
@@ -485,8 +361,7 @@ class UnrolledOptimizer_working(nn.Module):
 
             # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
             x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            generated_x = self.generator(x, gt_y_onehot)
-            generated_x = generated_x.view(self.opt.batch_size, -1)
+            generated_x = self.generator(x, gt_y)
 
             generated_x_proj = generated_x @ self.proj_matrix.cuda()
 
@@ -531,148 +406,14 @@ class UnrolledOptimizer_working(nn.Module):
         w_t = self.student.lin.weight
 
         i = torch.randint(0, self.nb_batch, size=(1,)).item()
-        gt_x, generated_labels = self.data_sampler(i)
-        generated_labels_onehot = onehot[generated_labels.long()].cuda()
-        generated_labels_filled = fill[generated_labels.long()].cuda()
-
-        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-        # z = Variable(torch.randn(gt_x.shape)).cuda()
-
-        # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-        x = torch.cat((w_t, w_t-w_star, z), dim=1)
-        generated_samples = self.generator(x, generated_labels_onehot)
-        # generated_samples = generated_samples.view(self.opt.batch_size, -1)
-        # generated_samples_proj = generated_samples @ self.proj_matrix.cuda()
-
-        # validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-        validity = netD(generated_samples, generated_labels_filled)
-        g_loss = self.adversarial_loss(validity, valid)
-
-        loss_stu = g_loss # + loss_stu + w_loss +
-
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=False, retain_graph=False)
-
-        return grad_stu, loss_stu, generated_samples, generated_labels, g_loss
-
-
-class UnrolledOptimizer_moon(nn.Module):
-    """
-    Args:
-        - nscale : number of scales
-        - alpha : scale factor in the softmax in the expansion (rho in the paper)
-        - nblock : number of stages (K in the paper)
-        - K : kernel size
-    """
-    def __init__(self, opt, teacher, student, generator, X, Y):
-        super(UnrolledOptimizer_moon, self).__init__()
-
-        self.opt = opt
-
-        self.optim_blocks = nn.ModuleList()
-
-        self.loss_fn = nn.MSELoss()
-        self.adversarial_loss = nn.BCELoss()
-
-        self.teacher = teacher
-        self.student = student
-        self.generator = generator
-
-        self.X = X
-        self.Y = Y
-
-        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
-
-    def data_sampler(self, i):
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
 
-        x = self.X[i_min:i_max].cuda()
-        y = self.Y[i_min:i_max].cuda()
+        # gt_x = self.X[i_min:i_max].cuda()
+        generated_labels = self.Y[i_min:i_max].cuda()
 
-        return x, y
-
-    def forward(self, weight, w_star, w_init, netD, valid):
-        # self.generator.linear.weight = weight
-        # self.student.lin.weight = w_init
-
-        with torch.no_grad():
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        new_weight = w_init
-
-        model_paramters = list(self.generator.parameters())
-
-        for i in range(self.opt.n_unroll_blocks):
-            w_t = self.student.lin.weight
-
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = self.data_sampler(i)
-
-            # Sample noise and labels as generator input
-            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-            z = Variable(torch.randn(gt_x.shape)).cuda()
-
-            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-            x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            generated_x = self.generator(x, gt_y)
-
-            # self.student.train()
-            out = self.student(generated_x)
-
-            loss = self.loss_fn(out, gt_y.float())
-            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
-            # new_weight = self.student.lin.weight - 0.001 * grad[0]
-            new_weight = new_weight - 0.001 * grad[0]
-            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
-
-            # tau = np.exp(-i / 0.95)
-            if i != -1:
-                tau = 1
-            else:
-                tau = 0.95 * tau
-
-            # self.student.eval()
-            out_stu = self.teacher(generated_x)
-            # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
-
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
-
-        '''
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
-
-
-        grad_stu_w = torch.autograd.grad(outputs=w_loss,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-        '''
-
-        # Loss measures generator's ability to fool the discriminator
-        # valid = Variable(torch.cuda.FloatTensor(self.batch_size, 1).fill_(1.0), requires_grad=False)
-
-        w_t = self.student.lin.weight
-
-        i = torch.randint(0, self.nb_batch, size=(1,)).item()
-        gt_x, generated_labels = self.data_sampler(i)
-
-        # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-        z = Variable(torch.randn(gt_x.shape)).cuda()
+        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+        # z = Variable(torch.randn(gt_x.shape)).cuda()
 
         # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
         x = torch.cat((w_t, w_t-w_star, z), dim=1)
@@ -690,3 +431,156 @@ class UnrolledOptimizer_moon(nn.Module):
                                        create_graph=True, retain_graph=True)
 
         return grad_stu, loss_stu, generated_samples, generated_labels, g_loss
+
+
+class UnrolledBlackBoxOptimizer(nn.Module):
+    """
+    Args:
+        - nscale : number of scales
+        - alpha : scale factor in the softmax in the expansion (rho in the paper)
+        - nblock : number of stages (K in the paper)
+        - K : kernel size
+    """
+    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
+        super(UnrolledBlackBoxOptimizer, self).__init__()
+
+        self.opt = opt
+        self.optim_blocks = nn.ModuleList()
+
+        self.loss_fn = nn.MSELoss()
+        self.adversarial_loss = nn.BCELoss()
+
+        self.teacher = teacher
+        self.student = student
+        self.generator = generator
+
+        self.X = X
+        self.Y = Y
+
+        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
+
+        self.proj_matrix = proj_matrix
+
+    def data_sampler(self, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = self.X[i_min:i_max].cuda()
+        y = self.Y[i_min:i_max].cuda()
+
+        # y = y.to(torch.int64)
+
+        return x, y
+
+    def forward(self, weight, w_star, w_init, netD, generated_labels, real):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
+
+        # convert labels to onehot encoding
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+        # reshape labels to image size, with number of labels as channel
+        fill = torch.zeros([self.opt.n_classes, self.opt.n_classes, self.opt.img_size, self.opt.img_size])
+        for i in range(self.opt.n_classes):
+            fill[i, i, :, :] = 1
+
+        with torch.no_grad():
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            self.generator.load_state_dict(weight)
+            for param1 in self.student.parameters():
+                param1 = w_init
+            for param2 in self.teacher.parameters():
+                param2 = w_star
+
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
+
+        new_weight = w_init
+
+        n = 0
+
+        model_paramters = list(self.generator.parameters())
+
+        for i in range(self.opt.n_unroll_blocks):
+            n = n + 1
+            w_t = self.student.lin.weight
+
+            i = torch.randint(0, self.nb_batch, size=(1,)).item()
+            gt_x, gt_y = self.data_sampler(i)
+            gt_y_onehot = onehot[gt_y.long()].cuda()
+
+            # Sample noise and labels as generator input
+            # z = Variable(torch.randn(gt_x.shape)).cuda()
+            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+
+            # x = torch.cat((w_t, w_t-w_star, z), dim=1)
+            w = w_t.repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, z), dim=1)
+            generated_x = self.generator(x, gt_y_onehot)
+            generated_x = generated_x.view(self.opt.batch_size, -1)
+            generated_x_proj = generated_x @ self.proj_matrix.cuda()
+
+            # self.student.train()
+            # out = self.student(mixed_x)
+            out = self.student(generated_x_proj)
+
+            loss = self.loss_fn(out, gt_y.float())
+
+            grad = torch.autograd.grad(loss,
+                                       self.student.lin.weight,
+                                       create_graph=True, retain_graph=True)
+
+            # new_weight = self.student.lin.weight - 0.001 * grad[0]
+            new_weight = new_weight - 0.001 * grad[0]
+            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
+            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+
+            # tau = np.exp(-i / 0.95)
+            if i != -1:
+                tau = 1
+            else:
+                tau = 0.95 * tau
+
+            # self.student.eval()
+            # out_stu = self.teacher(generated_x)
+            # out_stu = self.student(generated_x)
+            # out_stu = self.student(mixed_x)
+            # out_stu = self.student(gt_x)
+
+            # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            # loss_stu = loss_stu + tau * mixup_criterion(self.loss_fn, out_stu, targets_a.float(), targets_b.float(), lam)
+
+            out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+
+            # print(n, "After backward pass", torch.cuda.memory_allocated(0))
+
+        # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+        # loss_stu = self.loss_fn(out_stu, gt_y)
+
+        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+        w_t = w_t.repeat(self.opt.batch_size, 1)
+        x = torch.cat((w_t, z), dim=1)
+
+        # generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
+        generated_labels_onehot = onehot[generated_labels].cuda()
+        generated_labels_fill = fill[generated_labels].cuda()
+
+        generated_samples = self.generator(x, generated_labels_onehot)
+
+        z_out = netD(generated_samples, generated_labels_fill)
+        g_loss = self.adversarial_loss(z_out, real)
+
+        alpha = 1
+        # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
+        # loss_stu = loss_stu * alpha
+        # loss_final = loss_stu + g_loss
+        loss_final = loss_stu
+
+        grad_stu = torch.autograd.grad(outputs=loss_final,
+                                       inputs=model_paramters,
+                                       create_graph=False, retain_graph=False)
+
+        return grad_stu, loss_stu, g_loss, z_out, generated_samples

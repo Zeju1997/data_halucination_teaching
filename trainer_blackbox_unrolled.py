@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 
 from datasets import BaseDataset
 
-import networks.blackbox_optimizer as blackbox
+import networks.blackbox_unrolled as blackbox
 
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
@@ -427,7 +427,7 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
             data_train = BaseDataset(X_train, Y_train)
-            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size_gan, drop_last=True, shuffle=True)
+            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
 
             X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
             X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
@@ -618,8 +618,6 @@ class Trainer:
         #  Train Student
         # ---------------------
 
-        self.opt.batch_size = 32
-
         adversarial_loss = torch.nn.BCELoss()
 
         if self.opt.data_mode == "moon":
@@ -703,8 +701,6 @@ class Trainer:
                 optimG.step()
                 '''
 
-                self.opt.batch_size = 32
-
                 generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
                 generated_labels_onehot = onehot[generated_labels].cuda()
                 generated_labels_fill = fill[generated_labels].cuda()
@@ -730,8 +726,6 @@ class Trainer:
 
                 epoch_DGz.append(z_out.mean().item())
                 epoch_G_losses.append(G_loss.item())
-
-                self.opt.batch_size = 32
 
                 # G_loss.backward()
                 optimG.step()
@@ -864,7 +858,7 @@ class Trainer:
                 to_save = netD.state_dict()
                 torch.save(to_save, save_path)
 
-        plt.figure(figsize=(10,5))
+        plt.figure(figsize=(10, 5))
         plt.title("Discriminator and Generator loss during Training")
         # plot Discriminator and generator loss
         plt.plot(D_losses, label="D Loss")

@@ -4,6 +4,7 @@ same_feat_space: True
 n_iter: 300 # 800 # 500 # 200
 learning_rate: 1e-3
 batch_size: 1 # 128
+batch_size_gan: 32 # 128
 nb_train: 1000 # 10000
 nb_test: 100 # 1000
 dim: 24 # 784 # 24
@@ -17,7 +18,7 @@ hidden_dim: 32
 latent_dim: 24 # 24
 n_unroll: 1000 # 1000
 n_unroll_blocks: 10 # 40
-n_epochs: 50 # 35
+n_epochs: 10 # 35
 start_saving: 0
 save_frequency: 1
 label_dim: 10
