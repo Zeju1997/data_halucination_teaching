@@ -392,7 +392,7 @@ class UnrolledOptimizer(nn.Module):
 
         tau = 0.0002
 
-        loss_stu = loss_stu + w_loss + g_loss * tau
+        loss_stu = loss_stu + w_loss # + g_loss * tau
 
         # ratio = g_loss.item() * tau / loss_stu.item()
         # print("ratio", ratio)
