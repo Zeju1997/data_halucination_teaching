@@ -586,7 +586,7 @@ class Trainer:
             total = 0
             mixup_baseline.load_state_dict(torch.load('teacher_w0.pth'))
             mixup_baseline_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD([{'params': mixup_baseline.parameters()}, {'params': mixup_baseline_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
             self.best_acc = 0
@@ -600,7 +600,8 @@ class Trainer:
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
-                        outputs = mixup_baseline(mixed_x)
+                        features = mixup_baseline(mixed_x)
+                        outputs = mixup_baseline_fc(features)
                         loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
                         # loss = self.loss_fn(outputs, mixed_y.long())
 
@@ -659,7 +660,7 @@ class Trainer:
             total = 0
             mixup_baseline.load_state_dict(torch.load('teacher_w0.pth'))
             mixup_baseline_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD([{'params': mixup_baseline.parameters()}, {'params': mixup_baseline_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
             self.best_acc = 0

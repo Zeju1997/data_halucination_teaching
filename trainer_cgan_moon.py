@@ -22,10 +22,10 @@ import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from train_utils import *
 from eval import EvalMetrics
-import teachers.surrogate_teacher_optimizer as omniscient
+import teachers.omniscient_teacher as omniscient
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-
+import cv2
 
 from datasets import BaseDataset
 
@@ -885,7 +885,6 @@ class Trainer:
 
                 self.student.load_state_dict(torch.load('teacher_w0.pth'))
                 netG.eval()
-                generated_samples = np.zeros(2)
                 for idx in tqdm(range(self.opt.n_iter)):
                     if idx != 0:
                         w_t = self.student.lin.weight
@@ -901,20 +900,20 @@ class Trainer:
 
                         # w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
                         z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
-                        w = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+                        w = torch.cat((w_t, w_t-w_star), dim=1)
                         w = w.repeat(self.opt.batch_size, 1)
                         # x = torch.cat((w, z), dim=1)
                         generated_sample = netG(w, gt_y_onehot)
 
-                        if self.opt.data_mode == "moon":
-                            if idx == 1:
-                                generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                                generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
-                            else:
-                                generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                                generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
+                        if idx == 1:
+                            generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
+                            generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
                         else:
-                            generated_sample = generated_sample.view(self.opt.batch_size, -1)
+                            generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
+                            generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
+
+                        if self.opt.data_mode == "mnist":
+                            generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
                             generated_sample = generated_sample.detach().clone() @ proj_matrix.cuda()
 
                         self.student.update(generated_sample, gt_y)
@@ -956,17 +955,14 @@ class Trainer:
                         w_t = self.student.lin.weight
                         w_t = w_t / torch.norm(w_t)
 
+                        print("wt", w_t.mean())
+
                         w = torch.cat((w_t, w_t-w_star), dim=1)
                         w = w.repeat(self.opt.n_classes**2, 1)
                         x = torch.cat((w, x_test), dim=1)
-                        fake_test = netG(x, test_labels_onehot).cpu()
+                        fake_test = netG(w, test_labels_onehot).cpu()
                         torchvision.utils.save_image(fake_test, img_path, nrow=10, padding=0, normalize=True)
                     netG.train()
-
-                    # z = Variable(torch.randn((self.opt.n_classes**2, self.opt.latent_dim))).cuda()
-                    # w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.n_classes**2, 1)
-                    # x = torch.cat((w, z), dim=1)
-                    # test_samples = netG(z, test_labels_onehot)
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                     self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
@@ -984,6 +980,8 @@ class Trainer:
                 save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
                 to_save = netD.state_dict()
                 torch.save(to_save, save_path)
+
+                self.make_results_video_generated_data(generated_samples, epoch)
 
 
         plt.figure(figsize=(10,5))
@@ -1156,6 +1154,22 @@ class Trainer:
         img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
         plt.savefig(img_path)
         plt.close()
+
+    def make_results_video_generated_data(self, generated_samples, epoch):
+        n = generated_samples.shape[0]
+        for i in tqdm(range(n)):
+            img_path = self.opt.log_path + "/file%03d.png" % i
+            img = generated_samples[i]
+            img = torch.from_numpy(img)
+            torchvision.utils.save_image(img, img_path, nrow=10, padding=0, normalize=True)
+
+        #'-vf', 'scale=320:320'
+        subprocess.call([
+            'ffmpeg', '-framerate', '8', '-i', self.opt.log_path + '/file%03d.png', '-r', '30', '-pix_fmt', 'yuv420p',
+            self.opt.log_path + '/generated_samples_epoch_{}.mp4'.format(epoch)
+        ])
+        for file_name in glob.glob(self.opt.log_path + '/' + "*.png"):
+            os.remove(file_name)
 
 
     def make_results_video(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
