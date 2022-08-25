@@ -18,7 +18,7 @@ hidden_dim: 32
 latent_dim: 24 # 24
 n_unroll: 1000 # 1000
 n_unroll_blocks: 10 # 40
-n_epochs: 10 # 35
+n_epochs: 20 # 35
 start_saving: 0
 save_frequency: 1
 label_dim: 10

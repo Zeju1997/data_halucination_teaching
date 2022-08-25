@@ -16,7 +16,7 @@ def __example_difficulty__(student, X, y):
     student.optim.zero_grad()
     student.lin.weight.retain_grad()
     out = student(X)
-    loss = student.loss_fn(out, y)
+    loss = student.loss_fn(out.squeeze(1), y)
     loss.backward()
     res = student.lin.weight.grad
     return (th.norm(res) ** 2).item()
@@ -33,10 +33,11 @@ def __example_usefulness__(student, teacher, X, y):
     """
 
     out = student(X)
-    loss = student.loss_fn(out, y)
-    loss_teacher = teacher.loss_fn(teacher(X), y)
+    loss = student.loss_fn(out.squeeze(1), y)
+    # out_teacher = teacher(X)
+    # loss_teacher = teacher.loss_fn(out_teacher.squeeze(1), y)
 
-    return loss - loss_teacher
+    return loss # - loss_teacher
 
 
 def __select_example__(teacher, student, X, y, batch_size):
@@ -54,6 +55,8 @@ def __select_example__(teacher, student, X, y, batch_size):
 
     min_score = sys.float_info.max
     arg_min = 0
+    best_data = 0
+    best_label = 0
 
     # TODO
     # - one "forward" scoring pass
@@ -75,8 +78,10 @@ def __select_example__(teacher, student, X, y, batch_size):
         if s.item() < min_score:
             min_score = s.item()
             arg_min = i
+            best_data = data
+            best_label = label
 
-    return arg_min
+    return best_data, best_label
 
 
 class SurrogateLinearStudent(BaseLinear):

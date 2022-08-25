@@ -390,10 +390,10 @@ class UnrolledOptimizer(nn.Module):
         z_out = netD(generated_samples, generated_labels_fill)
         g_loss = self.adversarial_loss(z_out, real)
 
-        tau = 0.0002
+        tau = 0.0001
 
-        # loss_stu = loss_stu + w_loss # + g_loss * tau
-        loss_stu = + g_loss
+        loss_stu = loss_stu + w_loss + g_loss * tau
+        # loss_stu = + g_loss
 
         # ratio = g_loss.item() * tau / loss_stu.item()
         # print("ratio", ratio)

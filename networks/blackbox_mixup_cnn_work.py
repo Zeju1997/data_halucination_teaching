@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
+
 def mixup_data1(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha=1.0):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     lam = alpha
@@ -22,9 +23,11 @@ def mixup_data1(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha=1.0):
     y_b = gt_y_2
     mixed_x = lam * gt_x_1 + (1 - lam) * gt_x_2
     return mixed_x, y_a, y_b
+
 def mixup_criterion1(criterion, pred, y_a, y_b, lam):
     loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
     return loss.to(torch.float32)
+
 def mixup_data(x, y, alpha=1.0):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     batch_size = x.shape[0]
@@ -43,10 +46,12 @@ def mixup_data(x, y, alpha=1.0):
     y_a, y_b = y, y[index]
     # mixed_y = lam * y + (1 - lam) * y[index]
     return mixed_x, y_a, y_b, lam
+
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
     loss = torch.mean(loss)
     return loss
+
 class Generator(nn.Module):
     def __init__(self, opt):
         super(Generator, self).__init__()
@@ -72,6 +77,7 @@ class Generator(nn.Module):
         d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label)), -1)
         validity = self.model(d_in)
         return validity
+
 class Generator1(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator, self).__init__()
@@ -96,12 +102,14 @@ class Generator1(nn.Module):
             nn.Linear(128, 1),
             nn.Sigmoid()
         )
+
     def forward(self, noise, label1, label2):
         # Concatenate label embedding and image to produce input
         gen_input = torch.cat((noise, self.label_emb(label1.to(torch.int64)), self.label_emb(label2.to(torch.int64))), -1)
         img = self.model(gen_input)
         # img = img.view(img.size(0), *self.img_shape)
         return img
+
 class Discriminator(nn.Module):
     def __init__(self, opt):
         super(Discriminator, self).__init__()
@@ -126,6 +134,7 @@ class Discriminator(nn.Module):
         d_in = torch.cat((img, self.label_embedding(label1), self.label_embedding(label2)), -1)
         validity = self.model(d_in)
         return validity
+
 class Generator_moon(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator_moon, self).__init__()
@@ -139,6 +148,7 @@ class Generator_moon(nn.Module):
         # self.activation = nn.LeakyReLU(0.1)
         self.activation = nn.ReLU()
         self.out_activation = nn.Sigmoid()
+
     def forward(self, z, label1, label2):
         x = torch.cat((z, self.label_embedding(label1.to(torch.int64)), self.label_embedding(label2.to(torch.int64))), dim=1)
         x = self.activation(self.input_fc(x))
@@ -146,6 +156,7 @@ class Generator_moon(nn.Module):
         x = self.output_fc(x)
         x = self.out_activation(x)
         return x
+
 class Discriminator_moon(nn.Module):
     def __init__(self, opt):
         super(Discriminator_moon, self).__init__()
@@ -158,11 +169,13 @@ class Discriminator_moon(nn.Module):
             nn.Linear(self.opt.hidden_dim, 1, bias=False),
             nn.Sigmoid()
         )
+
     def forward(self, img, labels):
         # Concatenate label embedding and image to produce input
         d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
         validity = self.model(d_in)
         return validity
+
 class UnrolledBlackBoxOptimizer(nn.Module):
     """
     Args:
@@ -184,6 +197,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         self.dataset = train_dataset
         self.nb_batch = int(len(train_dataset) / self.opt.batch_size)
         self.proj_matrix = proj_matrix
+
     def forward(self, weight, w_star=None, w_init=None):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init

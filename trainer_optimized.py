@@ -23,6 +23,7 @@ from torchvision.transforms import ToTensor
 from train_utils import *
 from eval import EvalMetrics
 import teachers.omniscient_teacher_optimizer as omniscient
+import teachers.surrogate_teacher_optimizer as surrogate
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 import data.dataset_loader as data_loader
@@ -94,12 +95,13 @@ class Trainer:
             self.teacher = omniscient.OmniscientConvTeacher(self.opt.eta)
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
-            self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
-            self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
+            # self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
+            # self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
+            # self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
 
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
+            self.teacher = surrogate.SurrogateLinearTeacher(self.opt.dim)
+            self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
+            self.baseline = surrogate.SurrogateLinearStudent(self.opt.dim)
 
         self.student.load_state_dict(self.teacher.state_dict())
         self.baseline.load_state_dict(self.teacher.state_dict())
@@ -146,9 +148,9 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        torch.manual_seed(self.opt.seed)
-        np.random.seed(self.opt.seed)
-        torch.cuda.manual_seed(self.opt.seed)
+        # torch.manual_seed(self.opt.seed)
+        # np.random.seed(self.opt.seed)
+        # torch.cuda.manual_seed(self.opt.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
         # cudnn.enabled=True
@@ -354,58 +356,6 @@ class Trainer:
         teacher_acc = accuracies[-1]
 
         # ---------------------
-        #  Train Student
-        # ---------------------
-
-        res_i = [1] * 500
-
-        res_student = []
-        a_student = []
-        b_student = []
-        generated_samples = np.zeros(2)
-        w_diff_student = []
-        for t in tqdm(range(self.opt.n_iter)):
-            if t != 0:
-                # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
-                new_data, new_labels = self.teacher.generate_example(self.student, X_train.cuda(), Y_train.cuda(), self.opt.batch_size, self.opt.lr_factor, self.opt.gd_n, res_i[t-1], self.opt.optim)
-
-                generated_data = new_data.detach().clone().cpu().numpy()
-                generated_label = new_labels.detach().clone().cpu().numpy()
-                if t == 1:
-                    generated_samples = generated_data # [np.newaxis, :]
-                    generated_labels = generated_label # [np.newaxis, :]
-                else:
-                    generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
-                    generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
-
-                self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
-            self.student.eval()
-            test = self.student(X_test.cuda()).cpu()
-
-            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-            a_student.append(a)
-            b_student.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            res_student.append(acc)
-
-            diff = torch.linalg.norm(w_star - self.student.lin.weight, ord=2) ** 2
-            w_diff_student.append(diff.detach().clone().cpu())
-
-            print("iter", t, "acc student", acc)
-
-            sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
-            sys.stdout.flush()
-
-        # ---------------------
         #  Train SGD
         # ---------------------
 
@@ -493,6 +443,84 @@ class Trainer:
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
+
+        if self.visualize == True:
+            fig, (ax1, ax2) = plt.subplots(1, 2)
+            fig.set_size_inches(12, 6)
+            ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
+            ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
+            # ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
+            # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
+            ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            ax1.set_xlabel("Iteration")
+            ax1.set_ylabel("Accuracy")
+            ax1.legend(loc="lower right")
+
+            ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
+            ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
+            # ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
+            ax2.legend(loc="lower left")
+            ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            ax2.set_xlabel("Iteration")
+            ax2.set_ylabel("Distance between $w^t$ and $w^*$")
+            #ax2.set_aspect('equal')
+
+            # plt.savefig('results_mnist_final.jpg')
+            # plt.close()
+            plt.show()
+
+        # ---------------------
+        #  Train Student
+        # ---------------------
+
+        res_i = [1] * 500
+
+        res_student = []
+        a_student = []
+        b_student = []
+        generated_samples = np.zeros(2)
+        w_diff_student = []
+        for t in tqdm(range(self.opt.n_iter)):
+            if t != 0:
+                # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
+                new_data, new_labels = self.teacher.generate_example(self.student, X_train.cuda(), Y_train.cuda(), self.opt.batch_size, self.opt.lr_factor, self.opt.gd_n, res_i[t-1], self.opt.optim)
+
+                generated_data = new_data.detach().clone().cpu().numpy()
+                generated_label = new_labels.detach().clone().cpu().numpy()
+                if t == 1:
+                    generated_samples = generated_data # [np.newaxis, :]
+                    generated_labels = generated_label # [np.newaxis, :]
+                else:
+                    generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
+                    generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
+
+                self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
+            self.student.eval()
+            test = self.student(X_test.cuda()).cpu()
+
+            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+            a_student.append(a)
+            b_student.append(b)
+
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            elif self.opt.data_mode == "cifar10":
+                tmp = torch.max(test, dim=1).indices
+                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+            else:
+                sys.exit()
+            acc = nb_correct / X_test.size(0)
+            res_student.append(acc)
+
+            diff = torch.linalg.norm(w_star - self.student.lin.weight, ord=2) ** 2
+            w_diff_student.append(diff.detach().clone().cpu())
+
+            print("iter", t, "acc student", acc)
+
+            sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
+            sys.stdout.flush()
+
 
 
         if self.visualize == True:

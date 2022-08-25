@@ -249,13 +249,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         z_optimized = self.optimize_latent_features(fc, z.detach().clone(), targets)
 
-        out = fc(z_optimized)
+        # out = fc(z_optimized)
+        out = fc(z)
 
         # ---------------------
         #  Reconstruct Images from Feature Space
         # ---------------------
 
-        loss = self.cross_entropy(out, targets)
+        # loss = self.cross_entropy(out, targets)
 
         # targets_onehot = torch.FloatTensor(targets.shape[0], self.opt.n_classes).cuda()
         # targets_onehot.zero_()
@@ -264,7 +265,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # generated_inputs = self.F_inverse(model=model, netG=netG, input=inputs, class_vector=targets_onehot, features_ini=z_optimized)
 
         # return generated_inputs
-        return loss
+        return out
 
     def F_inverse1(self, model, netG, input, class_vector, features_ini, cov_matrix):
         truncation = 1

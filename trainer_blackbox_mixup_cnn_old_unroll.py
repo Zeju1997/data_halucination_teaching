@@ -305,71 +305,14 @@ class Trainer:
         self.experiment = "teacher"
 
     def get_teacher_student(self):
-        if self.opt.teaching_mode == "omniscient":
-            if self.opt.data_mode == "cifar10":
-                self.teacher = networks.ResNet18(in_channels=3).cuda()
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
+        self.teacher = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher.apply(initialize_weights)
+        torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+        # self.teacher.load_state_dict(torch.load('teacher.pth'))
 
-                self.student = networks.ResNet18(in_channels=3).cuda()
-                self.baseline = networks.ResNet18(in_channels=3).cuda()
-            elif self.opt.data_mode == "cifar100":
-                # self.teacher = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.teacher = networks.CNN(in_channels=3, num_classes=100).cuda()
-                self.teacher.apply(initialize_weights)
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
+        self.student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
-                # self.student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.student = networks.CNN(in_channels=3, num_classes=100).cuda()
-                # self.baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-                self.baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
-            else: # mnist / gaussian / moon
-                self.teacher = networks.ResNet18(in_channels=1).cuda()
-                torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-                # self.teacher.load_state_dict(torch.load('teacher.pth'))
-
-                self.student = networks.ResNet18(in_channels=1).cuda()
-                self.baseline = networks.ResNet18(in_channels=1).cuda()
-
-        elif self.opt.teaching_mode == "surrogate":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-                else:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateLinearTeacher(self.opt.dim)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-                else:
-                    self.teacher = surrogate.SurrogateDiffLinearTeacher(self.opt.dim, 24, normal_dist=True)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-        elif self.opt.teaching_mode == "imitation":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    tmp = next(iter(self.train_loader))[0]
-                    fst_x = torch.Tensor(tmp[torch.randint(0, tmp.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-                else:
-                    fst_x = torch.Tensor(data[torch.randint(0, data.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationLinearTeacher(self.opt.dim, fst_x)
-                    self.student = utils.BaseLinear(self.opt.dim)
-                else:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationDiffLinearTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-        else:
-            print("Unrecognized teacher!")
-            sys.exit()
         self.student.load_state_dict(self.teacher.state_dict())
         self.baseline.load_state_dict(self.teacher.state_dict())
 
@@ -444,7 +387,7 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        torch.manual_seed(self.opt.seed)
+        # torch.manual_seed(self.opt.seed)
         # np.random.seed(args.seed)
         # torch.cuda.set_device(args.gpu)
         # cudnn.benchmark = True
@@ -452,35 +395,17 @@ class Trainer:
         # cudnn.enabled=True
         # torch.cuda.manual_seed(args.seed)
 
-        if self.opt.data_mode == "cifar10":
-            example = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            tmp_student = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=3, num_classes=10).cuda()
-
-        elif self.opt.data_mode == "cifar100":
-            # example = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            example = networks.CNN(in_channels=3, num_classes=100).cuda()
-            # tmp_student = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            tmp_student = networks.CNN(in_channels=3, num_classes=100).cuda()
-            # mixup_baseline = networks.ResNet18(in_channels=3, num_classes=100).cuda()
-            mixup_baseline = networks.CNN(in_channels=3, num_classes=100).cuda()
-
-        elif self.opt.data_mode == "mnist":
-            example = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-            tmp_student = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-            mixup_baseline = networks.ResNet18(in_channels=1, num_classes=10).cuda()
-
-        else:
-            print("Unrecognized data mode!")
-            sys.exit()
+        example = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        tmp_student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        mixup_baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         example.load_state_dict(self.teacher.state_dict())
         tmp_student.load_state_dict(self.teacher.state_dict())
         mixup_baseline.load_state_dict(self.teacher.state_dict())
 
-
-
-
+        # ---------------------
+        #  Train Student
+        # ---------------------
 
         # train student
         netG = blackbox_mixup.Generator(self.opt).cuda()
@@ -733,9 +658,9 @@ class Trainer:
             # diff = weight_diff(w_teacher, w_student)
             # w_diff_student.append(diff)
 
-
-        sys.exit()
-
+        # ---------------------
+        #  Train Baseline
+        # ---------------------
 
         # mixup baseline
         self.experiment = "Vanilla_Mixup"
@@ -869,9 +794,9 @@ class Trainer:
             plt.legend()
             plt.show()
 
-        sys.exit()
-
-
+        # ---------------------
+        #  Train SGD
+        # ---------------------
 
          # train example
         self.experiment = "SGD"
