@@ -714,7 +714,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == True:
+        if self.opt.train_student:
             # student
             self.experiment = "Teacher"
             print("Start training {} ...".format(self.experiment))
@@ -727,10 +727,10 @@ class Trainer:
             res_mixup = []
             res_loss_mixup = []
 
-            netG = cgan.Generator_CIFAR10().cuda()
+            # netG = cgan.Generator_CIFAR10().cuda()
             # netG.apply(weights_init)
-            weight_path = os.path.join(self.opt.pretrained_dir, 'netG_CIFAR10.pth')
-            netG.load_state_dict(torch.load(weight_path))
+            # weight_path = os.path.join(self.opt.pretrained_dir, 'netG_CIFAR10.pth')
+            # netG.load_state_dict(torch.load(weight_path))
 
             # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
             # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
@@ -779,7 +779,7 @@ class Trainer:
 
                     # z = self.student(inputs)
                     # output = self.student_fc(z)
-                    outputs = unrolled_optimizer(self.student, self.student_fc, netG, inputs, targets)
+                    outputs = unrolled_optimizer(self.student, self.student_fc, inputs, targets)
 
                     # z = self.student(inputs)
                     # outputs = self.student_fc(z.detach().clone())
@@ -853,7 +853,7 @@ class Trainer:
                 # mixup_baseline.update(mixed_x, mixed_y)
                 '''
 
-                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch, netG=netG)
+                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 

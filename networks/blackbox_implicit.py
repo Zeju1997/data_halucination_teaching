@@ -247,7 +247,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return z
 
-    def forward(self, model, fc, netG, inputs, targets):
+    def forward(self, model, fc, inputs, targets):
 
         # ---------------------
         #  Optimize Linear Classifier
