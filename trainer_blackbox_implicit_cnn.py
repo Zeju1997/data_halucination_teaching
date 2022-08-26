@@ -619,7 +619,7 @@ class Trainer:
         baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
 
-        if self.opt.train_sgd:
+        if not self.opt.train_sgd:
             # train example
             self.experiment = "SGD"
             print("Start training {} ...".format(self.experiment))
@@ -743,9 +743,7 @@ class Trainer:
             # new_weight = w_init
             train_loss = []
 
-            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-            # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+
             self.step = 0
             self.best_acc = 0
             self.best_test_loss = 0
@@ -760,6 +758,11 @@ class Trainer:
 
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+
+            student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             for epoch in tqdm(range(self.opt.n_epochs)):
                 # if epoch < 50:
                 #     self.train(self.student, self.student_fc, self.loader, self.loss_fn, student_optim, epoch)
@@ -772,15 +775,29 @@ class Trainer:
 
                     # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
 
-                    student_optim.zero_grad()
+                    # student_optim.zero_grad()
 
                     # z = self.student(inputs)
                     # output = self.student_fc(z)
                     outputs = unrolled_optimizer(self.student, self.student_fc, netG, inputs, targets)
 
+                    # z = self.student(inputs)
+                    # outputs = self.student_fc(z.detach().clone())
+
                     loss = self.loss_fn(outputs, targets)
-                    loss.backward()
+
+                    gradients = torch.autograd.grad(outputs=loss,
+                                                   inputs=student_parameters,
+                                                   create_graph=True, retain_graph=True)
+
+                    with torch.no_grad():
+                        for p, g in zip(student_parameters, gradients):
+                            p.grad = g
+
                     student_optim.step()
+
+                    # loss.backward()
+                    # student_optim.step()
 
                     self.step += 1
 

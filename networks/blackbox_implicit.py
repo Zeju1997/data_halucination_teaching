@@ -19,6 +19,8 @@ from tqdm import tqdm
 
 import os
 
+import copy
+
 def mixup_data(gt_x, generated_x, gt_y, generated_y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
@@ -198,22 +200,25 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         """Run the style transfer."""
         # print('Building the style transfer model..')
 
-        z.requires_grad_(True)
+        z_org = z.detach().clone()
+        z_tmp = z.detach().clone()
+
+        z_tmp.requires_grad_(True)
         fc.requires_grad_(False)
 
-        optimizer = optim.SGD([z], lr=0.1, momentum=0.9)
+        optimizer = optim.SGD([z_tmp], lr=0.1, momentum=0.9)
 
         optim_loss = []
 
         # print('Optimizing..')
         run = [0]
-        while run[0] <= self.opt.n_unroll_blocks * 5:
+        while run[0] <= self.opt.n_unroll:
             # correct the values of updated input image
             # with torch.no_grad():
             #    z.clamp_(0, 1)
 
             optimizer.zero_grad()
-            output = fc(z)
+            output = fc(z_tmp)
             loss = self.loss_fn(output, labels)
             loss.backward()
             optimizer.step()
@@ -237,6 +242,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
+        diff = z_org - z_tmp
+        z = z - diff
+
         return z
 
     def forward(self, model, fc, netG, inputs, targets):
@@ -245,12 +253,25 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         #  Optimize Linear Classifier
         # ---------------------
 
+        model_parameters = list(model.parameters()) + list(fc.parameters())
+
         z = model(inputs)
 
-        z_optimized = self.optimize_latent_features(fc, z.detach().clone(), targets)
+        fc_mdl = copy.deepcopy(fc)
+        # fc_mdl.requires_grad_(False)
 
-        # out = fc(z_optimized)
-        out = fc(z)
+        z_optimized = self.optimize_latent_features(fc_mdl, z, targets)
+
+        out = fc(z_optimized)
+
+        # loss = self.loss_fn(out, targets)
+
+        # gradients = torch.autograd.grad(outputs=loss,
+        #                               inputs=model_parameters,
+        #                               create_graph=True, retain_graph=True)
+
+
+        # out = fc(z)
 
         # ---------------------
         #  Reconstruct Images from Feature Space

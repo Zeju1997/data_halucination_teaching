@@ -565,7 +565,7 @@ class Trainer:
         mixup_baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         mixup_baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_baseline:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -639,7 +639,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        if self.opt.train_baseline:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup_Batch"
             print("Start training {} ...".format(self.experiment))
@@ -730,9 +730,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        sys.exit()
-
-        if self.opt.train_student:
+        if self.opt.train_student == False:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -807,11 +805,21 @@ class Trainer:
                         # feat, labels = self.get_query_set()
                         # self.estimator.update_CV(feat, labels)
                         # cv_matrix = self.estimator.CoVariance.detach()
+                        val_lam = np.random.beta(1.0, 1.0)
+                        val_lam = torch.tensor(val_lam, dtype=torch.float).cuda()
+                        val_offset = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim, val_lam)
+                        val_offset = torch.max(val_offset, dim=1).indices
+                        offset_count = torch.bincount(val_offset)
 
-                        val_lam = netG(val_inputs.cuda(), val_targets.cuda(), model_features, feat_sim)
-                        val_lam = torch.max(val_lam, dim=1).indices
+                        if torch.argmax(offset_count) == 0:
+                            offset = 0.1
+                        elif torch.argmax(offset_count) == 2:
+                            offset = - 0.1
+                        else:
+                            offset = 0
 
-                        val_lam = val_lam.mean(0)
+                        val_lam = val_lam + offset
+                        val_lam = torch.clamp(val_lam, min=0, max=1)
 
                         index = torch.randperm(val_inputs.shape[0]).cuda()
                         targets_a, targets_b = val_targets, val_targets[index]
@@ -849,8 +857,22 @@ class Trainer:
                         self.student.train()
                         self.student_fc.train()
                         model_features = self.model_features(avg_train_loss, epoch)
-                        lam = netG(inputs, targets.long(), model_features, feat_sim)
-                        lam = lam.mean(0)
+
+                        lam = np.random.beta(1.0, 1.0)
+                        lam = torch.tensor(lam, dtype=torch.float).cuda()
+                        norm_offset = netG(inputs, targets.long(), model_features, feat_sim, lam)
+                        norm_offset = torch.max(norm_offset, dim=1).indices
+                        offset_count = torch.bincount(norm_offset)
+
+                        if torch.argmax(offset_count) == 0:
+                            offset = 0.1
+                        elif torch.argmax(offset_count) == 2:
+                            offset = - 0.1
+                        else:
+                            offset = 0
+
+                        lam = lam + offset
+                        lam = torch.clamp(lam, min=0, max=1)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
 
@@ -1062,8 +1084,22 @@ class Trainer:
                         index = torch.randperm(n_samples).cuda()
                         model_features = self.model_features(avg_train_loss, epoch)
 
-                        lam = netG(inputs, targets.long(), model_features, feat_sim)
-                        lam = lam.mean(0)
+                        lam = np.random.beta(1.0, 1.0)
+                        lam = torch.tensor(lam, dtype=torch.float).cuda()
+                        norm_offset = netG(inputs, targets.long(), model_features, feat_sim, lam)
+                        norm_offset = torch.max(norm_offset, dim=1).indices
+                        offset_count = torch.bincount(norm_offset)
+
+                        if torch.argmax(offset_count) == 0:
+                            offset = 0.1
+                        elif torch.argmax(offset_count) == 2:
+                            offset = - 0.1
+                        else:
+                            offset = 0
+
+                        lam = lam + offset
+                        lam = torch.clamp(lam, min=0, max=1)
+
                         # lam = torch.rand(n_samples, 1).cuda()
 
                         # x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
@@ -1072,7 +1108,8 @@ class Trainer:
                         mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
                         targets_a, targets_b = targets, targets[index]
 
-                        outputs = self.student(mixed_x)
+                        features = self.student(mixed_x)
+                        outputs = self.student_fc(features)
 
                         loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
                         # print("loss2", loss)
@@ -1105,7 +1142,7 @@ class Trainer:
                     # avg_train_loss = tmp_train_loss / len(self.train_loader)
                     # tmp_train_loss = 0
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
