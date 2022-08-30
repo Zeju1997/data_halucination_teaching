@@ -29,5 +29,5 @@ class CNN(nn.Module):
         x = self.max_pool(self.act(self.conv3(x)))
         x = torch.flatten(x, 1)
         x = self.act(self.lin1(x))
-        x = self.act(self.lin2(x))
+        x = self.lin2(x)
         return x

@@ -5,3 +5,6 @@ from .resnet import *
 from .mlp import *
 from .cnn import *
 from .cgan_cifar100 import *
+from .vgg import *
+from .policy_gradient import *
+from .controller import *

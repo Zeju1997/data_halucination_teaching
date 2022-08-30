@@ -1,92 +1,125 @@
-import torch
+import argparse
+import gym
 import numpy as np
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-from torch.nn.modules.loss import _WeightedLoss
-
-
-class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes, smoothing=0.0, dim=-1, weight = None):
-        """if smoothing == 0, it's one-hot method
-           if 0 < smoothing < 1, it's smooth method
-        """
-        super(LabelSmoothingLoss, self).__init__()
-        self.confidence = 1.0 - smoothing
-        self.smoothing = smoothing
-        self.weight = weight
-        self.cls = classes
-        self.dim = dim
-
-    def forward(self, pred, target):
-        assert 0 <= self.smoothing < 1
-        pred = pred.log_softmax(dim=self.dim)
-
-        if self.weight is not None:
-            pred = pred * self.weight.unsqueeze(0)
-
-        with torch.no_grad():
-            true_dist = torch.zeros_like(pred)
-            true_dist.fill_(self.smoothing / (self.cls - 1))
-            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
-        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
-
-
-class SmoothCrossEntropyLoss(_WeightedLoss):
-    def __init__(self, weight=None, reduction='mean', smoothing=0.0):
-        super().__init__(weight=weight, reduction=reduction)
-        self.smoothing = smoothing
-        self.weight = weight
-        self.reduction = reduction
-
-    def k_one_hot(self, targets:torch.Tensor, n_classes:int, smoothing=0.0):
-        with torch.no_grad():
-            targets = torch.empty(size=(targets.size(0), n_classes),
-                                  device=targets.device) \
-                                  .fill_(smoothing /(n_classes-1)) \
-                                  .scatter_(1, targets.data.unsqueeze(1), 1.-smoothing)
-        return targets
-
-    def reduce_loss(self, loss):
-        return loss.mean() if self.reduction == 'mean' else loss.sum() \
-        if self.reduction == 'sum' else loss
-
-    def forward(self, inputs, targets):
-        assert 0 <= self.smoothing < 1
-
-        targets = self.k_one_hot(targets, inputs.size(-1), self.smoothing)
-        log_preds = F.log_softmax(inputs, -1)
-
-        if self.weight is not None:
-            log_preds = log_preds * self.weight.unsqueeze(0)
-
-        return self.reduce_loss(-(targets * log_preds).sum(dim=-1))
-
+from itertools import count
 
 import torch
-import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from torch.nn.modules.loss import _WeightedLoss
+import torch.optim as optim
+from torch.distributions import Categorical
+import matplotlib.pyplot as plt
+
+class PolicyNet(nn.Module):
+    def __init__(self):
+        super(PolicyNet, self).__init__()
+        self.affine1 = nn.Linear(4, 128)
+        self.dropout = nn.Dropout(p=0.6)
+        self.affine2 = nn.Linear(128, 2)
+
+        self.saved_log_probs = []
+        self.rewards = []
+
+    def forward(self, x):
+        x = self.affine1(x)
+        x = self.dropout(x)
+        x = F.relu(x)
+        action_scores = self.affine2(x)
+        return F.softmax(action_scores, dim=1)
 
 
-if __name__=="__main__":
-    # 1. Devin Yang
-    crit = LabelSmoothingLoss(classes=5, smoothing=0.5)
-    predict = torch.FloatTensor([[0, 0.2, 0.7, 0.1, 0],
-                                 [0, 0.9, 0.2, 0.2, 1],
-                                 [1, 0.2, 0.7, 0.9, 1]])
-    v = crit(Variable(predict),
-             Variable(torch.LongTensor([2, 1, 0])))
-    print(v)
+parser = argparse.ArgumentParser(description='PyTorch REINFORCE example')
+parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
+                    help='discount factor (default: 0.99)')
+parser.add_argument('--seed', type=int, default=543, metavar='N',
+                    help='random seed (default: 543)')
+parser.add_argument('--render', action='store_true',
+                    help='render the environment')
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                    help='interval between training status logs (default: 10)')
+args = parser.parse_args()
 
-    # 2. Shital Shah
-    crit = SmoothCrossEntropyLoss(smoothing=0.5)
-    predict = torch.FloatTensor([[0, 0.2, 0.7, 0.1, 0],
-                                 [0, 0.9, 0.2, 0.2, 1],
-                                 [1, 0.2, 0.7, 0.9, 1]])
-    v = crit(Variable(predict),
-             Variable(torch.LongTensor([2, 1, 0])))
-    print(v)
 
+class Policy(nn.Module):
+    def __init__(self):
+        super(Policy, self).__init__()
+        self.affine1 = nn.Linear(4, 128)
+        self.dropout = nn.Dropout(p=0.6)
+        self.affine2 = nn.Linear(128, 2)
+
+        self.saved_log_probs = []
+        self.rewards = []
+
+    def forward(self, x):
+        x = self.affine1(x)
+        x = self.dropout(x)
+        x = F.relu(x)
+        action_scores = self.affine2(x)
+        return F.softmax(action_scores, dim=1)
+
+
+policy = Policy()
+optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+eps = np.finfo(np.float32).eps.item()
+
+
+env = gym.make('CartPole-v1')
+env.reset(seed=args.seed)
+torch.manual_seed(args.seed)
+
+
+def select_action(state):
+    state = torch.from_numpy(state).float().unsqueeze(0)
+    probs = policy(state)
+    m = Categorical(probs)
+    action = m.sample()
+    policy.saved_log_probs.append(m.log_prob(action))
+    return action.item()
+
+
+def finish_episode():
+    R = 0
+    policy_loss = []
+    returns = []
+    for r in policy.rewards[::-1]:
+        R = r + args.gamma * R
+        returns.insert(0, R)
+    returns = torch.tensor(returns)
+    returns = (returns - returns.mean()) / (returns.std() + eps)
+    for log_prob, R in zip(policy.saved_log_probs, returns):
+        policy_loss.append(-log_prob * R)
+    optimizer.zero_grad()
+    policy_loss = torch.cat(policy_loss).sum()
+    policy_loss.backward()
+    optimizer.step()
+    del policy.rewards[:]
+    del policy.saved_log_probs[:]
+
+
+def main():
+    running_reward = 10
+    for i_episode in count(1):
+        state, ep_reward = env.reset(), 0
+        for t in range(1, 10000):  # Don't infinite loop while learning
+            action = select_action(state)
+            state, reward, done, _ = env.step(action)
+            if args.render:
+                env.render()
+            policy.rewards.append(reward)
+            ep_reward += reward
+            if done:
+                break
+
+        running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+        finish_episode()
+        if i_episode % args.log_interval == 0:
+            print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
+                  i_episode, ep_reward, running_reward))
+        if running_reward > env.spec.reward_threshold:
+            print("Solved! Running reward is now {} and "
+                  "the last episode runs to {} time steps!".format(running_reward, t))
+            break
+
+
+if __name__ == '__main__':
+    main()

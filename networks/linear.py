@@ -28,8 +28,8 @@ class FullLayer(nn.Module):
     def __init__(self, feature_dim, n_classes):
         super(FullLayer, self).__init__()
         self.class_num = n_classes
-        self.fc = nn.Linear(feature_dim, n_classes)
+        self.lin = nn.Linear(feature_dim, n_classes)
 
     def forward(self, x):
-        x = self.fc(x)
+        x = self.lin(x)
         return x

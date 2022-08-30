@@ -4,6 +4,7 @@ import numpy as np
 import time
 import json
 
+import copy
 import sys
 
 import csv
@@ -56,6 +57,7 @@ import glob
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
+
 
 
 # custom weights initialization called on netG and netD
@@ -618,8 +620,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
-
-        if not self.opt.train_sgd:
+        if self.opt.train_sgd  == False:
             # train example
             self.experiment = "SGD"
             print("Start training {} ...".format(self.experiment))
@@ -713,7 +714,6 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
         if self.opt.train_student:
             # student
             self.experiment = "Teacher"
@@ -734,7 +734,7 @@ class Trainer:
 
             # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
             # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, train_dataset=self.train_dataset)
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.val_loader)
             res_student = []
             res_loss_student = []
             cls_loss = []
@@ -742,7 +742,6 @@ class Trainer:
             w_init = self.student.state_dict()
             # new_weight = w_init
             train_loss = []
-
 
             self.step = 0
             self.best_acc = 0
@@ -758,66 +757,79 @@ class Trainer:
 
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
+            # student_optim = torch.optim.SGD([{'params': self.student_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
-            student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
+            student_parameters = list(self.student.parameters()) # + list(self.student_fc.parameters())
+            train_loss = []
+            train_loss2 = []
             for epoch in tqdm(range(self.opt.n_epochs)):
-                # if epoch < 50:
-                #     self.train(self.student, self.student_fc, self.loader, self.loss_fn, student_optim, epoch)
-                # else:
                 self.student.train()
                 self.student_fc.train()
-                for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                if epoch != 0:
+                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
 
-                    inputs, targets = inputs.cuda(), targets.long().cuda()
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                    # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
+                        # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
 
-                    # student_optim.zero_grad()
+                        # student_optim.zero_grad()
 
-                    # z = self.student(inputs)
-                    # output = self.student_fc(z)
-                    outputs = unrolled_optimizer(self.student, self.student_fc, inputs, targets)
+                        # z = self.student(inputs)
+                        # output = self.student_fc(z)
+                        w_t, w_loss = unrolled_optimizer(self.student, self.student_fc, tmp_student, inputs, targets)
+                        self.student.load_state_dict(w_t)
 
-                    # z = self.student(inputs)
-                    # outputs = self.student_fc(z.detach().clone())
+                        # loss = self.loss_fn(outputs, targets)
 
-                    loss = self.loss_fn(outputs, targets)
+                        train_loss.append(w_loss)
 
-                    gradients = torch.autograd.grad(outputs=loss,
-                                                   inputs=student_parameters,
-                                                   create_graph=True, retain_graph=True)
+                        # gradients = torch.autograd.grad(outputs=loss,
+                        #                                inputs=student_parameters,
+                        #                                create_graph=True, retain_graph=True)
 
-                    with torch.no_grad():
-                        for p, g in zip(student_parameters, gradients):
-                            p.grad = g
+                        # with torch.no_grad():
+                        #     for p, g in zip(student_parameters, gradients):
+                        #         p.grad = g
 
-                    student_optim.step()
+                        # student_model_optim.step()
 
-                    # loss.backward()
-                    # student_optim.step()
+                        z = self.student(inputs)
+                        outputs = self.student_fc(z)
+                        loss = self.loss_fn(outputs, targets)
 
-                    self.step += 1
+                        student_optim.zero_grad()
+                        loss.backward()
+                        student_optim.step()
 
-                    if batch_idx % self.opt.log_interval == 0:
-                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                            100. * batch_idx / len(self.train_loader), loss.item()), '\t',
-                            'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                            epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
-                            100. * batch_idx / len(self.val_loader), loss.item()))
-                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+                        self.step += 1
 
-                    '''
-                    if self.step % self.opt.n_unroll_blocks == 0:
-                        avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
-                        tmp_train_loss = 0
+                        if batch_idx % self.opt.log_interval == 0:
+                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                100. * batch_idx / len(self.train_loader), loss.item()), '\t',
+                                'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
+                                100. * batch_idx / len(self.val_loader), loss.item()))
+                            self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-                        feat_sim = self.query_model() / self.init_feat_sim
-                        print(feat_sim.mean())
-                    '''
+                        '''
+                        if self.step % self.opt.n_unroll_blocks == 0:
+                            avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
+                            tmp_train_loss = 0
+    
+                            feat_sim = self.query_model() / self.init_feat_sim
+                            print(feat_sim.mean())
+                        '''
+                # fig = plt.figure()
+                # plt.plot(train_loss, c="b", label="Mixup")
+                # plt.xlabel("Epoch")
+                # plt.ylabel("Accuracy")
+                # plt.legend()
+                # plt.show()
+
                 # avg_train_loss = tmp_train_loss / len(self.train_loader)
                 # tmp_train_loss = 0
                 '''
@@ -852,6 +864,12 @@ class Trainer:
 
                 # mixup_baseline.update(mixed_x, mixed_y)
                 '''
+
+                # if epoch % 5 == 0:
+                fc_mdl = copy.deepcopy(self.student_fc)
+                model_mdl = copy.deepcopy(self.student)
+                w_t = self.get_w_star(model_mdl, fc_mdl)
+                tmp_student.load_state_dict(w_t)
 
                 acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
@@ -942,6 +960,69 @@ class Trainer:
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
             '''
+
+    def get_w_star(self, model, fc):
+        """Run the style transfer."""
+        # print('Building the style transfer model..')
+
+        optim = torch.optim.SGD([{'params': model.parameters()}, {'params': fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+        optim_loss = []
+
+        eps = 500
+        eps_batch = torch.ones(self.opt.batch_size) * eps
+        eps_batch = eps_batch.cuda()
+
+        model_orig = copy.deepcopy(model)
+
+        for _ in tqdm(range(1)):
+            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                inputs, targets = inputs.cuda(), targets.long().cuda()
+
+                optim.zero_grad()
+                z_new = model(inputs)
+                output = fc(z_new)
+                loss = self.loss_fn(output, targets)
+                loss.backward()
+                optim.step()
+
+                optim_loss.append(loss.item())
+
+                z_new = model(inputs)
+                z = model_orig(inputs)
+
+                diff = torch.norm(z - z_new, p='fro', dim=1) ** 2
+                mask = (diff < eps).float().unsqueeze(1)
+                test1 = mask.sum()
+
+                alpha = (diff / eps_batch) ** 2
+                alpha = alpha.unsqueeze(1)
+                z_new1 = z_new / alpha
+
+                diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
+                mask = (diff2 < eps).float().unsqueeze(1)
+                test = mask.sum()
+                print("askldjfalksdf")
+
+                # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
+
+                # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
+
+                # offset = project_onto_l1_ball(diff, 0.1)
+                # z_proj = z + offset
+
+
+
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Mixup")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
+
+        # diff = z_org - z_tmp
+        # z = z - diff
+
+        return model.state_dict()
 
     def get_activation(self, name):
         def hook(model, input, output):

@@ -575,12 +575,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         alpha = 0.001
         # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
-        # loss_stu = loss_stu * alpha
-        loss_final = loss_stu + alpha * g_loss
+        loss_final = loss_stu
+        # loss_final = loss_stu + alpha * g_loss
         # loss_final = g_loss
 
-        ratio = alpha * g_loss.item() / loss_final.item()
-        print("ratio", ratio)
+        # ratio = alpha * g_loss.item() / loss_final.item()
+        # print("ratio", ratio)
 
         grad_stu = torch.autograd.grad(outputs=loss_final,
                                        inputs=model_paramters,

@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.utils.parametrize as P
 
 from torch.autograd import Variable
 
@@ -165,6 +166,114 @@ class Discriminator_moon(nn.Module):
         return validity
 
 
+class CloseToMask(nn.Module):
+    def __init__(self, mask, S, eps=0.1, f=torch.tanh):
+        super().__init__()
+        self.register_buffer("mask", mask)
+        self.register_buffer("S_mask", S[mask])
+        self.eps = eps
+        self.f = f
+
+    def forward(self, X):
+        Y = self.S_mask + self.eps * self.f(X[self.mask])
+        Z = X.masked_scatter(self.mask, Y)
+        return Z
+
+
+def project_onto_l1_ball1(x_orig, x, eps):
+    """
+    Compute Euclidean projection onto the L1 ball for a batch.
+
+      min ||x - u||_2 s.t. ||u||_1 <= eps
+
+    Inspired by the corresponding numpy version by Adrien Gaidon.
+
+    Parameters
+    ----------
+    x: (batch_size, *) torch array
+      batch of arbitrary-size tensors to project, possibly on GPU
+
+    eps: float
+      radius of l-1 ball to project onto
+
+    Returns
+    -------
+    u: (batch_size, *) torch array
+      batch of projected tensors, reshaped to match the original
+
+    Notes
+    -----
+    The complexity of this algorithm is in O(dlogd) as it involves sorting x.
+
+    References
+    ----------
+    [1] Efficient Projections onto the l1-Ball for Learning in High Dimensions
+        John Duchi, Shai Shalev-Shwartz, Yoram Singer, and Tushar Chandra.
+        International Conference on Machine Learning (ICML 2008)
+    """
+    # original_shape = x.shape
+    # x = x.view(x.shape[0], -1)
+    diff = torch.norm(x - x_orig, p=1, dim=1)
+    mask = (diff < eps).float().unsqueeze(1)
+    mu, _ = torch.sort(torch.abs(x), dim=1, descending=True)
+    cumsum = torch.cumsum(mu, dim=1)
+    arange = torch.arange(1, x.shape[1] + 1, device=x.device)
+    rho, _ = torch.max((mu * arange > (cumsum - eps)) * arange, dim=1)
+    theta = (cumsum[torch.arange(x.shape[0]), rho.cpu() - 1] - eps) / rho
+    proj = (torch.abs(x) - theta.unsqueeze(1)).clamp(min=0)
+    x_proj = mask * x + (1 - mask) * proj * torch.sign(x) + x_orig
+
+    diff = torch.norm(x_proj - x_orig, p=1, dim=1)
+    mask = (diff < eps).float().unsqueeze(1)
+    return x_proj
+
+
+def project_onto_l1_ball(x, eps):
+    """
+    Compute Euclidean projection onto the L1 ball for a batch.
+
+      min ||x - u||_2 s.t. ||u||_1 <= eps
+
+    Inspired by the corresponding numpy version by Adrien Gaidon.
+
+    Parameters
+    ----------
+    x: (batch_size, *) torch array
+      batch of arbitrary-size tensors to project, possibly on GPU
+
+    eps: float
+      radius of l-1 ball to project onto
+
+    Returns
+    -------
+    u: (batch_size, *) torch array
+      batch of projected tensors, reshaped to match the original
+
+    Notes
+    -----
+    The complexity of this algorithm is in O(dlogd) as it involves sorting x.
+
+    References
+    ----------
+    [1] Efficient Projections onto the l1-Ball for Learning in High Dimensions
+        John Duchi, Shai Shalev-Shwartz, Yoram Singer, and Tushar Chandra.
+        International Conference on Machine Learning (ICML 2008)
+    """
+    original_shape = x.shape
+    x = x.view(x.shape[0], -1)
+    mask = (torch.norm(x, p=1, dim=1) < eps).float().unsqueeze(1)
+    mu, _ = torch.sort(torch.abs(x), dim=1, descending=True)
+    cumsum = torch.cumsum(mu, dim=1)
+    arange = torch.arange(1, x.shape[1] + 1, device=x.device)
+    rho, _ = torch.max((mu * arange > (cumsum - eps)) * arange, dim=1)
+    theta = (cumsum[torch.arange(x.shape[0]), rho.cpu() - 1] - eps) / rho
+    proj = (torch.abs(x) - theta.unsqueeze(1)).clamp(min=0)
+    x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
+
+    mask = (torch.norm(x, p=1, dim=1) < eps).float().unsqueeze(1)
+    return x_proj.view(original_shape)
+
+
 class UnrolledBlackBoxOptimizer(nn.Module):
     """
     Args:
@@ -173,7 +282,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, train_dataset):
+    def __init__(self, opt, loader):
         super(UnrolledBlackBoxOptimizer, self).__init__()
 
         self.opt = opt
@@ -181,6 +290,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         self.optim_blocks = nn.ModuleList()
 
         self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn_w = nn.MSELoss()
 
         self.adversarial_loss = nn.MSELoss()
         self.cross_entropy = nn.CrossEntropyLoss()
@@ -189,7 +299,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # self.student = student
         # self.generator = generator
 
-        self.X = train_dataset
+        self.loader = loader
         # self.Y = y
 
         # self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
@@ -204,7 +314,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         z_tmp = z.detach().clone()
 
         z_tmp.requires_grad_(True)
-        fc.requires_grad_(False)
+        # fc.requires_grad_(False)
 
         optimizer = optim.SGD([z_tmp], lr=0.1, momentum=0.9)
 
@@ -212,13 +322,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         # print('Optimizing..')
         run = [0]
-        while run[0] <= self.opt.n_unroll:
+        while run[0] <= 100:
             # correct the values of updated input image
             # with torch.no_grad():
             #    z.clamp_(0, 1)
 
             optimizer.zero_grad()
             output = fc(z_tmp)
+
             loss = self.loss_fn(output, labels)
             loss.backward()
             optimizer.step()
@@ -242,36 +353,102 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        diff = z_org - z_tmp
-        z = z - diff
+        # diff = z_org - z_tmp
+        # z = z - diff
 
-        return z
+        return z, z_tmp
 
-    def forward(self, model, fc, inputs, targets):
+    def get_w_star(self, model, fc, z, labels):
+        """Run the style transfer."""
+        # print('Building the style transfer model..')
+
+        optim = torch.optim.SGD([{'params': model.parameters()}, {'params': fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+        optim_loss = []
+
+        eps = 500
+        eps_batch = torch.ones(self.opt.batch_size) * eps
+        eps_batch = eps_batch.cuda()
+
+        data_iter = iter(self.loader)
+        for _ in range(1):
+            try:
+                (inputs, targets) = data_iter.next()
+            except:
+                data_iter = iter(self.loader)
+                (inputs, targets) = data_iter.next()
+
+            inputs, targets = inputs.cuda(), targets.long().cuda()
+            optim.zero_grad()
+            z_new = model(inputs)
+
+            diff = torch.norm(z - z_new, p='fro', dim=1) ** 2
+            # mask = (diff < eps).float().unsqueeze(1)
+
+            # alpha = (diff / eps_batch) ** 2
+            # alpha = alpha.unsqueeze(1)
+            z_proj = z + (z - z_new) * (eps / diff)
+
+            # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
+
+            # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
+
+            # offset = project_onto_l1_ball(diff, 0.1)
+            # z_proj = z + offset
+
+            output = fc(z_proj)
+            loss = self.loss_fn(output, targets)
+            loss.backward()
+            optim.step()
+
+            optim_loss.append(loss.item())
+
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Mixup")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
+
+        # diff = z_org - z_tmp
+        # z = z - diff
+
+        return model
+
+    def forward(self, model, fc, model_star, inputs, targets):
 
         # ---------------------
         #  Optimize Linear Classifier
         # ---------------------
 
-        model_parameters = list(model.parameters()) + list(fc.parameters())
+        model_parameters = list(model.parameters()) # + list(fc.parameters())
+        model_optim = torch.optim.SGD([{'params': model.parameters()}], lr=0.1, momentum=0.9, weight_decay=self.opt.decay)
+        model_optim.zero_grad()
 
         z = model(inputs)
 
-        fc_mdl = copy.deepcopy(fc)
-        # fc_mdl.requires_grad_(False)
+        # fc_mdl = copy.deepcopy(fc)
+        # model_mdl = copy.deepcopy(model)
 
-        z_optimized = self.optimize_latent_features(fc_mdl, z, targets)
-
-        out = fc(z_optimized)
-
-        # loss = self.loss_fn(out, targets)
-
-        # gradients = torch.autograd.grad(outputs=loss,
-        #                               inputs=model_parameters,
-        #                               create_graph=True, retain_graph=True)
-
+        # z, z_optimized = self.optimize_latent_features(fc, z, targets)
+        # w_star = self.get_w_star(model_mdl, fc_mdl, z, targets)
+        z_optimized = model_star(inputs)
 
         # out = fc(z)
+
+        # diff = fc.lin.weight - w_star
+        # w_loss = torch.linalg.norm(diff, ord=2) ** 2
+        w_loss = self.loss_fn_w(z, z_optimized)
+        # loss = self.loss_fn(out, targets)
+
+        gradients = torch.autograd.grad(outputs=w_loss,
+                                        inputs=model_parameters,
+                                        create_graph=True, retain_graph=True)
+
+        with torch.no_grad():
+            for p, g in zip(model_parameters, gradients):
+                p.grad = g
+
+        model_optim.step()
 
         # ---------------------
         #  Reconstruct Images from Feature Space
@@ -286,7 +463,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # generated_inputs = self.F_inverse(model=model, netG=netG, input=inputs, class_vector=targets_onehot, features_ini=z_optimized)
 
         # return generated_inputs
-        return out
+        return model.state_dict(), w_loss.item()
 
     def F_inverse1(self, model, netG, input, class_vector, features_ini, cov_matrix):
         truncation = 1
