@@ -640,7 +640,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -675,7 +675,7 @@ class Trainer:
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
                         # lam = np.random.beta(1.0, 1.0)
-                        prob = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+                        prob = [1.0, 0.5]
                         lam = random.choice(prob)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
@@ -875,7 +875,7 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
 
-            if self.visualize == True:
+            if self.visualize == False:
                 fig = plt.figure()
                 # plt.plot(w_diff_mixup, c="c", label="Mixup")
                 plt.plot(res_example, c="g", label="SGD")
