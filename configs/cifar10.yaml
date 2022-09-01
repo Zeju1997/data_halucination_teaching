@@ -36,6 +36,6 @@ train_sgd: True
 train_baseline: True
 n_query_classes: 10
 num_workers: 0 # 10
-action_space: 11
+action_space: 2
 n_pg_epochs: 3
-max_tries: 30
+n_tries: 30

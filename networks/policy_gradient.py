@@ -21,7 +21,6 @@ activation = {}
 
 class PolicyGradient:
     def __init__(self, opt, student, train_loader, val_loader, test_loader, writers):
-        NUM_TRIES = 10
         ALPHA = 5e-3        # learning rate
         BATCH_SIZE = 1     # how many episodes we want to pack into an epoch
         HIDDEN_SIZE = 64    # number of hidden nodes we have in our dnn
@@ -34,9 +33,11 @@ class PolicyGradient:
         self.experiment = "policy gradient"
 
         self.student = student
-        self.student.lin2.register_forward_hook(self.get_activation('latent'))
+        # self.student.lin2.register_forward_hook(self.get_activation('latent'))
 
-        self.NUM_TRIES = NUM_TRIES
+        self.opt = opt
+
+        self.NUM_TRIES = self.opt.n_tries
         self.ALPHA = ALPHA
         self.BATCH_SIZE = BATCH_SIZE # number of models to generate for each action
         self.HIDDEN_SIZE = HIDDEN_SIZE
@@ -45,13 +46,12 @@ class PolicyGradient:
         self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.INPUT_SIZE = INPUT_SIZE
         self.NUM_STEPS = NUM_STEPS
-        self.ACTION_SPACE = ACTION_SPACE
+        self.ACTION_SPACE = self.opt.action_space
 
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
 
-        self.opt = opt
 
         # instantiate the tensorboard writer
         """
@@ -173,8 +173,8 @@ class PolicyGradient:
         # episode_actions = torch.cat((episode_actions, action_index), dim=0)
 
         # Get action actions
-        action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
-        # action_space = torch.tensor([0, 0.5, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
+        # action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
+        action_space = torch.tensor([0.5, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
         # action_space = torch.tensor([[0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0]], device=self.DEVICE)
 
         action = torch.gather(action_space, 1, action_index).squeeze(1)
@@ -366,6 +366,7 @@ class PolicyGradient:
             writer.writerows(to_write)
 
         if acc > self.best_final_acc:
+            self.best_final_acc == acc
             torch.save(self.agent.state_dict(), 'policy_w.pth')
 
     def play_episode(self):

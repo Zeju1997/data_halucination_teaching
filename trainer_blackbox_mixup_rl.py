@@ -568,9 +568,9 @@ class Trainer:
         # cudnn.benchmark = True
         # cudnn.enabled=True
 
-        # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-        # policy_gradient.solve_environment()
-        # sys.exit()
+        policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+        policy_gradient.solve_environment()
+        sys.exit()
 
         example = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         tmp_student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
@@ -641,7 +641,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -948,8 +948,8 @@ class Trainer:
         # episode_actions = torch.cat((episode_actions, action_index), dim=0)
 
         # Get action actions
-        action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]).cuda().unsqueeze(0).repeat(self.opt.n_epochs, 1)
-        # action_space = torch.tensor([0, 0.5, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
+        # action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]).cuda().unsqueeze(0).repeat(self.opt.n_epochs, 1)
+        action_space = torch.tensor([1.0, 0.5]).cuda().unsqueeze(0).repeat(self.opt.n_epochs, 1)
         # action_space = torch.tensor([[0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0]], device=self.DEVICE)
 
         action = torch.gather(action_space, 1, action_index).squeeze(1)
