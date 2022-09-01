@@ -38,3 +38,4 @@ n_query_classes: 10
 num_workers: 0 # 10
 action_space: 11
 n_pg_epochs: 3
+max_tries: 30

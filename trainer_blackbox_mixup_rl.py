@@ -568,9 +568,9 @@ class Trainer:
         # cudnn.benchmark = True
         # cudnn.enabled=True
 
-        policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-        policy_gradient.solve_environment()
-        sys.exit()
+        # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+        # policy_gradient.solve_environment()
+        # sys.exit()
 
         example = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         tmp_student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
@@ -675,9 +675,9 @@ class Trainer:
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        lam = np.random.beta(1.0, 1.0)
-                        # prob = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-                        # lam = random.choice(prob)
+                        # lam = np.random.beta(1.0, 1.0)
+                        prob = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+                        lam = random.choice(prob)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
@@ -717,7 +717,7 @@ class Trainer:
 
                 mixup_baseline.train()
 
-            if self.visualize == True:
+            if self.visualize == False:
                 save_folder = os.path.join(self.opt.log_path, "imgs")
                 if not os.path.exists(save_folder):
                     os.makedirs(save_folder)

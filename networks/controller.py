@@ -77,8 +77,6 @@ class Generator(nn.Module):
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        self.offset = torch.tensor([-0.1, 0, 0.1]).cuda()
-
         in_channels = self.opt.label_dim*2 + int(np.prod(self.img_shape))*2
 
         self.model = nn.Sequential(
