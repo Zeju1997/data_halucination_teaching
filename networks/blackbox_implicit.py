@@ -382,14 +382,15 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             z_new = model(inputs)
 
             diff = torch.norm(z - z_new, p='fro', dim=1) ** 2
+            print('diff', diff.max())
             # mask = (diff < eps).float().unsqueeze(1)
 
             # alpha = (diff / eps_batch) ** 2
             # alpha = alpha.unsqueeze(1)
             z_proj = z + (z - z_new) * (eps / diff)
 
-            # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
-
+            diff2 = torch.norm(z - z_proj, p='fro', dim=1) ** 2
+            print('diff2', diff2.max())
             # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
 
             # offset = project_onto_l1_ball(diff, 0.1)

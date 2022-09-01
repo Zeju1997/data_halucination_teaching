@@ -6,27 +6,23 @@ import torch.optim as optim
 from torch.nn.functional import one_hot, log_softmax, softmax, normalize
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from .controller import Agent
+from .controller import  Agent
 from collections import deque
-# from model import NASModel
+# from model import  NASModel
 import networks
 
-from tqdm import tqdm
-
-
 class PolicyGradient:
-    def __init__(self, opt, train_set, val_set, test_set, writers):
+    def __init__(self, config, train_set, test_set, use_cuda=False):
+
         NUM_EPOCHS = 50
         ALPHA = 5e-3        # learning rate
         BATCH_SIZE = 3     # how many episodes we want to pack into an epoch
         HIDDEN_SIZE = 64    # number of hidden nodes we have in our dnn
         BETA = 0.1          # the entropy bonus multiplier
-        INPUT_SIZE = 11
-        ACTION_SPACE = 11
+        INPUT_SIZE = 3
+        ACTION_SPACE = 3
         NUM_STEPS = 4
         GAMMA = 0.99
-
-        self.experiment = "policy gradient"
 
         self.NUM_EPOCHS = NUM_EPOCHS
         self.ALPHA = ALPHA
@@ -34,34 +30,28 @@ class PolicyGradient:
         self.HIDDEN_SIZE = HIDDEN_SIZE
         self.BETA = BETA
         self.GAMMA = GAMMA
-        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() and use_cuda else 'cpu')
         self.INPUT_SIZE = INPUT_SIZE
         self.NUM_STEPS = NUM_STEPS
         self.ACTION_SPACE = ACTION_SPACE
 
         self.train = train_set
-        self.val = val_set
         self.test = test_set
 
-        self.opt = opt
-
         # instantiate the tensorboard writer
-        """
         self.writer = SummaryWriter(comment=f'_PG_CP_Gamma={self.GAMMA},'
                                             f'LR={self.ALPHA},'
                                             f'BS={self.BATCH_SIZE},'
                                             f'NH={self.HIDDEN_SIZE},'
                                             f'BETA={self.BETA}')
-        """
-        self.writers = writers
 
         # the agent driven by a neural network architecture
-        self.agent = Agent(self.opt, self.INPUT_SIZE, self.HIDDEN_SIZE, self.NUM_STEPS, device=self.DEVICE).cuda()
-
+        if use_cuda:
+            self.agent = Agent(self.INPUT_SIZE, self.HIDDEN_SIZE, self.NUM_STEPS, device=self.DEVICE).cuda()
+        else:
+            self.agent = Agent(self.INPUT_SIZE, self.HIDDEN_SIZE, self.NUM_STEPS, device=self.DEVICE)
         self.adam = optim.Adam(params=self.agent.parameters(), lr=self.ALPHA)
         self.total_rewards = deque([], maxlen=100)
-
-        print(self.agent)
 
     def solve_environment(self):
         """
@@ -87,8 +77,8 @@ class PolicyGradient:
                 self.total_rewards.append(sum_of_episode_rewards)
 
                 # append the weighted log-probabilities of actions
-                epoch_weighted_log_probs = torch.cat((epoch_weighted_log_probs, episode_weighted_log_prob_trajectory), dim=0)
-
+                epoch_weighted_log_probs = torch.cat((epoch_weighted_log_probs, episode_weighted_log_prob_trajectory),
+                                                     dim=0)
                 # append the logits - needed for the entropy bonus calculation
                 epoch_logits = torch.cat((epoch_logits, episode_logits), dim=0)
 
@@ -110,9 +100,13 @@ class PolicyGradient:
                   end="",
                   flush=True)
 
-            self.log(mode="policy gradient", name="Average Return over 100 episodes", value=np.mean(self.total_rewards), step=epoch)
-            self.log(mode="policy gradient", name="Entropy", value=entropy, step=epoch)
+            self.writer.add_scalar(tag='Average Return over 100 episodes',
+                                   scalar_value=np.mean(self.total_rewards),
+                                   global_step=epoch)
 
+            self.writer.add_scalar(tag='Entropy',
+                                   scalar_value=entropy,
+                                   global_step=epoch)
             # check if solved
             # if np.mean(self.total_rewards) > 200:
             #     print('\nSolved!')
@@ -132,7 +126,7 @@ class PolicyGradient:
                 sum_of_rewards: sum of the rewards for the episode - needed for the average over 200 episode statistic
         """
         # Init state
-        init_state = [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+        init_state = [[3, 8, 16]]
 
         # get the action logits from the agent - (preferences)
         episode_logits = self.agent(torch.tensor(init_state).float().to(self.DEVICE))
@@ -149,49 +143,37 @@ class PolicyGradient:
         #episode_actions = torch.cat((episode_actions, action_index), dim=0)
 
         # Get action actions
-        action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
-        # action_space = torch.tensor([[0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0]], device=self.DEVICE)
-
+        action_space = torch.tensor([[3, 5, 7], [8, 16, 32], [3, 5, 7], [8, 16, 32]], device=self.DEVICE)
         action = torch.gather(action_space, 1, action_index).squeeze(1)
         # generate a submodel given predicted actions
         # net = NASModel(action)
-        net = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        net = networks.CNN(in_channels=3, num_classes=10).cuda()
         #net = Net()
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-        running_loss = 0.0
-        for epoch in tqdm(range(self.opt.n_epochs)):  # loop over the dataset multiple times
+        for epoch in range(0):  # loop over the dataset multiple times
 
-            for batch_idx, (inputs, targets) in enumerate(self.train):
-                inputs, targets = inputs.cuda(), targets.long().cuda()
+            running_loss = 0.0
+            for i, data in enumerate(self.train, 0):
+                # get the inputs; data is a list of [inputs, labels]
+                inputs, labels = data
 
-                lam = action[epoch]
-
-                index = torch.randperm(inputs.shape[0]).cuda()
-                targets_a, targets_b = targets, targets[index]
-                mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
-
-                outputs = net(mixed_x)
-
-                loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(outputs, targets_b)
-
-                # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-
-                # outputs = mixup_baseline(mixed_x)
-                # loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
-                # loss = self.loss_fn(outputs, mixed_y.long())
-
+                # zero the parameter gradients
                 optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs = net(inputs)
+                loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
 
                 # print statistics
                 running_loss += loss.item()
-                if batch_idx % 2000 == 1999:  # print every 2000 mini-batches
+                if i % 2000 == 1999:  # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, batch_idx + 1, running_loss / 2000))
+                          (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
 
         print('Finished Training')
@@ -203,13 +185,12 @@ class PolicyGradient:
         correct = 0
         total = 0
         with torch.no_grad():
-            for (inputs, targets) in self.test:
-                inputs, targets = inputs.cuda(), targets.long().cuda()
-
-                outputs = net(inputs)
+            for data in self.test:
+                images, labels = data
+                outputs = net(images)
                 _, predicted = torch.max(outputs.data, 1)
-                total += inputs.size(0)
-                correct += (predicted == targets).sum().item()
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
 
         acc = 100 * correct / total
         print('Accuracy of the network on the 10000 test images: {}'.format(acc))
@@ -220,7 +201,7 @@ class PolicyGradient:
         episode_weighted_log_probs = episode_log_probs * reward
         sum_weighted_log_probs = torch.sum(episode_weighted_log_probs).unsqueeze(dim=0)
 
-        return sum_weighted_log_probs, episode_logits, reward
+        return  sum_weighted_log_probs, episode_logits, reward
 
     def calculate_loss(self, epoch_logits: torch.Tensor, weighted_log_probs: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         """
@@ -241,9 +222,3 @@ class PolicyGradient:
         entropy_bonus = -1 * self.BETA * entropy
 
         return policy_loss + entropy_bonus, entropy
-
-    def log(self, mode, name, value, step):
-        """Write an event to the tensorboard events file
-        """
-        writer = self.writers[mode]
-        writer.add_scalar("{}/{}/{}".format(self.experiment, mode, name), value, step)

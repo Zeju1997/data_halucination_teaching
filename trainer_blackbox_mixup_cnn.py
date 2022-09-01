@@ -731,7 +731,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # mixup student
             self.experiment = "Trained_Mixup"
             print("Start training {} ...".format(self.experiment))
@@ -756,7 +756,7 @@ class Trainer:
 
             w_init = self.student.state_dict()
             # new_weight = w_init
-            train_loss = []
+            train_loss = 0.0
 
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
@@ -801,7 +801,12 @@ class Trainer:
                         # val_targets_onehot.scatter_(1, val_targets.unsqueeze(1), 1)
 
                         netG.train()
-                        model_features = self.model_features(avg_train_loss, epoch)
+
+                        if self.step == 0:
+                            avg_train_loss = train_loss / self.step
+                            model_features = self.model_features(avg_train_loss, epoch)
+
+                        print(model_features)
 
                         # feat, labels = self.get_query_set()
                         # self.estimator.update_CV(feat, labels)
@@ -890,6 +895,8 @@ class Trainer:
 
                         loss_stu = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
 
+                        train_loss = train_loss + loss_stu.item()
+
                         student_optim.zero_grad()
                         loss_stu.backward()
                         student_optim.step()
@@ -907,15 +914,9 @@ class Trainer:
                             self.log(mode="train", name="loss_student", value=loss_stu.item(), step=self.step)
                             self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
 
-                        if self.step % self.opt.n_unroll_blocks == 0:
-                            avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
-                            tmp_train_loss = 0
-
+                        # if self.step % self.opt.n_unroll_blocks == 0:
                             # feat_sim = self.query_model() / self.init_feat_sim
                             # feat_sim.zero_grad()
-
-                    # avg_train_loss = tmp_train_loss / len(self.train_loader)
-                    # tmp_train_loss = 0
 
                 acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
@@ -931,11 +932,21 @@ class Trainer:
                     feat_sim = torch.ones(self.opt.n_query_classes).cuda()
                     print(self.init_feat_sim.mean())
 
-                if epoch == 1:
-                    self.init_train_loss = self.avg_loss(self.student, data_loader=self.train_loader)
+                    # feat_sim = self.query_model()
+                    # self.init_feat_sim = feat_sim
+                    # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
+                    # print(self.init_feat_sim.mean())
+
+                    _ = self.test(self.student, self.student_fc, self.test_loader, epoch)
+
+                    self.init_train_loss = train_loss / self.step
                     avg_train_loss = self.init_train_loss
-                    self.init_test_loss = test_loss
-                    self.best_test_loss = test_loss
+                    self.init_test_loss = self.best_test_loss
+                    state = self.model_features(avg_train_loss)
+
+                else:
+                    avg_train_loss = train_loss / self.step
+                    state = self.model_features(avg_train_loss)
 
                 if epoch % 2 == 0:
                     self.query_set_1, self.query_set_2 = self.get_query_set()

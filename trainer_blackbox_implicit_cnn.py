@@ -968,7 +968,7 @@ class Trainer:
         optim = torch.optim.SGD([{'params': model.parameters()}, {'params': fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
         optim_loss = []
 
-        eps = 500
+        eps = 10
         eps_batch = torch.ones(self.opt.batch_size) * eps
         eps_batch = eps_batch.cuda()
 
@@ -991,17 +991,15 @@ class Trainer:
                 z = model_orig(inputs)
 
                 diff = torch.norm(z - z_new, p='fro', dim=1) ** 2
-                mask = (diff < eps).float().unsqueeze(1)
-                test1 = mask.sum()
+                print('diff', diff.max())
+                # mask = (diff < eps).float().unsqueeze(1)
 
-                alpha = (diff / eps_batch) ** 2
+                alpha = eps_batch / diff
                 alpha = alpha.unsqueeze(1)
-                z_new1 = z_new / alpha
+                z_proj = z + (z - z_new) * alpha
 
-                diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
-                mask = (diff2 < eps).float().unsqueeze(1)
-                test = mask.sum()
-                print("askldjfalksdf")
+                diff2 = torch.norm(z - z_proj, p='fro', dim=1) ** 2
+                print('diff2', diff2.max())
 
                 # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
 
