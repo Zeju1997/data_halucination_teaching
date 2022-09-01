@@ -366,7 +366,7 @@ class PolicyGradient:
             writer.writerows(to_write)
 
         if acc > self.best_final_acc:
-            self.best_final_acc == acc
+            self.best_final_acc = acc
             torch.save(self.agent.state_dict(), 'policy_w.pth')
 
     def play_episode(self):
