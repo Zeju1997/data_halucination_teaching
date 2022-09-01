@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from trainer_blackbox_mixup_rl import Trainer
-# from trainer_blackbox_mixup_cnn import Trainer
+# from trainer_blackbox_mixup_rl import Trainer
+from trainer_blackbox_mixup_cnn import Trainer
 from options.options import Options
 import os
 import argparse
