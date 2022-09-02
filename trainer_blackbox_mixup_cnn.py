@@ -795,6 +795,7 @@ class Trainer:
 
             optimizer = torch.optim.SGD([{'params': self.student.parameters()}, {'params': netG.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
+            self.opt.n_epochs = 20
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()
@@ -927,7 +928,7 @@ class Trainer:
             model_features = torch.FloatTensor([0, 1.0, 1.0]).cuda()
 
             optimizer = torch.optim.SGD([{'params': self.student.parameters()}, {'params': netG.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-
+            self.opt.n_epochs = 50
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()

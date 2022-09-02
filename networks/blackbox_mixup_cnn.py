@@ -113,7 +113,7 @@ class Generator(nn.Module):
         # feat_sim = torch.tensor(feat_sim).unsqueeze(0).repeat(img.shape[0], 1)
         feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
         x = torch.cat((x, feat_model), dim=1)
-        x = self.act(self.fc1(x))
+        x = self.act(self.fc1(x)) * 0.5
 
         return x
 
@@ -795,7 +795,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         outputs = self.student(input)
         loss = self.loss_fn(outputs, target)
         self.student_optim.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=True)
         self.student_optim.step()
 
         # dtheta = _concat(torch.autograd.grad(loss, self.model.parameters())).data + self.network_weight_decay*theta
@@ -813,8 +813,20 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # return self.student
 
     def step(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, model_features):
+        targets_onehot = one_hot(target_train, self.opt.n_classes)
+
+        index = torch.randperm(input_train.shape[0]).cuda()
+
+        lam = self.generator(input_train, input_train[index, :], target_train, target_train[index], model_features)
+
+        x_lam = torch.reshape(lam, (input_train.shape[0], 1, 1, 1)).cuda()
+        y_lam = torch.reshape(lam, (input_train.shape[0], 1)).cuda()
+
+        mixed_x = x_lam * input_train + (1 - x_lam) * input_train[index, :]
+        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
+
         self.netG_optim.zero_grad()
-        unrolled_loss = self._backward_step_unrolled(input_train, target_train, input_valid, target_valid, eta, network_optimizer, model_features)
+        unrolled_loss = self._backward_step_unrolled(mixed_x, mixed_y, input_valid, target_valid, eta, network_optimizer, model_features)
         self.netG_optim.step()
         return unrolled_loss
 
@@ -871,30 +883,18 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         return model_new.cuda()
 
     def _hessian_vector_product(self, vector, inputs, targets, model_features, r=1e-2):
-        targets_onehot = one_hot(targets, self.opt.n_classes)
-
-        index = torch.randperm(inputs.shape[0]).cuda()
-
-        lam = self.generator(inputs, inputs[index, :], targets, targets[index], model_features)
-
-        x_lam = torch.reshape(lam, (inputs.shape[0], 1, 1, 1)).cuda()
-        y_lam = torch.reshape(lam, (inputs.shape[0], 1)).cuda()
-
-        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
-        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
-
         R = r / _concat(vector).norm()
         for p, v in zip(self.student.parameters(), vector):
             p.data.add_(R, v)
-        outputs = self.student(mixed_x)
-        loss = self.loss_fn(outputs, mixed_y)
+        outputs = self.student(inputs)
+        loss = self.loss_fn(outputs, targets)
         grads_p = torch.autograd.grad(loss, self.generator.parameters(), retain_graph=True)
         self.generator.zero_grad()
 
         for p, v in zip(self.student.parameters(), vector):
             p.data.sub_(2*R, v)
-        outputs = self.student(mixed_x)
-        loss = self.loss_fn(outputs, mixed_y)
+        outputs = self.student(inputs)
+        loss = self.loss_fn(outputs, targets)
         grads_n = torch.autograd.grad(loss, self.generator.parameters())
         self.generator.zero_grad()
 
