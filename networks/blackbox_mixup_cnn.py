@@ -101,48 +101,45 @@ class Generator(nn.Module):
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        self.backbone = resnet18(pretrained=True)
-        self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-        # self.model.fc = nn.Linear(512, num_classes)
-        self.backbone.fc = nn.Identity()
+        # self.backbone = resnet18(pretrained=True)
+        # self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # self.backbone.fc = nn.Identity()
+        # self.backbone.requires_grad_(False)
 
-        self.backbone.requires_grad_(False)
-
-        in_channels = self.opt.label_dim*2 + 512*2
+        in_channels = self.opt.label_dim*2 + self.opt.n_classes*2
 
         self.model = nn.Sequential(
-            nn.Linear(in_channels, 512),
+            nn.Linear(in_channels, 128),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 256),
+            nn.Linear(128, 128),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 128),
-            nn.Dropout(0.4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
+            nn.Linear(128, self.opt.n_classes),
+            # nn.Dropout(0.4),
+            # nn.LeakyReLU(0.2, inplace=True),
+            # nn.Linear(128, 10),
+            # nn.Sigmoid()
         )
         # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
-        feat_dim = self.opt.n_query_classes
+        # feat_dim = self.opt.n_query_classes
 
-        self.fc1 = nn.Linear(10 + 3, 1)
+        self.fc1 = nn.Linear(self.opt.n_classes + 3, 1)
 
         self.act = nn.Sigmoid()
 
     def forward(self, img1, img2, label1, label2, feat_model):
-        feat_1 = self.backbone(img1)
-        feat_2 = self.backbone(img2)
+        # feat_1 = self.backbone(img1)
+        # feat_2 = self.backbone(img2)
         # Concatenate label embedding and image to produce input
         # d_in = torch.cat((img1.view(img1.size(0), -1), img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1)
-        d_in = torch.cat((feat_1, feat_2, self.label_embedding(label1), self.label_embedding(label2)), -1)
+        d_in = torch.cat((img1, img2, self.label_embedding(label1), self.label_embedding(label2)), -1)
         x = self.model(d_in)
 
-        '''
         # feat_sim = torch.tensor(feat_sim).unsqueeze(0).repeat(img.shape[0], 1)
         feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
         x = torch.cat((x, feat_model), dim=1)
         x = self.act(self.fc1(x)) * 0.5
-        '''
+
         return x * 0.5
 
 
@@ -675,7 +672,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, train_dataset, proj_matrix=None):
+    def __init__(self, opt, teacher, student, generator, train_dataset, val_loader, proj_matrix=None):
         super(UnrolledBlackBoxOptimizer, self).__init__()
 
         self.opt = opt
@@ -699,7 +696,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         self.student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
 
-    def forward(self, weight, w_star=None, w_init=None):
+        self.val_loader = val_loader
+
+    def forward(self, weight, model_features):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
         optim_student = torch.optim.SGD(self.student.parameters(), lr=0.01)
@@ -708,45 +707,69 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            self.student.load_state_dict(w_init)
+            # self.student.load_state_dict(w_init)
             # for param1 in self.student.parameters():
             #     param1 = w_init
             # for param2 in self.teacher.parameters():
             #    param2 = w_star
         loss_stu = 0
-        w_loss = 0
-        tau = 1
-        new_weight = w_init
         student_loss = []
-        model_paramters = list(self.generator.parameters())
+        model_paramters = list(self.generator.model.parameters())
         student_parameters = list(self.student.parameters())
+
+        loader_eval = iter(self.val_loader)
 
         self.student.train()
         for n in range(self.opt.n_unroll_blocks):
-            # w_t = self.student.lin.weight
+            self.student.eval()
 
-            # i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            # gt_x_1, gt_y_1 = self.data_sampler(self.X, self.Y, i)
-            # i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            # gt_x_2, gt_y_2 = self.data_sampler(self.X, self.Y, i)
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = self.data_sampler(self.dataset, i)
-            lam = self.generator(gt_x.cuda(), gt_y.cuda())
-            batch_size = gt_x.shape[0]
-            index = torch.randperm(batch_size).cuda()
-            # lam = np.random.beta(alpha, alpha, size=(gt_x.shape[0]))
-            # lam = torch.tensor(lam, dtype=torch.float).cuda()
-            # mixed_y = lam * y + (1 - lam) * y[index]
-            # lam = torch.unsqueeze(lam, 1)
-            lam = torch.unsqueeze(lam, 2)
-            lam = torch.unsqueeze(lam, 3)
-            mixed_x = lam * gt_x + (1 - lam) * gt_x[index, :]
-            targets_a, targets_b = gt_y, gt_y[index]
-            # inputs, targets = inputs.cuda(), targets.long().cuda()
-            # mixed_x, targets_a, targets_b, lam = mixup_data(gt_x, gt_y, alpha=1.0)
-            outputs = self.student(mixed_x)
-            loss = mixup_criterion(self.loss_fn, outputs, targets_a.long(), targets_b.long(), lam)
-            # loss = self.loss_fn(outputs, mixed_y.long())
+            try:
+                (val_inputs, val_targets) = loader_eval.next()
+            except:
+                loader_eval = iter(self.val_loader)
+                (val_inputs, val_targets) = loader_eval.next()
+
+            val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
+
+            val_targets_onehot = one_hot(val_targets, self.opt.n_classes)
+
+            self.generator.train()
+
+            # val_lam = np.random.beta(1.0, 1.0)
+            # val_lam = torch.tensor(val_lam, dtype=torch.float).cuda()
+            # val_offset = netG(val_inputs.cuda(), val_targets.cuda(), model_features, val_lam)
+            # val_offset = torch.max(val_offset, dim=1).indices
+            # offset_count = torch.bincount(val_offset)
+
+            # if torch.argmax(offset_count) == 0:
+            #     offset = 0.1
+            # elif torch.argmax(offset_count) == 2:
+            #     offset = - 0.1
+            # else:
+            #     offset = 0
+
+            # val_lam = val_lam + offset
+            # val_lam = torch.clamp(val_lam, min=0, max=1)
+
+            index = torch.randperm(val_inputs.shape[0]).cuda()
+
+            val_inputs_logits_1 = self.student(val_inputs)
+            val_inputs_logits_2 = self.student(val_inputs[index, :])
+            val_lam = self.generator(val_inputs_logits_1, val_inputs_logits_2, val_targets, val_targets[index], model_features)
+            ## val_lam = self.generator(val_inputs, val_inputs[index, :], val_targets, val_targets[index], model_features)
+
+            x_lam = torch.reshape(val_lam, (val_inputs.shape[0], 1, 1, 1)).cuda()
+            y_lam = torch.reshape(val_lam, (val_inputs.shape[0], 1)).cuda()
+
+            mixed_x = x_lam * val_inputs + (1 - x_lam) * val_inputs[index, :]
+            mixed_y = y_lam * val_targets_onehot + (1 - y_lam) * val_targets_onehot[index]
+
+            outputs_mixed = self.student(mixed_x)
+
+            # loss = val_lam * self.loss_fn(val_outputs, targets_a) + (1 - val_lam) * self.loss_fn(val_outputs, targets_b)
+
+            loss = self.loss_fn(outputs_mixed, mixed_y)
+
             grad_stu = torch.autograd.grad(outputs=loss,
                                            inputs=student_parameters,
                                            create_graph=True, retain_graph=True)
@@ -758,7 +781,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             loss_stu = loss_stu + loss # .clone()
 
             student_loss.append(loss.item())
-            print(n, "After backward pass", torch.cuda.memory_allocated(0))
+            # print(n, "After backward pass", torch.cuda.memory_allocated(0))
 
             student_loss.append(loss.detach().item())
 
@@ -845,9 +868,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         index = torch.randperm(input_train.shape[0]).cuda()
 
-        # feat1 = feature_extractor(input_train)
-        # feat2 = feature_extractor(input_train[index, :])
-        lam = self.generator(input_train, input_train[index, :], target_train, target_train[index], model_features)
+        inputs_logits_1 = self.student(input_train)
+        inputs_logits_2 = self.student(input_train[index, :])
+        lam = self.generator(inputs_logits_1, inputs_logits_2, target_train, target_train[index], model_features)
+        # lam = self.generator(input_train, input_train[index, :], target_train, target_train[index], model_features)
         # lam = self.generator(model_features)
 
         x_lam = torch.reshape(lam, (input_train.shape[0], 1, 1, 1)).cuda()
@@ -866,13 +890,17 @@ class UnrolledBlackBoxOptimizer(nn.Module):
     def _backward_step_unrolled(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, model_features):
         self._compute_unrolled_model(input_train, target_train, eta, network_optimizer)
 
+        self.student.zero_grad()
+        self.generator.zero_grad()
+
         target_valid_onehot = one_hot(target_valid, self.opt.n_classes)
 
         index = torch.randperm(input_valid.shape[0]).cuda()
 
-        # feat1 = feature_extractor(input_valid)
-        # feat2 = feature_extractor(input_valid[index, :])
-        val_lam = self.generator(input_valid, input_valid[index, :], target_valid, target_valid[index], model_features)
+        val_inputs_logits_1 = self.student(input_valid)
+        val_inputs_logits_2 = self.student(input_valid[index, :])
+        val_lam = self.generator(val_inputs_logits_1, val_inputs_logits_2, target_valid, target_valid[index], model_features)
+        # val_lam = self.generator(input_valid, input_valid[index, :], target_valid, target_valid[index], model_features)
         # val_lam = self.generator(model_features)
 
         x_lam = torch.reshape(val_lam, (input_valid.shape[0], 1, 1, 1)).cuda()
@@ -927,14 +955,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         outputs = self.student(inputs)
         loss = self.loss_fn(outputs, targets)
         grads_p = torch.autograd.grad(loss, self.generator.model.parameters(), retain_graph=True)
-        self.generator.zero_grad()
+        # self.generator.zero_grad()
 
         for p, v in zip(self.student.parameters(), vector):
             p.data.sub_(2*R, v)
         outputs = self.student(inputs)
         loss = self.loss_fn(outputs, targets)
         grads_n = torch.autograd.grad(loss, self.generator.model.parameters(), retain_graph=True)
-        self.generator.zero_grad()
+        # self.generator.zero_grad()
 
         for p, v in zip(self.student.parameters(), vector):
             p.data.add_(R, v)

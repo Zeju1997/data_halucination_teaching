@@ -16,7 +16,7 @@ optim: AMSGrad
 hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000 # 1000
-n_unroll_blocks: 0 # 40
+n_unroll_blocks: 1 # 40
 n_epochs: 50 # 200
 start_saving: 1
 save_frequency: 1
