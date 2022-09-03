@@ -21,6 +21,19 @@ class ResNet_ACOUSTICS(nn.Module):
         return output
 
 
+class ResNet18(nn.Module):
+    def __init__(self, in_channels=1, num_classes=10):
+        super(ResNet18, self).__init__()
+        self.model = models.resnet18(weights='DEFAULT')
+        self.model.conv1 = nn.Conv2d(in_channels, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # self.model.fc = nn.Linear(512, num_classes)
+        self.model.fc = nn.Identity()
+
+    def forward(self, x):
+        output = self.model(x)
+        return output
+
+
 '''ResNet in PyTorch.
 BasicBlock and Bottleneck module is from the original ResNet paper:
 [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
@@ -148,7 +161,7 @@ class PreActBottleneck(nn.Module):
         return out
 
 
-class ResNet(nn.Module):
+class ResNet2(nn.Module):
     def __init__(self, block, num_blocks, num_classes=100):
         super(ResNet, self).__init__()
         self.in_planes = 64
@@ -192,6 +205,9 @@ class ResNet(nn.Module):
 
 # def ResNet18(in_channels=3, num_classes=10):
 #    return ResNet(PreActBlock, [2,2,2,2])
+
+def ResNet(in_channels=3, num_classes=10):
+    return ResNet18(in_channels=in_channels, num_classes=num_classes)
 
 def ResNet18(in_channels=3, num_classes=10):
     return ResNet_ACOUSTICS(model=18, in_channels=in_channels, num_classes=num_classes)

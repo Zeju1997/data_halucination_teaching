@@ -640,7 +640,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.experiment))

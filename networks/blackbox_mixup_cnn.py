@@ -71,31 +71,50 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 def _concat(xs):
     return torch.cat([x.view(-1) for x in xs])
 
-class Generator(nn.Module):
+class Generator2(nn.Module):
     def __init__(self, opt):
+        super(Generator, self).__init__()
+        self.affine1 = nn.Linear(3, 128)
+        self.dropout = nn.Dropout(p=0.6)
+        self.affine2 = nn.Linear(128, 1)
+
+        self.act = nn.Sigmoid()
+
+        self.saved_log_probs = []
+        self.rewards = []
+
+        self.opt = opt
+
+    def forward(self, x):
+        x = self.affine1(x)
+        x = self.dropout(x)
+        x = F.relu(x)
+        action_scores = self.affine2(x)
+        return self.act(action_scores) * 0.5
+
+class Generator(nn.Module):
+    def __init__(self, opt, feature_extractor):
         super(Generator, self).__init__()
 
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = self.opt.label_dim*2 + int(np.prod(self.img_shape))*2
+        self.feature_extractor = feature_extractor
+
+        in_channels = self.opt.label_dim*2 + 512*2
 
         self.model = nn.Sequential(
-            nn.Linear(in_channels, 4096),
+            nn.Linear(in_channels, 512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(4096, 2048),
-            nn.Dropout(0.4),
-            nn.Linear(2048, 1024),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(1024, 256),
+            nn.Linear(512, 256),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(256, 128),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(128, 10),
-            # nn.Sigmoid()
+            nn.Linear(128, 1),
+            nn.Sigmoid()
         )
         # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
         feat_dim = self.opt.n_query_classes
@@ -105,17 +124,20 @@ class Generator(nn.Module):
         self.act = nn.Sigmoid()
 
     def forward(self, img1, img2, label1, label2, feat_model):
+        feat_1 = self.feature_extractor(img1)
+        feat_2 = self.feature_extractor(img2)
         # Concatenate label embedding and image to produce input
-        d_in = torch.cat((img1.view(img1.size(0), -1), img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1)
-        # d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(label)), -1)
+        # d_in = torch.cat((img1.view(img1.size(0), -1), img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1)
+        d_in = torch.cat((feat_1, feat_2, self.label_embedding(label1), self.label_embedding(label2)), -1)
         x = self.model(d_in)
 
+        '''
         # feat_sim = torch.tensor(feat_sim).unsqueeze(0).repeat(img.shape[0], 1)
         feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
         x = torch.cat((x, feat_model), dim=1)
         x = self.act(self.fc1(x)) * 0.5
-
-        return x
+        '''
+        return x * 0.5
 
 
 class Generator1(nn.Module):
@@ -818,9 +840,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         index = torch.randperm(input_train.shape[0]).cuda()
 
         lam = self.generator(input_train, input_train[index, :], target_train, target_train[index], model_features)
+        # lam = self.generator(model_features)
 
         x_lam = torch.reshape(lam, (input_train.shape[0], 1, 1, 1)).cuda()
+        # x_lam = lam
         y_lam = torch.reshape(lam, (input_train.shape[0], 1)).cuda()
+        # y_lam = lam
 
         mixed_x = x_lam * input_train + (1 - x_lam) * input_train[index, :]
         mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
@@ -838,9 +863,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         index = torch.randperm(input_valid.shape[0]).cuda()
 
         val_lam = self.generator(input_valid, input_valid[index, :], target_valid, target_valid[index], model_features)
+        # val_lam = self.generator(model_features)
 
         x_lam = torch.reshape(val_lam, (input_valid.shape[0], 1, 1, 1)).cuda()
+        # x_lam = val_lam
         y_lam = torch.reshape(val_lam, (input_valid.shape[0], 1)).cuda()
+        # y_lam = val_lam
 
         mixed_x = x_lam * input_valid + (1 - x_lam) * input_valid[index, :]
         mixed_y = y_lam * target_valid_onehot + (1 - y_lam) * target_valid_onehot[index]

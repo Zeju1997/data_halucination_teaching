@@ -584,6 +584,8 @@ class Trainer:
         mixup_baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         mixup_baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
+        feature_extractor = networks.ResNet(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+
         if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
@@ -762,7 +764,7 @@ class Trainer:
             res_mixup = []
             res_loss_mixup = []
 
-            netG = blackbox_mixup.Generator(self.opt).cuda()
+            netG = blackbox_mixup.Generator(self.opt, feature_extractor).cuda()
             netG.apply(weights_init)
 
             optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
@@ -795,11 +797,10 @@ class Trainer:
 
             optimizer = torch.optim.SGD([{'params': self.student.parameters()}, {'params': netG.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
-            self.opt.n_epochs = 20
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()
-                    for batch_idx, (inputs, targets) in enumerate(self.loader):
+                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
                         self.step = self.step + 1
 
                         try:
@@ -882,6 +883,151 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+        if self.opt.train_student == True:
+            # w_student1 = []
+            # for param in self.student.parameters():
+            #     w_student1.append(param.data.clone())
+
+            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
+            # self.student.load_state_dict(w_init)
+
+            netG_path = os.path.join(self.opt.log_path, 'weights/best_model_netG.pth')
+            netG = blackbox_mixup.Generator(self.opt).cuda()
+            netG.load_state_dict(torch.load(netG_path))
+
+            # w_student2 = []
+            # for param in self.student.parameters():
+            #    w_student2.append(param.data.clone())
+
+            self.experiment = "Trained_Mixup_fixed_G"
+            print("Start training {} ...".format(self.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            res_student = []
+            res_loss_student = []
+
+            '''
+            batch_size = 5
+            nb_digits = 10
+            # Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
+            y = torch.LongTensor(batch_size,1).random_() % nb_digits
+            # One hot encoding buffer that you create out of the loop and just keep reusing
+            y_onehot = torch.FloatTensor(batch_size, nb_digits)
+
+            # In your for loop
+            y_onehot.zero_()
+            y_onehot.scatter_(1, y, 1)
+
+            print(y)
+            print(y_onehot)
+            '''
+
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+
+            self.step = 0
+            self.best_acc = 0
+            self.best_test_loss = 1000
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            self.init_feat_sim = 0
+            avg_train_loss = 0
+            tmp_train_loss = 0
+
+            train_loss = 0.0
+
+            model_features = torch.FloatTensor([0, 1.0, 1.0]).cuda()
+
+            for epoch in tqdm(range(self.opt.n_epochs)):
+                if epoch != 0:
+                    self.student.train()
+                    for batch_idx, (inputs, targets) in enumerate(self.loader):
+                        n_samples = inputs.shape[0]
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+                        targets_onehot = torch.FloatTensor(n_samples, self.opt.n_classes).cuda()
+                        targets_onehot.zero_()
+                        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
+
+                        # alpha = np.random.beta(1.0, 1.0)
+                        # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
+
+                        # lam = torch.rand(n_samples, 1).cuda()
+
+                        index = torch.randperm(inputs.shape[0]).cuda()
+
+                        lam = netG(inputs, inputs[index, :], targets, targets[index], model_features)
+
+                        x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
+                        y_lam = torch.reshape(lam, (n_samples, 1))
+
+                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
+                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
+
+                        outputs = self.student(mixed_x)
+                        loss = self.loss_fn(outputs, mixed_y)
+
+                        # loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+                        # print("loss2", loss)
+
+                        # targets_a, targets_b = targets, targets[index]
+                        # loss1 = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, y_lam)
+                        # print("loss1", loss1)
+
+                        # loss = self.loss_fn(outputs, mixed_y.long())
+                        # print("loss2", loss)
+                        train_loss = train_loss + loss.item()
+
+                        student_optim.zero_grad()
+                        loss.backward()
+                        student_optim.step()
+
+                        self.step += 1
+                        if batch_idx % self.opt.log_interval == 0:
+                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                100. * batch_idx / len(self.train_loader), loss.item()))
+
+                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+                        if self.step == 1:
+                            # feat_sim = self.query_model()
+                            # self.init_feat_sim = feat_sim
+                            # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
+                            # print(self.init_feat_sim.mean())
+
+                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+
+                            self.init_train_loss = train_loss / self.step
+                            avg_train_loss = self.init_train_loss
+                            self.init_test_loss = self.best_test_loss
+                            model_features = self.model_features(avg_train_loss)
+
+                        else:
+                            avg_train_loss = train_loss / self.step
+                            model_features = self.model_features(avg_train_loss)
+
+                        if self.step % 100 == 0:
+                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                res_student.append(acc)
+                res_loss_student.append(test_loss)
+
+                # if epoch % 2 == 0:
+                #    self.query_set_1, self.query_set_2 = self.get_query_set()
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+
+        sys.exit()
+
 
         if self.opt.train_student == False:
             # mixup student
@@ -1108,148 +1254,6 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
-
-        if self.opt.train_student == True:
-            # w_student1 = []
-            # for param in self.student.parameters():
-            #     w_student1.append(param.data.clone())
-
-            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.eta)
-            # self.student.load_state_dict(w_init)
-
-            netG_path = os.path.join(self.opt.log_path, 'weights/best_model_netG.pth')
-            netG = blackbox_mixup.Generator(self.opt).cuda()
-            netG.load_state_dict(torch.load(netG_path))
-
-            # w_student2 = []
-            # for param in self.student.parameters():
-            #    w_student2.append(param.data.clone())
-
-            self.experiment = "Trained_Mixup_fixed_G"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-            if not os.path.exists(logname):
-                with open(logname, 'w') as logfile:
-                    logwriter = csv.writer(logfile, delimiter=',')
-                    logwriter.writerow(['epoch', 'test acc'])
-
-            res_student = []
-            res_loss_student = []
-
-            '''
-            batch_size = 5
-            nb_digits = 10
-            # Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
-            y = torch.LongTensor(batch_size,1).random_() % nb_digits
-            # One hot encoding buffer that you create out of the loop and just keep reusing
-            y_onehot = torch.FloatTensor(batch_size, nb_digits)
-
-            # In your for loop
-            y_onehot.zero_()
-            y_onehot.scatter_(1, y, 1)
-
-            print(y)
-            print(y_onehot)
-            '''
-
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
-
-            self.step = 0
-            self.best_acc = 0
-            self.best_test_loss = 1000
-            self.init_train_loss = 0
-            self.init_test_loss = 0
-            self.init_feat_sim = 0
-            avg_train_loss = 0
-            tmp_train_loss = 0
-
-            train_loss = 0.0
-
-            model_features = torch.FloatTensor([0, 1.0, 1.0]).cuda()
-
-            for epoch in tqdm(range(self.opt.n_epochs)):
-                if epoch != 0:
-                    self.student.train()
-                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                        n_samples = inputs.shape[0]
-                        inputs, targets = inputs.cuda(), targets.long().cuda()
-                        # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
-                        targets_onehot = torch.FloatTensor(n_samples, self.opt.n_classes).cuda()
-                        targets_onehot.zero_()
-                        targets_onehot.scatter_(1, targets.unsqueeze(1), 1)
-
-                        # alpha = np.random.beta(1.0, 1.0)
-                        # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
-
-                        # lam = torch.rand(n_samples, 1).cuda()
-
-                        index = torch.randperm(inputs.shape[0]).cuda()
-
-                        lam = netG(inputs, inputs[index, :], targets, targets[index], model_features)
-
-                        x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
-                        y_lam = torch.reshape(lam, (n_samples, 1))
-
-                        mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
-                        mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
-
-                        outputs = self.student(mixed_x)
-                        loss = self.loss_fn(outputs, mixed_y)
-
-                        # loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
-                        # print("loss2", loss)
-
-                        # targets_a, targets_b = targets, targets[index]
-                        # loss1 = mixup_criterion_batch(self.loss_fn, outputs, targets_a, targets_b, y_lam)
-                        # print("loss1", loss1)
-
-                        # loss = self.loss_fn(outputs, mixed_y.long())
-                        # print("loss2", loss)
-                        train_loss = train_loss + loss.item()
-
-                        student_optim.zero_grad()
-                        loss.backward()
-                        student_optim.step()
-
-                        self.step += 1
-                        if batch_idx % self.opt.log_interval == 0:
-                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                                100. * batch_idx / len(self.train_loader), loss.item()))
-
-                        self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-                        if self.step == 1:
-                            # feat_sim = self.query_model()
-                            # self.init_feat_sim = feat_sim
-                            # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
-                            # print(self.init_feat_sim.mean())
-
-                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-
-                            self.init_train_loss = train_loss / self.step
-                            avg_train_loss = self.init_train_loss
-                            self.init_test_loss = self.best_test_loss
-                            model_features = self.model_features(avg_train_loss)
-
-                        else:
-                            avg_train_loss = train_loss / self.step
-                            model_features = self.model_features(avg_train_loss)
-
-                        if self.step % 100 == 0:
-                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-                res_student.append(acc)
-                res_loss_student.append(test_loss)
-
-                # if epoch % 2 == 0:
-                #    self.query_set_1, self.query_set_2 = self.get_query_set()
-
-                with open(logname, 'a') as logfile:
-                    logwriter = csv.writer(logfile, delimiter=',')
-                    logwriter.writerow([epoch, acc])
 
         sys.exit()
 
