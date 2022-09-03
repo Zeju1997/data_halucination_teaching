@@ -584,8 +584,6 @@ class Trainer:
         mixup_baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         mixup_baseline_fc = networks.FullLayer(feature_dim=512, n_classes=self.opt.n_classes).cuda()
 
-        feature_extractor = networks.ResNet(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-
         if self.opt.train_baseline == False:
             # mixup baseline
             self.experiment = "Vanilla_Mixup"
@@ -764,7 +762,7 @@ class Trainer:
             res_mixup = []
             res_loss_mixup = []
 
-            netG = blackbox_mixup.Generator(self.opt, feature_extractor).cuda()
+            netG = blackbox_mixup.Generator(self.opt).cuda()
             netG.apply(weights_init)
 
             optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
@@ -837,6 +835,7 @@ class Trainer:
                             self.log(mode="train", name="loss_student", value=loss, step=self.step)
                             # self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
 
+                        '''
                         if self.step == 1:
                             # feat_sim = self.query_model()
                             # self.init_feat_sim = feat_sim
@@ -856,7 +855,7 @@ class Trainer:
 
                         if self.step % 100 == 0:
                             _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-
+                        '''
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
@@ -995,6 +994,7 @@ class Trainer:
 
                         self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
+                        '''
                         if self.step == 1:
                             # feat_sim = self.query_model()
                             # self.init_feat_sim = feat_sim
@@ -1014,6 +1014,7 @@ class Trainer:
 
                         if self.step % 100 == 0:
                             _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                        '''
 
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)

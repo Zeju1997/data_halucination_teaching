@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.functional import one_hot, log_softmax, softmax, normalize
 from torchvision import transforms
+from torchvision.models import resnet18
 
 from torch.autograd import Variable
 
@@ -93,14 +94,19 @@ class Generator2(nn.Module):
         return self.act(action_scores) * 0.5
 
 class Generator(nn.Module):
-    def __init__(self, opt, feature_extractor):
+    def __init__(self, opt, feature_extractor=None):
         super(Generator, self).__init__()
 
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        self.feature_extractor = feature_extractor
+        self.backbone = resnet18(pretrained=True)
+        self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # self.model.fc = nn.Linear(512, num_classes)
+        self.backbone.fc = nn.Identity()
+
+        self.backbone.requires_grad_(False)
 
         in_channels = self.opt.label_dim*2 + 512*2
 
@@ -124,8 +130,8 @@ class Generator(nn.Module):
         self.act = nn.Sigmoid()
 
     def forward(self, img1, img2, label1, label2, feat_model):
-        feat_1 = self.feature_extractor(img1)
-        feat_2 = self.feature_extractor(img2)
+        feat_1 = self.backbone(img1)
+        feat_2 = self.backbone(img2)
         # Concatenate label embedding and image to produce input
         # d_in = torch.cat((img1.view(img1.size(0), -1), img2.view(img2.size(0), -1), self.label_embedding(label1), self.label_embedding(label2)), -1)
         d_in = torch.cat((feat_1, feat_2, self.label_embedding(label1), self.label_embedding(label2)), -1)
@@ -689,7 +695,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         self.proj_matrix = proj_matrix
 
-        self.netG_optim = torch.optim.Adam(self.generator.parameters(), lr=0.0002, betas=(0.5, 0.999), weight_decay=0.001)
+        self.netG_optim = torch.optim.Adam(self.generator.model.parameters(), lr=0.0002, betas=(0.5, 0.999), weight_decay=0.001)
 
         self.student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
 
@@ -839,6 +845,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         index = torch.randperm(input_train.shape[0]).cuda()
 
+        # feat1 = feature_extractor(input_train)
+        # feat2 = feature_extractor(input_train[index, :])
         lam = self.generator(input_train, input_train[index, :], target_train, target_train[index], model_features)
         # lam = self.generator(model_features)
 
@@ -862,6 +870,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         index = torch.randperm(input_valid.shape[0]).cuda()
 
+        # feat1 = feature_extractor(input_valid)
+        # feat2 = feature_extractor(input_valid[index, :])
         val_lam = self.generator(input_valid, input_valid[index, :], target_valid, target_valid[index], model_features)
         # val_lam = self.generator(model_features)
 
@@ -880,14 +890,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # unrolled_loss = self.loss_fn(output_valid, target_valid)
 
         unrolled_loss.backward()
-        dalpha = [v.grad for v in self.generator.parameters()]
+        dalpha = [v.grad for v in self.generator.model.parameters()]
         vector = [v.grad.data for v in self.student.parameters()]
         implicit_grads = self._hessian_vector_product(vector, input_train, target_train, model_features)
 
         for g, ig in zip(dalpha, implicit_grads):
             g.data.sub_(eta, ig.data)
 
-        for v, g in zip(self.generator.parameters(), dalpha):
+        for v, g in zip(self.generator.model.parameters(), dalpha):
             if v.grad is None:
                 v.grad = Variable(g.data)
             else:
@@ -916,14 +926,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             p.data.add_(R, v)
         outputs = self.student(inputs)
         loss = self.loss_fn(outputs, targets)
-        grads_p = torch.autograd.grad(loss, self.generator.parameters(), retain_graph=True)
+        grads_p = torch.autograd.grad(loss, self.generator.model.parameters(), retain_graph=True)
         self.generator.zero_grad()
 
         for p, v in zip(self.student.parameters(), vector):
             p.data.sub_(2*R, v)
         outputs = self.student(inputs)
         loss = self.loss_fn(outputs, targets)
-        grads_n = torch.autograd.grad(loss, self.generator.parameters())
+        grads_n = torch.autograd.grad(loss, self.generator.model.parameters(), retain_graph=True)
         self.generator.zero_grad()
 
         for p, v in zip(self.student.parameters(), vector):
