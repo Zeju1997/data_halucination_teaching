@@ -600,8 +600,7 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load('teacher_w0.pth'))
-            mixup_baseline_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            mixup_baseline_optim = torch.optim.SGD([{'params': mixup_baseline.parameters()}, {'params': mixup_baseline_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
             self.best_acc = 0
@@ -615,8 +614,7 @@ class Trainer:
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
-                        features = mixup_baseline(mixed_x)
-                        outputs = mixup_baseline_fc(features)
+                        outputs = mixup_baseline(mixed_x)
                         loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
                         # loss = self.loss_fn(outputs, mixed_y.long())
 
@@ -632,7 +630,7 @@ class Trainer:
                                 100. * batch_idx / len(self.train_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-                acc, test_loss = self.test(mixup_baseline, mixup_baseline_fc, test_loader=self.test_loader, epoch=epoch)
+                acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
                 res_mixup.append(acc)
                 res_loss_mixup.append(test_loss)
 
@@ -674,8 +672,7 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load('teacher_w0.pth'))
-            mixup_baseline_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            mixup_baseline_optim = torch.optim.SGD([{'params': mixup_baseline.parameters()}, {'params': mixup_baseline_fc.parameters()}], lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
             self.best_acc = 0
@@ -702,8 +699,7 @@ class Trainer:
                         mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
                         mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
-                        features = mixup_baseline(mixed_x)
-                        outputs = mixup_baseline_fc(features)
+                        outputs = mixup_baseline(mixed_x)
 
                         loss = self.loss_fn(outputs, mixed_y)
 
@@ -721,7 +717,7 @@ class Trainer:
                                 100. * batch_idx / len(self.train_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-                acc, test_loss = self.test(mixup_baseline, mixup_baseline_fc, test_loader=self.test_loader, epoch=epoch)
+                acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
                 res_mixup.append(acc)
                 res_loss_mixup.append(test_loss)
 
@@ -950,7 +946,7 @@ class Trainer:
 
             # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
             # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-            unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=self.student, generator=netG, train_dataset=self.train_dataset, proj_matrix=None)
+            unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, val_loader=self.val_loader, proj_matrix=None)
             res_student = []
             res_loss_student = []
             cls_loss = []
@@ -1146,6 +1142,7 @@ class Trainer:
                         inputs_logits_1 = self.student(inputs)
                         inputs_logits_2 = self.student(inputs[index, :])
                         lam = netG(inputs_logits_1, inputs_logits_2, targets, targets[index], model_features)
+
                         # lam = netG(inputs, inputs[index, :], targets, targets[index], model_features)
 
                         self.student.train()
