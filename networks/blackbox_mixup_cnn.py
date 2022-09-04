@@ -819,13 +819,11 @@ class UnrolledBlackBoxOptimizer(nn.Module):
     def _backward_step_unrolled(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, model_features):
         self._compute_unrolled_model(input_train, target_train, eta, network_optimizer)
 
-        self.student.zero_grad()
-        self.generator.zero_grad()
-
-
         w_t = self.student.state_dict()
         w_t = self.generator.state_dict()
         gradients, generator_loss, unrolled_loss = self.forward(w_t, model_features)
+
+        self.student.train()
 
         # with torch.no_grad():
         #     for p, g in zip(self.generator.model.parameters(), gradients):
