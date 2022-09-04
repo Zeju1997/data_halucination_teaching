@@ -682,10 +682,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # self.student.lin.weight = w_init
         optim_student = torch.optim.SGD(self.student.parameters(), lr=0.01)
         optim = torch.optim.SGD(self.generator.parameters(), lr=0.01)
-        with torch.no_grad():
+        # with torch.no_grad():
             # for param1 in self.generator.parameters():
             #    param1 = weight
-            self.generator.load_state_dict(weight)
+            # self.generator.load_state_dict(weight)
             # self.student.load_state_dict(w_init)
             # for param1 in self.student.parameters():
             #     param1 = w_init
@@ -764,62 +764,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             student_loss.append(loss.detach().item())
 
-            '''
-            mixup_baseline_optim.zero_grad()
-            loss.backward()
-            mixup_baseline_optim.step()
-            # generated_y = torch.randint(0, 2, (self.opt.batch_size,), dtype=torch.float).cuda()
-            # Sample noise and labels as generator input
-            # z = Variable(torch.randn(gt_x.shape)).cuda()
-            # z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-            # generated_x_proj = generated_x @ self.proj_matrix.cuda()
-            # x = torch.cat((w_t, gt_x_1, gt_x_2), dim=1)
-            # x = torch.cat((w_t, w_t-w_init, gt_x_1, gt_x_2), dim=1)
-            # x = torch.cat((gt_x_1, gt_x_2), dim=0)
-            alpha = self.generator(gt_x_1, gt_x_2, gt_y_1.long(), gt_y_2.long())
-            # alpha = np.random.beta(1.0, 1.0)
-            # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
-            #  alpha.requires_grad = True
-            # mixup data
-            # mixed_x, targets_a, targets_b = mixup_data(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha)
-            mixed_x = alpha * gt_x_1 + (1 - alpha) * gt_x_2
-            # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
-            # mixed_y = alpha * gt_y_1 + (1 - alpha) * gt_y_2
-            # optim_student.zero_grad()
-            # self.student.train()
-            out = self.student(mixed_x)
-            # out = self.student(generated_x_proj)
-            # mixed_y = gt_y_1 * alpha + gt_y_2 * (1 - alpha)
-            # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), alpha)
-            loss = alpha * self.loss_fn(out, gt_y_1) + (1 - alpha) * self.loss_fn(out, gt_y_2)
-            loss = loss.to(torch.float32)
-            # out_stu = gt_x
-            # for idx, param in enumerate(self.student.parameters()):
-            #     out_stu = param @ torch.transpose(out_stu, 0, 1)
-            # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-            # out_stu = self.student(gt_x)
-            # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
-            # loss_stu = loss_stu + loss
-            # grad = torch.autograd.grad(loss_stu, model_paramters, create_graph=True, retain_graph=True)
-            # grad_stu = torch.autograd.grad(outputs=loss_stu, inputs=model_paramters, create_graph=True, retain_graph=True)
-            optim.zero_grad()
-            grad_stu = torch.autograd.grad(outputs=loss_stu, inputs=model_paramters, create_graph=True, retain_graph=True)
-            loss_stu.backward()
-            optim.step()
-            '''
-        grad_gen = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=False, retain_graph=False)
+        grad_gen = 0
+        # grad_gen = torch.autograd.grad(outputs=loss_stu,
+        #                                inputs=model_paramters,
+        #                                create_graph=False, retain_graph=False)
 
-        # w = self.generator.state_dict()
-
-        # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        # loss_stu = self.loss_fn(out_stu, gt_y)
-        # alpha = 1
-        # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
-        # loss_stu = loss_stu * alpha
-        # grad_stu = torch.autograd.grad(outputs=loss_stu, inputs=model_paramters, create_graph=True, retain_graph=True)
-        return grad_gen, loss_stu.item(), student_loss #, generated_x, gt_y, g_loss
+        return grad_gen, loss_stu.item(), loss_stu #, generated_x, gt_y, g_loss
 
     def _compute_unrolled_model(self, input, target, eta, network_optimizer):
         outputs = self.student(input)
@@ -875,35 +825,16 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         w_t = self.student.state_dict()
         w_t = self.generator.state_dict()
-        gradients, generator_loss, G_loss = self.unrolled_optimizer(w_t, model_features)
+        gradients, generator_loss, unrolled_loss = self.forward(w_t, model_features)
 
-        with torch.no_grad():
-            for p, g in zip(self.generator.model.parameters(), gradients):
-                p.grad = g
+        # with torch.no_grad():
+        #     for p, g in zip(self.generator.model.parameters(), gradients):
+        #        p.grad = g
 
-        # outputs_normal = self.student(val_inputs)
-        # loss_normal = self.loss_fn(outputs_normal, val_targets)
+        # optimizer_G.step()
+        # netG.eval()
 
-        # tmp_train_loss = tmp_train_loss + loss.item()
-
-        # optimizer_G.zero_grad()
-        # loss.backward()
-        optimizer_G.step()
-        netG.eval()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        '''
         target_valid_onehot = one_hot(target_valid, self.opt.n_classes)
 
         index = torch.randperm(input_valid.shape[0]).cuda()
@@ -927,6 +858,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         # output_valid = self.student(input_valid)
         # unrolled_loss = self.loss_fn(output_valid, target_valid)
+        '''
 
         unrolled_loss.backward()
         dalpha = [v.grad for v in self.generator.model.parameters()]
