@@ -123,7 +123,7 @@ class Generator(nn.Module):
         # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
         # feat_dim = self.opt.n_query_classes
 
-        self.fc1 = nn.Linear(self.opt.n_classes + 3, 1)
+        self.fc1 = nn.Linear(self.opt.n_classes + 3, 2)
 
         self.act = nn.Sigmoid()
 
@@ -138,9 +138,13 @@ class Generator(nn.Module):
         # feat_sim = torch.tensor(feat_sim).unsqueeze(0).repeat(img.shape[0], 1)
         feat_model = feat_model.unsqueeze(0).repeat(x.shape[0], 1)
         x = torch.cat((x, feat_model), dim=1)
-        x = self.act(self.fc1(x)) * 0.5
+        x = self.act(self.fc1(x))
 
-        return x * 0.5
+        x = F.softmax(x, dim=1)
+
+        out = x[:, 1] * 0.5
+
+        return out
 
 
 class Generator1(nn.Module):

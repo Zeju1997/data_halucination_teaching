@@ -16,7 +16,7 @@ optim: AMSGrad
 hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000 # 1000
-n_unroll_blocks: 20 # 40
+n_unroll_blocks: 10 # 40
 n_epochs: 50 # 200
 start_saving: 1
 save_frequency: 1
@@ -35,7 +35,7 @@ train_student: True
 train_sgd: True
 train_baseline: True
 n_query_classes: 10
-num_workers: 10 # 10
+num_workers: 0 # 10
 action_space: 2
 n_pg_epochs: 3
 n_tries: 30

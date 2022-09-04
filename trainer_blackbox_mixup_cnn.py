@@ -742,7 +742,7 @@ class Trainer:
 
         if self.opt.train_student == False:
             # mixup student
-            self.experiment = "Trained_Mixup"
+            self.experiment = "Trained_Mixup_First_Order"
             print("Start training {} ...".format(self.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -930,7 +930,7 @@ class Trainer:
 
         if self.opt.train_student == True:
             # mixup student
-            self.experiment = "Trained_Mixup"
+            self.experiment = "Trained_Mixup_Second_Order"
             print("Start training {} ...".format(self.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -946,7 +946,7 @@ class Trainer:
 
             # optimizer_G = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999), eps=1e-08, amsgrad=False)
             # optimizer_G = torch.optim.SGD(netG.parameters(), lr=0.0002)
-            unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, train_dataset=self.train_dataset, val_loader=self.val_loader, proj_matrix=None)
+            unrolled_optimizer = blackbox_mixup.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=self.student, generator=netG, train_dataset=self.train_dataset, val_loader=self.val_loader, proj_matrix=None)
             res_student = []
             res_loss_student = []
             cls_loss = []
@@ -990,7 +990,7 @@ class Trainer:
                         #  Generator Input
                         # ---------------------
 
-                        self.student.eval()
+                        # self.student.eval()
 
                         val_inputs, val_targets = val_inputs.cuda(), val_targets.long().cuda()
 
