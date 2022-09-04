@@ -768,10 +768,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             student_loss.append(loss.detach().item())
 
-        grad_gen = 0
-        # grad_gen = torch.autograd.grad(outputs=loss_stu,
-        #                                inputs=model_paramters,
-        #                                create_graph=False, retain_graph=False)
+
+        grad_gen = torch.autograd.grad(outputs=loss_stu,
+                                       inputs=model_paramters,
+                                       create_graph=False, retain_graph=False)
 
         return grad_gen, loss_stu.item(), loss_stu #, generated_x, gt_y, g_loss
 

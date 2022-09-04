@@ -740,7 +740,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # mixup student
             self.experiment = "Trained_Mixup_First_Order"
             print("Start training {} ...".format(self.experiment))
@@ -928,7 +928,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             # mixup student
             self.experiment = "Trained_Mixup_Second_Order"
             print("Start training {} ...".format(self.experiment))
