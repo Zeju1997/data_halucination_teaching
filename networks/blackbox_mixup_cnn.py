@@ -768,10 +768,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             student_loss.append(loss.detach().item())
 
-
+        '''
         grad_gen = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
                                        create_graph=False, retain_graph=False)
+        '''
+        grad_gen = 0
 
         return grad_gen, loss_stu.item(), loss_stu #, generated_x, gt_y, g_loss
 
@@ -823,8 +825,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
     def _backward_step_unrolled(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, model_features):
         self._compute_unrolled_model(input_train, target_train, eta, network_optimizer)
 
-        w_t = self.student.state_dict()
-        w_t = self.generator.state_dict()
+        # w_t = self.student.state_dict()
+        # w_t = self.generator.state_dict()
         gradients, generator_loss, unrolled_loss = self.forward(w_t, model_features)
 
         self.student.train()
