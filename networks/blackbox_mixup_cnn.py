@@ -114,16 +114,16 @@ class Generator(nn.Module):
             nn.Linear(128, 128),
             nn.Dropout(0.4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(128, self.opt.n_classes),
-            # nn.Dropout(0.4),
-            # nn.LeakyReLU(0.2, inplace=True),
-            # nn.Linear(128, 10),
+            nn.Linear(128, 128),
+            nn.Dropout(0.4),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(128, 10),
             # nn.Sigmoid()
         )
         # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
         # feat_dim = self.opt.n_query_classes
 
-        self.fc1 = nn.Linear(self.opt.n_classes + 3, 2)
+        self.fc1 = nn.Linear(self.opt.n_classes + 3, 5)
 
         self.act = nn.Sigmoid()
 
@@ -142,7 +142,7 @@ class Generator(nn.Module):
 
         x = F.softmax(x, dim=1)
 
-        out = x[:, 1] * 0.5
+        out = x[:, 1] * 0.2 + x[:, 2] * 0.4 + x[:, 3] * 0.6 + x[:, 4] * 0.8
 
         return out
 
