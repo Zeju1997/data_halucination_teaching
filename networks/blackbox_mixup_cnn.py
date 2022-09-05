@@ -826,7 +826,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         self._compute_unrolled_model(input_train, target_train, eta, network_optimizer)
 
         # w_t = self.student.state_dict()
-        # w_t = self.generator.state_dict()
+        w_t = self.generator.state_dict()
         gradients, generator_loss, unrolled_loss = self.forward(w_t, model_features)
 
         self.student.train()
