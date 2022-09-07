@@ -30,8 +30,9 @@ from datasets import BaseDataset
 
 import networks.blackbox_unrolled as blackbox
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
+
+
+from utils.visualize import make_results_video_blackbox, make_results_video_2d_blackbox, make_results_img_blackbox, make_results_img_2d_blackbox
 
 import subprocess
 import glob
@@ -133,6 +134,8 @@ class Trainer:
         self.opt.model_name = "blackbox_unrolled_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        if not os.path.exists(self.opt.log_path):
+            os.makedirs(self.opt.log_path)
 
         self.visualize = True
 
@@ -158,13 +161,10 @@ class Trainer:
             # self.teacher.load_state_dict(torch.load('pretrained/teacher.pth'))
 
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
-
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
 
             # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
             # self.student = omniscient.StudentClassifier(self.opt.dim)
-        self.student.load_state_dict(self.teacher.state_dict())
-        self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
         """Convert all models to training mode

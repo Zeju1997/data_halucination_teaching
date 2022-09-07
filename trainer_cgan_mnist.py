@@ -36,6 +36,9 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+from utils.data import init_data
+
+from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
 import subprocess
 import glob
@@ -208,146 +211,11 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        if self.opt.data_mode == "cifar10":
-            print("Loading CIFAR10 data ...")
-
-            transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                     (0.2470, 0.2435, 0.2616)),
-            ])
-
-            train_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-            test_dataset = torchvision.datasets.CIFAR10(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
-
-            train_loader = DataLoader(train_dataset, batch_size=len(train_dataset))
-            test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
-
-            X = next(iter(train_loader))[0].numpy()
-            Y = next(iter(train_loader))[1].numpy()
-            (N, W, H, C) = train_dataset.data.shape
-            dim = W*H*C
-
-            sgd_example = utils.BaseConv(self.opt.eta)
-            tmp_student = utils.BaseConv(self.opt.eta)
-            # baseline = utils.BaseConv(self.opt.eta)
-
-        elif self.opt.data_mode == "mnist":
-            print("Loading MNIST data ...")
-
-            # MNIST normalizing
-            transform = transforms.Compose([transforms.ToTensor(),
-                                            transforms.Normalize([0.5], [0.5])
-            ])
-
-            train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
-            test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
-
-            '''
-            idx = (train_dataset.targets == self.opt.class_1) | (train_dataset.targets == self.opt.class_2)
-            train_dataset.targets = train_dataset.targets[idx]
-            train_dataset.data = train_dataset.data[idx]
-            train_dataset.targets = np.where(train_dataset.targets == self.opt.class_1, 0, 1)
-            indices = np.random.choice(len(train_dataset), self.opt.nb_train)
-            train_dataset.data = train_dataset.data[indices]
-            train_dataset.targets = train_dataset.targets[indices]
-            
-            idx = (test_dataset.targets == self.opt.class_1) | (test_dataset.targets == self.opt.class_2)
-            test_dataset.targets = test_dataset.targets[idx]
-            test_dataset.data = test_dataset.data[idx]
-            test_dataset.targets = np.where(test_dataset.targets == self.opt.class_1, 0, 1)
-            indices = np.random.choice(len(test_dataset), self.opt.nb_train)
-            test_dataset.data = test_dataset.data[indices]
-            test_dataset.targets = test_dataset.targets[indices]
-            '''
-
-            loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
-            X = next(iter(loader))[0].numpy()
-            Y = next(iter(loader))[1].numpy()
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-
-            # create new data set with class 1 as 0 and class 2 as 1
-            f = (Y == self.opt.class_1) | (Y == self.opt.class_2)
-            X = X[f]
-            Y = Y[f]
-            Y = np.where(Y == self.opt.class_1, 0, 1)
-
-            # Shuffle datasets
-            randomize = np.arange(X.shape[0])
-            np.random.shuffle(randomize)
-            X = X[randomize]
-            Y = Y[randomize]
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-
-        elif self.opt.data_mode == "gaussian":
-            print("Generating Gaussian data ...")
-
-            dim__diff = 7
-            nb_data_per_class = 1000
-
-            X, Y = self.init_data(self.opt.dim, nb_data_per_class)
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-            # baseline = utils.BaseLinear(self.opt.dim)
-
-            if self.visualize:
-                fig = plt.figure(figsize=(8, 5))
-                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-                plt.plot(a, b, '-r', label='y=wx+b')
-                plt.scatter(X[:, 0], X[:, 1], c=Y)
-                plt.title('Gaussian Data')
-                #plt.show()
-                plt.close()
-
-        elif self.opt.data_mode == "moon":
-            print("Generating moon data ...")
-
-            np.random.seed(0)
-            noise_val = 0.2
-
-            X, Y = make_moons(self.opt.nb_train+self.opt.nb_test, noise=noise_val)
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-            # baseline = utils.BaseLinear(self.opt.dim)
-
-            if self.visualize:
-                fig = plt.figure(figsize=(8, 5))
-                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-                plt.plot(a, b, '-r', label='y=wx+b')
-                plt.scatter(X[:, 0], X[:, 1], c=Y)
-                plt.title('Moon Data')
-                #plt.show()
-                plt.close()
-
-        elif self.opt.data_mode == "linearly_seperable":
-            print("Generating linearly seperable data ...")
-
-            X, Y = make_classification(
-                n_samples=self.opt.nb_train+self.opt.nb_test, n_features=2, n_redundant=0, n_informative=2, random_state=1, n_clusters_per_class=1
-            )
-            rng = np.random.RandomState(2)
-            X += 2 * rng.uniform(size=X.shape)
-
-            sgd_example = utils.BaseLinear(self.opt.dim)
-            tmp_student = utils.BaseLinear(self.opt.dim)
-            # baseline = utils.BaseLinear(self.opt.dim)
-
-            if self.visualize:
-                fig = plt.figure(figsize=(8, 5))
-                a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-                plt.plot(a, b, '-r', label='y=wx+b')
-                plt.scatter(X[:, 0], X[:, 1], c=Y)
-                plt.title('Linearly Seperable Data')
-                # plt.show()
-                plt.close()
+        if self.opt.init_data:
+            X, Y = init_data(self.opt)
         else:
-            print("Unrecognized data!")
-            sys.exit()
+            X = torch.load('X.pt')
+            Y = torch.load('Y.pt')
 
         # Shuffle datasets
         # randomize = np.arange(X.shape[0])
@@ -559,165 +427,41 @@ class Trainer:
         #  Train Teacher
         # ---------------------
 
-        # train teacher
-        accuracies = []
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[25], gamma=0.1)
-        for n in tqdm(range(self.opt.n_teacher_runs)):
-            if n != 0:
-                for i in range(nb_batch):
-                    i_min = i * self.opt.batch_size
-                    i_max = (i + 1) * self.opt.batch_size
-                    self.teacher.update(X_train[i_min:i_max].cuda(), Y_train[i_min:i_max].cuda())
+        if self.opt.train_wstar == False:
+            wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
+            wstar_trainer.train(self.teacher)
 
-            self.teacher.eval()
-            test = self.teacher(X_test.cuda()).cpu()
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            accuracies.append(acc)
-            print("Accuracy:", acc)
-            self.scheduler.step()
-
-            if acc > 0.6 and n == 0:
-                sys.exit()
-
-        if self.visualize == False:
-            fig = plt.figure()
-            plt.plot(accuracies, c="b", label="Teacher (CNN)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.legend()
-            plt.close()
-
-            fig = plt.figure(figsize=(8, 5))
-            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=Y)
-            plt.title('Initial Classifer Weight')
-            plt.close()
-
+        self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
         w_star = self.teacher.lin.weight
         w_star = w_star / torch.norm(w_star)
-        torch.save(self.teacher.state_dict(), 'teacher_wstar.pth')
 
         # ---------------------
         #  Train SGD
         # ---------------------
 
-        # train example
-        res_sgd = []
-        a_example = []
-        b_example = []
-        w_diff_sgd = []
-        sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
-        for idx in tqdm(range(self.opt.n_iter)):
-            if idx != 0:
-                i = torch.randint(0, nb_batch, size=(1,)).item()
-                data, label = self.data_sampler(X_train, Y_train, i)
+        if self.opt.train_sgd == False:
 
-                random_data = data.detach().clone().cpu().numpy()
-                random_label = label.detach().clone().cpu().numpy()
-                if idx == 1:
-                    random_samples = random_data # [np.newaxis, :]
-                    random_labels = random_label # [np.newaxis, :]
-                else:
-                    random_samples = np.concatenate((random_samples, random_data), axis=0)
-                    random_labels = np.concatenate((random_labels, random_label), axis=0)
+            sgd_example = utils.BaseLinear(self.opt.dim)
+            sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
-                sgd_example.update(data, label)
+            sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
+            sgd_trainer.train(sgd_example, w_star)
 
-            sgd_example.eval()
-            test = sgd_example(X_test.cuda()).cpu()
-
-            if self.opt.data_mode == "moon":
-                a, b = plot_classifier(sgd_example, X.max(axis=0), X.min(axis=0))
-                a_example.append(a)
-                b_example.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-
-            acc = nb_correct / X_test.size(0)
-            res_sgd.append(acc)
-
-            w = sgd_example.lin.weight
-            w = w / torch.norm(w)
-            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-            w_diff_sgd.append(diff.detach().clone().cpu())
-
-            print("w diff", diff)
+        self.experiment = "SGD"
+        res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
-        #  Train IMT
+        #  Train IMT Baseline
         # ---------------------
 
-        # train baseline
-        res_baseline = []
-        a_baseline = []
-        b_baseline = []
-        w_diff_baseline = []
-        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
-        for t in tqdm(range(self.opt.n_iter)):
-            if t != 0:
-                i = self.teacher.select_example(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
-                # i = torch.randint(0, nb_batch, size=(1,)).item()
+        if self.opt.train_baseline == False:
+            self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
-                best_data, best_label = self.data_sampler(X_train, Y_train, i)
+            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
+            imt_trainer.train(self.baseline, self.teacher, w_star)
 
-                selected_data = best_data.detach().clone().cpu().numpy()
-                selected_label = best_label.detach().clone().cpu().numpy()
-                if t == 1:
-                    selected_samples = selected_data # [np.newaxis, :]
-                    selected_labels = selected_label # [np.newaxis, :]
-                else:
-                    selected_samples = np.concatenate((selected_samples, selected_data), axis=0)
-                    selected_labels = np.concatenate((selected_labels, selected_label), axis=0)
-
-                self.baseline.update(best_data, best_label)
-
-            self.baseline.eval()
-            test = self.baseline(X_test.cuda()).cpu()
-
-            if self.opt.data_mode == "moon":
-                a, b = plot_classifier(self.baseline, X.max(axis=0), X.min(axis=0))
-                a_baseline.append(a)
-                b_baseline.append(b)
-
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            elif self.opt.data_mode == "cifar10":
-                tmp = torch.max(test, dim=1).indices
-                nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            else:
-                sys.exit()
-            acc = nb_correct / X_test.size(0)
-            res_baseline.append(acc)
-
-            w = self.baseline.lin.weight
-            w = w / torch.norm(w)
-            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-            w_diff_baseline.append(diff.detach().clone().cpu())
-
-            print("w diff", diff)
-
-            # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
-            # sys.stdout.flush()
-
-        print("Base line trained\n")
+        self.experiment = "IMT_Baseline"
+        res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
         #  Train Student
