@@ -294,7 +294,7 @@ class UnrolledOptimizer(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, generated_labels, real, epoch):
+    def forward(self, weight, w_star, netD, generated_labels, real, epoch):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -310,10 +310,8 @@ class UnrolledOptimizer(nn.Module):
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
         loss_stu = 0
         w_loss = 0
@@ -592,7 +590,7 @@ class UnrolledOptimizer_moon(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, valid):
+    def forward(self, weight, w_star, netD, valid):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -600,16 +598,18 @@ class UnrolledOptimizer_moon(nn.Module):
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
 
         loss_stu = 0
         w_loss = 0
         tau = 1
 
-        new_weight = w_init
+        new_weight = self.student.lin.weight
 
         model_paramters = list(self.generator.parameters())
 
@@ -678,7 +678,6 @@ class UnrolledOptimizer_moon(nn.Module):
         generated_samples = self.generator(x, generated_labels)
 
         # generated_labels = generated_labels.float()
-
         validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
         g_loss = self.adversarial_loss(validity, valid)
 
@@ -688,4 +687,4 @@ class UnrolledOptimizer_moon(nn.Module):
                                        inputs=model_paramters,
                                        create_graph=True, retain_graph=True)
 
-        return grad_stu, loss_stu, generated_samples, generated_labels, g_loss
+        return grad_stu, loss_stu, g_loss.unsqueeze(0), validity, generated_samples, generated_labels

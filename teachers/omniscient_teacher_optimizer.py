@@ -314,7 +314,7 @@ def __select_example__(teacher, student, X, y, batch_size):
             min_score = s2
             arg_min = i
             best_data = data
-            best_label = label
+            best_label = label # .squeeze(0)
             # print("arg min", arg_min, "s", min_score)
 
     # print("arg min", arg_min, "s", s)

@@ -38,7 +38,7 @@ class VGG(nn.Module):
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
         return nn.Sequential(*layers)
 
-net = VGG('VGG11')
-x = torch.randn(2, 3, 32, 32)
+# net = VGG('VGG11')
+# x = torch.randn(2, 3, 32, 32)
 # print(net(Variable(x)).size())
-print(net)
+# print(net)

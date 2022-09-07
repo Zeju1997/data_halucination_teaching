@@ -28,11 +28,18 @@ import teachers.utils as utils
 import matplotlib.pyplot as plt
 import data.dataset_loader as data_loader
 
+from torchvision.utils import save_image, make_grid
+
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 import subprocess
 import glob
+
+import imageio
+from pygifsicle import optimize
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
@@ -77,9 +84,11 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "optimized_" + self.opt.data_mode
+        self.opt.model_name = "whitebox_optimized_" + self.opt.data_mode
 
-        self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        if not os.path.exists(self.opt.log_path):
+            os.makedirs(self.opt.log_path)
 
         self.visualize = True
 
@@ -90,21 +99,16 @@ class Trainer:
 
         self.get_teacher_student()
 
+
     def get_teacher_student(self):
         if self.opt.data_mode == "cifar10":
             self.teacher = omniscient.OmniscientConvTeacher(self.opt.eta)
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
-            # self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            # self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
-            # self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            self.teacher = surrogate.SurrogateLinearTeacher(self.opt.dim)
-            self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-            self.baseline = surrogate.SurrogateLinearStudent(self.opt.dim)
-
-        self.student.load_state_dict(self.teacher.state_dict())
-        self.baseline.load_state_dict(self.teacher.state_dict())
+            self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
+            self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
+            self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -183,6 +187,7 @@ class Trainer:
             # MNIST normalizing
             transform = transforms.Compose([
                 transforms.ToTensor(),
+                # transforms.Normalize((0.5,), (0.5,)), # transforms.Normalize((0.1307,), (0.3081,)),
                 transforms.Normalize((0.1307,), (0.3081,)),
             ])
             train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
@@ -229,7 +234,7 @@ class Trainer:
         elif self.opt.data_mode == "moon":
             print("Generating moon data ...")
 
-            np.random.seed(0)
+            # np.random.seed(0)
             noise_val = 0.2
 
             X, Y = make_moons(self.opt.nb_train+self.opt.nb_test, noise=noise_val)
@@ -270,9 +275,6 @@ class Trainer:
             print("Unrecognized data!")
             sys.exit()
 
-        sgd_example.load_state_dict(self.teacher.state_dict())
-        # baseline.load_state_dict(self.teacher.state_dict())
-
         # Shuffle datasets
         randomize = np.arange(X.shape[0])
         np.random.shuffle(randomize)
@@ -304,9 +306,10 @@ class Trainer:
         # ---------------------
         #  Train Teacher
         # ---------------------
+
         print("Training Teacher ...")
         accuracies = []
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[25], gamma=0.1)
+        # self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[25], gamma=0.1)
         for n in tqdm(range(self.opt.n_teacher_runs)):
             if n != 0:
                 for i in range(nb_batch):
@@ -329,12 +332,13 @@ class Trainer:
             accuracies.append(acc)
             print("Accuracy:", acc)
 
-            self.scheduler.step()
+            # self.scheduler.step()
 
             if acc > 0.6 and n == 0:
                 sys.exit()
 
         w_star = self.teacher.lin.weight
+        w_star = w_star / torch.norm(w_star)
 
         if self.visualize == False:
             fig = plt.figure()
@@ -362,6 +366,7 @@ class Trainer:
         res_sgd = []
         res_i = []
         w_diff_sgd = []
+        sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
         for n in tqdm(range(self.opt.n_iter)):
             if n != 0:
                 i = torch.randint(0, nb_batch, size=(1,)).item()
@@ -389,7 +394,9 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_sgd.append(acc)
 
-            diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
+            w = sgd_example.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
 
         print("IMT baseline trained\n")
@@ -402,6 +409,7 @@ class Trainer:
         a_baseline = []
         b_baseline = []
         w_diff_baseline = []
+        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
                 # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
@@ -436,7 +444,9 @@ class Trainer:
             acc_base = nb_correct / X_test.size(0)
             res_baseline.append(acc_base)
 
-            diff = torch.linalg.norm(w_star - self.baseline.lin.weight, ord=2) ** 2
+            w = self.baseline.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_baseline.append(diff.detach().clone().cpu())
 
             print("iter", t, "acc baseline", acc_base)
@@ -444,7 +454,7 @@ class Trainer:
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
 
-        if self.visualize == True:
+        if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
             fig.set_size_inches(12, 6)
             ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
@@ -473,13 +483,12 @@ class Trainer:
         #  Train Student
         # ---------------------
 
-        res_i = [1] * 500
-
         res_student = []
         a_student = []
         b_student = []
         generated_samples = np.zeros(2)
         w_diff_student = []
+        self.student.load_state_dict(torch.load('teacher_w0.pth'))
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
                 # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
@@ -513,7 +522,9 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_student.append(acc)
 
-            diff = torch.linalg.norm(w_star - self.student.lin.weight, ord=2) ** 2
+            w = self.student.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_student.append(diff.detach().clone().cpu())
 
             print("iter", t, "acc student", acc)
@@ -521,9 +532,14 @@ class Trainer:
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
 
+        if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+            make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+        else:
+            # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
 
-
-        if self.visualize == True:
+        if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
             fig.set_size_inches(12, 6)
             ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
@@ -535,61 +551,20 @@ class Trainer:
             ax1.set_ylabel("Accuracy")
             ax1.legend(loc="lower right")
 
-            ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-            ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-            ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
+            ax2.plot(w_diff_sgd, 'g', label="SGD %s" % self.opt.data_mode)
+            ax2.plot(w_diff_baseline, 'b', label="IMT %s" % self.opt.data_mode)
+            ax2.plot(w_diff_student, 'r', label="Student %s" % self.opt.data_mode)
             ax2.legend(loc="lower left")
             ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
             ax2.set_xlabel("Iteration")
             ax2.set_ylabel("Distance between $w^t$ and $w^*$")
             #ax2.set_aspect('equal')
 
-            # plt.savefig('results_mnist_final.jpg')
-            # plt.close()
-            plt.show()
+            img_path = os.path.join(self.opt.log_path, 'results_{}_final.jpg'.format(self.opt.data_mode))
+            plt.savefig(img_path)
+            plt.close()
+            # plt.show()
 
-        if self.visualize == False:
-            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            for i in range(len(res_student)):
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                fig.set_size_inches(20, 5.8)
-                #ax1.plot(a, b, '-k', label='Teacher Classifier')
-                ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-                ax1.scatter(X[:, 0], X[:, 1], c=y)
-                ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
-                ax1.legend(loc="upper right")
-                ax1.set_title("Data Generation (Optimizer)")
-                ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-                ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-                #ax2.plot(a, b, '-k', label='Teacher Classifier')
-                ax2.plot(a_baseline[i], b_baseline[i], '-g', label='IMT Classifier')
-                ax2.scatter(X[:, 0], X[:, 1], c=y)
-                ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1, 0], marker='x')
-                ax2.legend(loc="upper right")
-                ax2.set_title("Data Selection (IMT)")
-                ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-                ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-
-                ax3.plot(res_sgd, 'bo', label="linear classifier", alpha=0.5)
-                ax3.plot(res_baseline[:i+1], 'go', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-                ax3.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-                ax3.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-                ax3.legend(loc="upper right")
-                ax3.set_title("Test Set Accuracy")
-                #ax3.set_aspect('equal')
-
-                plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
-
-                plt.close()
-
-            os.chdir(CONF.PATH.OUTPUT)
-            subprocess.call([
-                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-                'video_name.mp4'
-            ])
-            for file_name in glob.glob("*.png"):
-                os.remove(file_name)
 
     def main1(self):
         X_test = next(iter(self.test_loader))[0].numpy()

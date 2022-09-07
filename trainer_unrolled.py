@@ -36,8 +36,14 @@ import networks.unrolled_optimizer as unrolled
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+
+import imageio
+
 import subprocess
 import glob
+
+import csv
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
@@ -98,6 +104,21 @@ def to_matrix(l, n):
     return [l[i:i+n] for i in range(0, len(l), n)]
 
 
+def initialize_weights(m):
+  if isinstance(m, nn.Conv2d):
+      nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
+      if m.bias is not None:
+          nn.init.constant_(m.bias.data, 0)
+  elif isinstance(m, nn.BatchNorm2d):
+      if m.bias is not None:
+          nn.init.constant_(m.weight.data, 1)
+          nn.init.constant_(m.bias.data, 0)
+  elif isinstance(m, nn.Linear):
+      if m.bias is not None:
+          nn.init.kaiming_uniform_(m.weight.data)
+          nn.init.constant_(m.bias.data, 0)
+
+
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -105,6 +126,8 @@ class Trainer:
         self.opt.model_name = "whitebox_unrolled_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        if not os.path.exists(self.opt.log_path):
+            os.makedirs(self.opt.log_path)
 
         self.visualize = True
 
@@ -121,8 +144,9 @@ class Trainer:
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-
+            self.teacher.apply(initialize_weights)
             torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
 
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
@@ -268,7 +292,7 @@ class Trainer:
         elif self.opt.data_mode == "moon":
             print("Generating moon data ...")
 
-            np.random.seed(0)
+            # np.random.seed(0)
             noise_val = 0.2
 
             X, Y = make_moons(self.opt.nb_train+self.opt.nb_test, noise=noise_val)
@@ -310,9 +334,6 @@ class Trainer:
         else:
             print("Unrecognized data!")
             sys.exit()
-
-        sgd_example.load_state_dict(self.teacher.state_dict())
-        tmp_student.load_state_dict(self.teacher.state_dict())
 
         # Shuffle datasets
         randomize = np.arange(X.shape[0])
@@ -390,6 +411,8 @@ class Trainer:
             plt.close()
 
         w_star = self.teacher.lin.weight
+        w_star = w_star / torch.norm(w_star)
+        torch.save(self.teacher.state_dict(), 'teacher_wstar.pth')
 
         # ---------------------
         #  Train SGD
@@ -440,10 +463,10 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_sgd.append(acc)
 
-            diff = torch.linalg.norm(w_star - sgd_example.lin.weight, ord=2) ** 2
+            w = sgd_example.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_sgd.append(diff.detach().clone().cpu())
-
-        print("w diff", diff)
 
         # ---------------------
         #  Train IMT Baseline
@@ -490,10 +513,12 @@ class Trainer:
             acc_base = nb_correct / X_test.size(0)
             res_baseline.append(acc_base)
 
-            diff = torch.linalg.norm(w_star - self.baseline.lin.weight, ord=2) ** 2
+            w = self.baseline.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_baseline.append(diff.detach().clone().cpu())
 
-            print("w diff", diff)
+            print("acc", acc_base)
 
             sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
             sys.stdout.flush()
@@ -509,7 +534,7 @@ class Trainer:
             unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
         else:
             netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
+            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
 
         netG.train()
         netG.apply(weights_init)
@@ -524,15 +549,16 @@ class Trainer:
 
         generated_samples = np.zeros(2)
 
-        w_init = self.student.lin.weight
-        # for idx in tqdm(range(self.opt.n_iter)):
+        # tmp_student.load_state_dict(torch.load('teacher_w0.pth'))
+        # w_init = tmp_student.state_dict()
         for idx in tqdm(range(self.opt.n_unroll)):
             if idx != 0:
 
                 w_t = netG.state_dict()
-                gradients, loss = unrolled_optimizer(w_t, w_star, w_init)
+                gradients, loss, train_loss = unrolled_optimizer(w_t, w_star)
 
-                loss_student.append(loss.item())
+                # loss_student.append(loss.item())
+                loss_student = loss_student + train_loss
 
                 with torch.no_grad():
                     for p, g in zip(netG.parameters(), gradients):
@@ -540,18 +566,19 @@ class Trainer:
 
                 optimizer.step()
 
-        plt.plot(loss_student, c='b', label="loss")
-        plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        plt.xlabel("Iteration")
-        plt.ylabel("Loss")
-        plt.legend()
-        plt.show()
+        # plt.plot(loss_student, c='b', label="loss")
+        # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+        # plt.xlabel("Iteration")
+        # plt.ylabel("Loss")
+        # plt.legend()
+        # plt.show()
 
         loss111 = []
         self.student.load_state_dict(torch.load('teacher_w0.pth'))
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 w_t = self.student.lin.weight
+                w_t = w_t / torch.norm(w_t)
 
                 '''
                 y = torch.randint(0, 2, (1,), dtype=torch.float).cuda()
@@ -566,6 +593,7 @@ class Trainer:
                 z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
                 x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+                # x = torch.cat((w_t, w_t-w_star), dim=1)
                 generated_sample = netG(x, gt_y)
 
                 if self.opt.data_mode == "mnist":
@@ -578,7 +606,7 @@ class Trainer:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                     generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
 
-                self.student.update(generated_sample, gt_y)
+                self.student.update(generated_sample.detach(), gt_y)
 
                 #self.student(generated_sample)
                 #out = self.student(generated_sample)
@@ -604,13 +632,21 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_student.append(acc)
 
-            # diff = self.teacher.lin.weight - example.lin.weight
-            diff = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
+            w = self.student.lin.weight
+            w = w / torch.norm(w)
+            diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_student.append(diff.detach().clone().cpu())
 
-            print("w diff", diff)
+            print("acc", acc)
 
-        if self.visualize == True:
+        if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+            make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+        else:
+            # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+
+        if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
             fig.set_size_inches(12, 6)
             ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
@@ -631,7 +667,8 @@ class Trainer:
             ax2.set_ylabel("Distance between $w^t$ and $w^*$")
             #ax2.set_aspect('equal')
 
-            plt.savefig('results_mnist_final.jpg')
+            img_path = os.path.join(self.opt.log_path, 'results_{}_final.jpg'.format(self.opt.data_mode))
+            plt.savefig(img_path)
             plt.close()
             # plt.show()
 
@@ -639,7 +676,7 @@ class Trainer:
             a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
             for i in tqdm(range(len(res_student))):
                 fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                fig.set_size_inches(20, 5.8)
+                fig.set_size_inches(20, 6)
                 ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
                 ax1.scatter(X[:, 0], X[:, 1], c=Y)
                 ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
@@ -676,6 +713,29 @@ class Trainer:
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
 
+    def make_gif(self):
+        video_dir = os.path.join(self.opt.log_path, "video")
+
+        '''
+        os.chdir(video_dir)
+        images = []
+        for file_name in tqdm(sorted(glob.glob("*.png"))):
+            # print(file_name)
+            images.append(imageio.imread(file_name))
+            # os.remove(file_name)
+        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
+        imageio.mimsave(gif_path, images, fps=20)
+        '''
+
+        images = []
+        for file_name in tqdm(sorted(os.listdir(video_dir))):
+            if file_name.endswith('.png'):
+                file_path = os.path.join(video_dir, file_name)
+                images.append(imageio.imread(file_path))
+        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
+        # imageio.mimsave(gif_path, images, fps=20)
+        imageio.mimsave(gif_path, images, fps=20)
+
     def data_sampler(self, X, Y, i):
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
@@ -684,7 +744,6 @@ class Trainer:
         y = Y[i_min:i_max].cuda()
 
         return x, y
-
 
     def train(self):
         X_test = next(iter(self.test_loader))[0].numpy()
