@@ -16,7 +16,7 @@ optim: Adam
 hidden_dim: 8
 latent_dim: 2
 n_unroll: 1000 # 1000
-n_unroll_blocks: 40 # 10
+n_unroll_blocks: 10 # 10
 n_epochs: 10 # 50
 start_saving: 0
 save_frequency: 1
