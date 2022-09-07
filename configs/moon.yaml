@@ -5,7 +5,7 @@ n_iter: 300 # 800 # 1500
 learning_rate: 1e-4
 batch_size: 1
 nb_train: 1000
-nb_test: 800
+nb_test: 200
 dim: 2
 n_teacher_runs: 30
 class_1: 0
@@ -15,8 +15,8 @@ gd_n: 300
 optim: Adam
 hidden_dim: 8
 latent_dim: 2
-n_unroll: 1000
-n_unroll_blocks: 40
+n_unroll: 1000 # 300
+n_unroll_blocks: 40 # 10
 n_epochs: 20 # 50
 start_saving: 0
 save_frequency: 1

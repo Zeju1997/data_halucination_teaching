@@ -1,17 +1,22 @@
 import torch
+from torchvision.utils import save_image, make_grid
 import numpy as np
 import matplotlib.pyplot as plt
 import imageio
 import glob
 import os
 
-def make_results_video(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix):
-    unproj_matrix = np.linalg.pinv(proj_matrix)
-    # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
-    generated_samples = generated_samples @ unproj_matrix
-    img_shape = (1, 28, 28)
-    generated_samples = np.reshape(generated_samples, (generated_samples.shape[0], *img_shape))
-    generated_samples = torch.from_numpy(generated_samples)
+
+def make_results_video(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
+    if proj_matrix is not None:
+        unproj_matrix = np.linalg.pinv(proj_matrix)
+        # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
+        generated_samples = generated_samples @ unproj_matrix
+        img_shape = (1, 28, 28)
+        generated_samples = np.reshape(generated_samples, (generated_samples.shape[0], *img_shape))
+        generated_samples = torch.from_numpy(generated_samples)
+    else:
+        generated_samples = torch.from_numpy(generated_samples)
 
     for i in range(len(res_student)-1):
 
@@ -84,11 +89,62 @@ def make_results_video(opt, X, Y, a_student, b_student, generated_samples, gener
         os.remove(file_name)
     '''
 
-def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
+
+def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
 
     print("generated samples", generated_samples.shape)
 
-    unproj_matrix = np.linalg.pinv(proj_matrix)
+    if proj_matrix is not None:
+        unproj_matrix = np.linalg.pinv(proj_matrix)
+        # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
+        generated_samples = generated_samples @ unproj_matrix
+        img_shape = (1, 28, 28)
+        generated_samples = np.reshape(generated_samples, (generated_samples.shape[0], *img_shape))
+        generated_samples = torch.from_numpy(generated_samples)
+    else:
+        generated_samples = torch.from_numpy(generated_samples)
+
+    generated_sample = generated_samples[-1].squeeze()
+    generated_label = generated_labels[-1]
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+    fig.set_size_inches(20, 5.8)
+    # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
+    # ax1.scatter(X[:, 0], X[:, 1], c=Y)
+    # ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
+    ax1.imshow(generated_sample, cmap='gray')
+    ax1.legend(loc="upper right")
+    ax1.set_title("Data Generation (Ours)")
+    #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
+    #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
+
+    ax2.plot(res_sgd, c='g', label="SGD %s" % opt.data_mode)
+    ax2.plot(res_baseline, c='b', label="IMT %s" % opt.data_mode)
+    ax2.plot(res_student, c='r', label="Student %s" % opt.data_mode)
+    # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
+    ax2.set_title("Test accuracy " + str(opt.data_mode) + " (class : " + str(opt.class_1) + ", " + str(opt.class_2) + ")")
+    ax2.set_xlabel("Iteration")
+    ax2.set_ylabel("Accuracy")
+    ax2.legend(loc="lower right")
+
+    ax3.plot(w_diff_sgd, 'g', label="SGD %s" % opt.data_mode)
+    ax3.plot(w_diff_baseline, 'b', label="IMT %s" % opt.data_mode)
+    ax3.plot(w_diff_student, 'r', label="Student %s" % opt.data_mode)
+    ax3.legend(loc="lower left")
+    ax3.set_title("w diff " + str(opt.data_mode) + " (class : " + str(opt.class_1) + ", " + str(opt.class_2) + ")")
+    ax3.set_xlabel("Iteration")
+    ax3.set_ylabel("Distance between $w^t$ and $w^*$")
+    #ax3.set_aspect('equal')
+
+    save_folder = os.path.join(opt.log_path, "imgs")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
+    plt.savefig(img_path)
+    plt.close()
+
+    '''
     n_rows = 10
     indices = torch.randint(0, len(generated_samples), (n_rows**2,))
     labels = generated_labels[indices]
@@ -137,10 +193,11 @@ def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generat
     img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
     plt.savefig(img_path)
     plt.close()
+    '''
 
 def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch):
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-    fig.set_size_inches(20, 6)
+    fig.set_size_inches(20, 5.8)
     # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
     ax1.scatter(X[:, 0], X[:, 1], c=Y)
     ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
@@ -171,7 +228,7 @@ def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, gene
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
+    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
     plt.savefig(img_path)
     plt.close()
 

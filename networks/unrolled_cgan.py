@@ -317,7 +317,7 @@ class UnrolledOptimizer(nn.Module):
         w_loss = 0
         tau = 1
 
-        new_weight = w_init
+        new_weight = self.student.lin.weight
 
         n = 0
 

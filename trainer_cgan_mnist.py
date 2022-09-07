@@ -838,7 +838,6 @@ class Trainer:
                 epoch_DGz.append(z_out.mean().item())
                 epoch_G_losses.append(G_loss.item())
 
-
                 # G_loss.backward()
                 optimG.step()
 
@@ -847,7 +846,7 @@ class Trainer:
                 ###########################
 
                 real_labels_fill = fill[real_labels].cuda()
-                real_preds = netD(real_samples, real_labels_fill.long())
+                real_preds = netD(real_samples, real_labels_fill)
                 D_real_loss = adversarial_loss(real_preds, real)
 
                 fake_preds = netD(generated_samples.detach(), generated_labels_fill)
@@ -947,6 +946,7 @@ class Trainer:
                     diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                     w_diff_student.append(diff.detach().clone().cpu())
 
+                '''
                 if self.opt.data_mode == "mnist":
                     save_folder = os.path.join(self.opt.log_path, "imgs")
                     if not os.path.exists(save_folder):
@@ -967,11 +967,14 @@ class Trainer:
                         fake_test = netG(w, test_labels_onehot).cpu()
                         torchvision.utils.save_image(fake_test, img_path, nrow=10, padding=0, normalize=True)
                     netG.train()
+                '''
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                    make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                    make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                 else:
-                    self.make_results_img(a_student, b_student, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, G_losses, D_losses, epoch, proj_matrix)
+                    make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                    make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):
@@ -985,9 +988,9 @@ class Trainer:
                 to_save = netD.state_dict()
                 torch.save(to_save, save_path)
 
-                self.make_results_video_generated_data(generated_samples, epoch)
+                # self.make_results_video_generated_data(generated_samples, epoch)
 
-
+        '''
         plt.figure(figsize=(10,5))
         plt.title("Discriminator and Generator loss during Training")
         # plot Discriminator and generator loss
@@ -1002,6 +1005,7 @@ class Trainer:
         plt.xlabel("num_epochs")
         plt.legend()
         plt.show()
+        '''
 
         if self.visualize == True:
             fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -1028,13 +1032,6 @@ class Trainer:
             # plt.close()
             plt.show()
 
-        if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-            make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-        else:
-            # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-            make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-
     def compute_gradient_penalty(self, D, real_samples, fake_samples):
         """Calculates the gradient penalty loss for WGAN GP"""
         # Random weight term for interpolation between real and fake samples
@@ -1055,113 +1052,6 @@ class Trainer:
         gradients = gradients.view(gradients.size(0), -1)
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
-
-
-    def make_results_img(self, a_student, b_student, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
-        n_rows = 2
-        # indices = torch.randint(0, len(generated_samples), (n_rows**2,))
-        # labels = generated_labels[indices]
-        # samples = generated_samples[indices]
-
-        # gen_imgs = samples @ unproj_matrix
-
-        # img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
-        # gen_imgs = samples
-        # im = np.reshape(samples, (samples.shape[0], *img_shape))
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        '''
-        img_path = os.path.join(save_folder, "results_examples_{}.png".format(epoch))
-        torchvision.utils.save_image(generated_samples, img_path, nrow=4, padding=0, normalize=True)
-        '''
-        '''
-        grid = make_grid(im, nrow=n_rows, normalize=True)
-        fig1, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-        ax.axis('off')
-        plt.title("Fake Images, Label", )
-        img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-        # plt.show()
-        '''
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-        ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
-        ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
-        ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
-        # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        ax1.set_xlabel("Iteration")
-        ax1.set_ylabel("Accuracy")
-        ax1.legend(loc="lower right")
-
-        ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-        ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-        ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
-        ax2.legend(loc="lower left")
-        ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        ax2.set_xlabel("Iteration")
-        ax2.set_ylabel("Distance between $w^t$ and $w^*$")
-        #ax2.set_aspect('equal')
-
-        # ax3.plot(loss_g, color='orange', label="netG loss")
-        # ax3.plot(loss_d, c='b', label="netD loss")
-        # ax3.plot(loss_student, c='r', label="generator loss")
-        # ax3.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax3.xlabel("Iteration")
-        # ax3.ylabel("Loss")
-        # ax3.legend(loc="upper right")
-
-        # im = torch.from_numpy(generated_samples)
-        # grid = make_grid(im, nrow=n_rows, normalize=True)
-        # ax4.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-        # ax4.axis('off')
-        # ax4.set_title("Fake Images, Label", )
-
-        img_path = os.path.join(save_folder, "results_w_diff_{}.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
-    def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        fig.set_size_inches(18, 6)
-        # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
-        ax1.legend(loc="upper right")
-        ax1.set_title("Data Generation (Optimizer)")
-        #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-        #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-        ax2.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
-        ax2.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
-        ax2.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
-        # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax2.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        ax2.set_xlabel("Iteration")
-        ax2.set_ylabel("Accuracy")
-        ax2.legend(loc="lower right")
-
-        ax3.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-        ax3.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-        ax3.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
-        ax3.legend(loc="lower left")
-        ax3.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        ax3.set_xlabel("Iteration")
-        ax3.set_ylabel("Distance between $w^t$ and $w^*$")
-        #ax3.set_aspect('equal')
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
 
     def make_results_video_generated_data(self, generated_samples, epoch):
         n = generated_samples.shape[0]
