@@ -478,7 +478,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD, generated_labels, real):
+    def forward(self, weight, w_star, w_init, netD, generated_labels, real, proj_matrix):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -524,9 +524,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # z = Variable(torch.randn(gt_x.shape)).cuda()
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
+            # gt_x = gt_x.reshape(self.opt.batch_size, -1)
+            # z = gt_x @ proj_matrix.cuda()
+
+            gt_x = gt_x / torch.norm(gt_x)
+
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
             w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, z), dim=1)
+            x = torch.cat((w, gt_x), dim=1)
             generated_x = self.generator(x, gt_y_onehot)
             generated_x = generated_x.view(self.opt.batch_size, -1)
             generated_x = generated_x @ self.proj_matrix.cuda()
@@ -568,6 +573,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         # loss_stu = self.loss_fn(out_stu, gt_y)
+
+        # w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
 
         z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
         w_t = w_t.repeat(self.opt.batch_size, 1)
