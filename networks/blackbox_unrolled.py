@@ -11,6 +11,8 @@ from torch.autograd import Variable
 
 import numpy as np
 
+from tqdm import tqdm
+
 
 def mixup_data(gt_x, generated_x, gt_y, generated_y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
@@ -118,7 +120,7 @@ class Generator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = self.opt.latent_dim
+        in_channels = teacher.lin.weight.size(1) + self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -295,7 +297,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix):
+    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
         super(UnrolledBlackBoxOptimizer_moon, self).__init__()
 
         self.opt = opt
@@ -335,22 +337,26 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         with torch.no_grad():
             # for param1 in self.generator.parameters():
             #    param1 = weight
+            # self.generator.load_state_dict(weight)
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
             self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
         loss_stu = 0
         w_loss = 0
         tau = 1
 
-        new_weight = w_init
+        new_weight = self.student.lin.weight
 
         model_paramters = list(self.generator.parameters())
 
         for i in range(self.opt.n_unroll_blocks):
             w_t = self.student.lin.weight
+            w_t = w_t / torch.norm(w_t)
 
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
@@ -360,13 +366,13 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
             # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-            x = torch.cat((w_t, w_t-w_star, z), dim=1)
+            x = torch.cat((w_t, z), dim=1)
             generated_x = self.generator(x, gt_y)
 
-            generated_x_proj = generated_x @ self.proj_matrix.cuda()
+            # generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
-            out = self.student(generated_x_proj)
+            out = self.student(generated_x)
 
             loss = self.loss_fn(out, gt_y.float())
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
@@ -382,11 +388,11 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
                 tau = 0.95 * tau
 
             # self.student.eval()
-            out_stu = self.teacher(generated_x_proj)
+            out_stu = self.teacher(generated_x)
             # out_stu = self.student(generated_x)
             loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
+        # w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
 
         '''
         grad_stu = torch.autograd.grad(outputs=loss_stu,
@@ -416,7 +422,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         # z = Variable(torch.randn(gt_x.shape)).cuda()
 
         # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-        x = torch.cat((w_t, w_t-w_star, z), dim=1)
+        x = torch.cat((w_t, z), dim=1)
         generated_samples = self.generator(x, generated_labels)
 
         # generated_labels = generated_labels.float()
@@ -488,16 +494,18 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
 
         loss_stu = 0
         w_loss = 0
         tau = 1
 
-        new_weight = w_init
+        new_weight = self.student.lin.weight
 
         n = 0
 
@@ -506,6 +514,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         for i in range(self.opt.n_unroll_blocks):
             n = n + 1
             w_t = self.student.lin.weight
+            w_t = w_t / torch.norm(w_t)
 
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
@@ -513,18 +522,18 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             # Sample noise and labels as generator input
             # z = Variable(torch.randn(gt_x.shape)).cuda()
-            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim-24))).cuda()
+            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
             w = w_t.repeat(self.opt.batch_size, 1)
             x = torch.cat((w, z), dim=1)
             generated_x = self.generator(x, gt_y_onehot)
             generated_x = generated_x.view(self.opt.batch_size, -1)
-            generated_x_proj = generated_x @ self.proj_matrix.cuda()
+            generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
             # out = self.student(mixed_x)
-            out = self.student(generated_x_proj)
+            out = self.student(generated_x)
 
             loss = self.loss_fn(out, gt_y.float())
 
@@ -560,7 +569,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         # loss_stu = self.loss_fn(out_stu, gt_y)
 
-        z = torch.randn(self.opt.batch_size, self.opt.latent_dim-24).cuda()
+        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
         w_t = w_t.repeat(self.opt.batch_size, 1)
         x = torch.cat((w_t, z), dim=1)
 

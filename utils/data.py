@@ -114,6 +114,11 @@ def init_data(opt):
         #
         # tmp_student = utils.BaseLinear(opt.dim)
 
+        img_shape = (opt.channels, opt.img_size, opt.img_size)
+        proj_matrix = torch.empty(int(np.prod(img_shape)), opt.dim).normal_(mean=0, std=0.1)
+
+        torch.save(proj_matrix, 'proj_matrix.pt')
+
     elif opt.data_mode == "gaussian":
         print("Generating Gaussian data ...")
 
@@ -183,6 +188,4 @@ def init_data(opt):
 
     torch.save(X, 'X.pt')
     torch.save(Y, 'Y.pt')
-
-    return X, Y
 

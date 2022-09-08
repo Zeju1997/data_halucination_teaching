@@ -28,4 +28,7 @@ model_name: Blackbox_MNIST
 channels: 1
 img_size: 28
 n_query_classes: 10
-
+train_student: True
+train_sgd: True
+train_baseline: True
+train_wstar: True
