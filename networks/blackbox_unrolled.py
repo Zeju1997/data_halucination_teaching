@@ -120,7 +120,7 @@ class Generator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + self.opt.latent_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -507,12 +507,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         new_weight = self.student.lin.weight
 
-        n = 0
+        w_init = self.student.lin.weight
+        w_init = w_init / torch.norm(w_init)
 
         model_paramters = list(self.generator.parameters())
 
+        train_loss = []
+
         for i in range(self.opt.n_unroll_blocks):
-            n = n + 1
             w_t = self.student.lin.weight
             w_t = w_t / torch.norm(w_t)
 
@@ -527,12 +529,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # gt_x = gt_x.reshape(self.opt.batch_size, -1)
             # z = gt_x @ proj_matrix.cuda()
 
-            gt_x = gt_x / torch.norm(gt_x)
+            gt_x_norm = gt_x / torch.norm(gt_x)
 
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, gt_x), dim=1)
+            w = torch.cat((w_t, w_t-w_init), dim=1)
+            w = w.repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, gt_x_norm), dim=1)
             generated_x = self.generator(x, gt_y_onehot)
+
             generated_x = generated_x.view(self.opt.batch_size, -1)
             generated_x = generated_x @ self.proj_matrix.cuda()
 
@@ -560,25 +564,31 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # self.student.eval()
             # out_stu = self.teacher(generated_x)
             # out_stu = self.student(generated_x)
-            # out_stu = self.student(mixed_x)
             # out_stu = self.student(gt_x)
 
             # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
-            # loss_stu = loss_stu + tau * mixup_criterion(self.loss_fn, out_stu, targets_a.float(), targets_b.float(), lam)
 
             out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
             loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
             # print(n, "After backward pass", torch.cuda.memory_allocated(0))
 
+            train_loss.append(loss.item())
+
         # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         # loss_stu = self.loss_fn(out_stu, gt_y)
 
         # w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
 
+        w_t = self.student.lin.weight
+        w_t = w_t / torch.norm(w_t)
         z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
-        w_t = w_t.repeat(self.opt.batch_size, 1)
-        x = torch.cat((w_t, z), dim=1)
+
+        w = torch.cat((w_t, w_t-w_init), dim=1)
+        w = w.repeat(self.opt.batch_size, 1)
+        # w = w_t.repeat(self.opt.batch_size, 1)
+        gt_x_norm = gt_x / torch.norm(gt_x)
+        x = torch.cat((w, gt_x_norm), dim=1)
 
         # generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
         generated_labels_onehot = onehot[generated_labels].cuda()
@@ -589,7 +599,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         z_out = netD(generated_samples, generated_labels_fill)
         g_loss = self.adversarial_loss(z_out, real)
 
-        alpha = 0.001
+        alpha = 1 # 0.001
         # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
         loss_final = loss_stu
         # loss_final = loss_stu + alpha * g_loss
@@ -602,4 +612,4 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                                        inputs=model_paramters,
                                        create_graph=False, retain_graph=False)
 
-        return grad_stu, loss_stu, g_loss, z_out, generated_samples
+        return grad_stu, loss_stu, g_loss, z_out, generated_samples, train_loss

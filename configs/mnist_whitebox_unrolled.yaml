@@ -15,10 +15,14 @@ lr_factor: 2
 optim: AMSGrad
 hidden_dim: 32
 latent_dim: 24
-n_unroll: 1000
+n_unroll: 100 #  0
 n_unroll_blocks: 40
 n_epochs: 50
 start_saving: 1
 save_frequency: 1
 label_dim: 10
 n_critic: 1
+train_student: True
+train_sgd: True
+train_baseline: True
+train_wstar: True

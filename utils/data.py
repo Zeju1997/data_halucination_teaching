@@ -65,8 +65,6 @@ def init_data(opt):
     elif opt.data_mode == "mnist":
         print("Loading MNIST data ...")
 
-        print(CONF.PATH.DATA)
-
         # MNIST normalizing
         transform = transforms.Compose([transforms.ToTensor(),
                                         transforms.Normalize([0.5], [0.5])
@@ -97,7 +95,9 @@ def init_data(opt):
         X = next(iter(loader))[0].numpy()
         Y = next(iter(loader))[1].numpy()
 
-        # sgd_example = utils.BaseLinear(opt.dim)
+        # (N, W, H) = train_dataset.data.shape
+        # dim = W*H
+        # X = X.reshape((N, dim))
 
         # create new data set with class 1 as 0 and class 2 as 1
         f = (Y == opt.class_1) | (Y == opt.class_2)
@@ -110,9 +110,6 @@ def init_data(opt):
         np.random.shuffle(randomize)
         X = X[randomize]
         Y = Y[randomize]
-
-        #
-        # tmp_student = utils.BaseLinear(opt.dim)
 
         img_shape = (opt.channels, opt.img_size, opt.img_size)
         proj_matrix = torch.empty(int(np.prod(img_shape)), opt.dim).normal_(mean=0, std=0.1)

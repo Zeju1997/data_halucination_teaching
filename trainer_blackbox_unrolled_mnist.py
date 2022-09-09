@@ -394,6 +394,8 @@ class Trainer:
         Dx_values = []
         DGz_values = []
 
+        test_loss = []
+
         # number of training steps done on discriminator
         step = 0
         for epoch in tqdm(range(self.opt.n_epochs)):
@@ -432,15 +434,17 @@ class Trainer:
                     # G_loss.backward()
                     optimG.step()
                     '''
+                    # netG.zero_grad()
 
                     generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
                     generated_labels_onehot = onehot[generated_labels].cuda()
                     generated_labels_fill = fill[generated_labels].cuda()
 
-                    netG.zero_grad()
                     w_t = netG.state_dict()
-                    gradients, generator_loss, G_loss, z_out, generated_samples = unrolled_optimizer(w_t, w_star, w_init, netD, generated_labels, real, proj_matrix)
+                    gradients, generator_loss, G_loss, z_out, generated_samples, train_loss = unrolled_optimizer(w_t, w_star, w_init, netD, generated_labels, real, proj_matrix)
                     loss_student.append(generator_loss.item())
+
+                    test_loss = test_loss + train_loss
 
                     with torch.no_grad():
                         for p, g in zip(netG.parameters(), gradients):
@@ -483,6 +487,22 @@ class Trainer:
                         D_loss.backward()
                         optimD.step()
 
+                '''
+                plt.figure(figsize=(10, 5))
+                plt.title("Discriminator and Generator loss during Training")
+                # plot Discriminator and generator loss
+                plt.plot(test_loss, label="D Loss")
+                plt.legend()
+                plt.show()
+
+                plt.figure(figsize=(10, 5))
+                plt.title("Discriminator and Generator loss during Training")
+                # plot Discriminator and generator loss
+                plt.plot(loss_student, label="D Loss")
+                plt.legend()
+                plt.show()
+                '''
+
                 # calculate average value for one epoch
                 D_losses.append(sum(epoch_D_losses)/len(epoch_D_losses))
                 G_losses.append(sum(epoch_G_losses)/len(epoch_G_losses))
@@ -499,9 +519,11 @@ class Trainer:
                 w_diff_student = []
 
                 self.student.load_state_dict(torch.load('teacher_w0.pth'))
+                w_init = self.student.lin.weight
+                w_init = w_init / torch.norm(w_init)
                 netG.eval()
 
-                self.opt.batch_size = 1
+                # self.opt.batch_size = 1
 
                 for idx in tqdm(range(self.opt.n_iter)):
                     if idx != 0:
@@ -517,9 +539,9 @@ class Trainer:
 
                         gt_x = gt_x / torch.norm(gt_x)
 
-                        # w = torch.cat((w_t, w_t-w_star), dim=1).repeat(self.opt.batch_size, 1)
-                        w_t = w_t.repeat(self.opt.batch_size, 1)
-                        x = torch.cat((w_t, gt_x), dim=1)
+                        w = torch.cat((w_t, w_t-w_init), dim=1).repeat(self.opt.batch_size, 1)
+                        # w = w_t.repeat(self.opt.batch_size, 1)
+                        x = torch.cat((w, gt_x), dim=1)
                         generated_sample = netG(x, gt_y_onehot)
 
                         if idx == 1:
@@ -530,10 +552,10 @@ class Trainer:
                             generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
 
                         if self.opt.data_mode == "mnist":
-                            generated_sample = generated_sample.view(self.opt.batch_size, -1)
+                            generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
                             generated_sample = generated_sample @ proj_matrix.cuda()
 
-                        self.student.update(generated_sample, gt_y)
+                        self.student.update(generated_sample.detach(), gt_y)
 
                     self.student.eval()
                     test = self.student(X_test.cuda()).cpu()

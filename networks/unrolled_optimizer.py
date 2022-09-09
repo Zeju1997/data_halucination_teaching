@@ -20,6 +20,7 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
         in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
@@ -310,7 +311,9 @@ class UnrolledOptimizer(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn(gt_x.shape)).cuda()
 
-            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+            # w = torch.cat((w_t, w_t-w_star), dim=1)
+            w = w_t.repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, gt_x), dim=1)
             # x = torch.cat((w_t, w_t-w_star), dim=1)
             generated_x = self.generator(x, gt_y)
 
@@ -320,7 +323,7 @@ class UnrolledOptimizer(nn.Module):
             # self.student.train()
             out = self.student(generated_x)
 
-            loss = self.loss_fn(out, gt_y.unsqueeze(0).float())
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
 
             # with torch.no_grad():
@@ -342,7 +345,7 @@ class UnrolledOptimizer(nn.Module):
 
             # self.student.eval()
             out_stu = self.teacher(generated_x)
-            loss_teacher = tau * self.loss_fn(out_stu, gt_y.unsqueeze(0))
+            loss_teacher = tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
             loss_stu = loss_stu + loss_teacher
             train_loss.append(loss_teacher.item())
 
