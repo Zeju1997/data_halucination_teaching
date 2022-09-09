@@ -55,10 +55,10 @@ class Generator(nn.Module):
         in_channels = student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
-            layers = [nn.Linear(in_feat, out_feat)]
+            layers = [nn.Linear(in_feat, out_feat, bias=False)]
             if normalize:
                 layers.append(nn.BatchNorm1d(out_feat, 0.8))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            layers.append(nn.LeakyReLU(0.2))
             return layers
 
         self.model = nn.Sequential(
@@ -66,7 +66,7 @@ class Generator(nn.Module):
             *block(in_channels, 128, normalize=False),
             *block(128, 128),
             *block(128, 128),
-            nn.Linear(128, self.opt.dim),
+            nn.Linear(128, self.opt.dim, bias=False),
             # nn.Tanh()
         )
 
@@ -505,12 +505,15 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w_loss = 0
         tau = 1
 
+        student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
+
         new_weight = self.student.lin.weight
 
         w_init = self.student.lin.weight
         w_init = w_init / torch.norm(w_init)
 
         model_paramters = list(self.generator.parameters())
+        student_paramters = list(self.student.parameters())
 
         train_loss = []
 
@@ -534,7 +537,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
             # w = torch.cat((w_t, w_t-w_init), dim=1)
             w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, gt_x), dim=1)
+            x = torch.cat((w, z), dim=1)
             # generated_x = self.generator(x, gt_y_onehot)
             generated_x = self.generator(x, gt_y)
 
@@ -547,14 +550,24 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             loss = self.loss_fn(out, gt_y.float())
 
+            # loss.backward(create_graph=True, retain_graph=True)
+
             grad = torch.autograd.grad(loss,
                                        self.student.lin.weight,
                                        create_graph=True, retain_graph=True)
 
-            # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
             self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
+            # self.student.lin.weight.data = self.student.lin.weight.data - 0.001 * grad[0]
             # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+
+
+            # with torch.no_grad():
+            #for p, g in zip(self.student.parameters(), grad):
+            #    p.grad = g
+
+            # student_optim.step()
+
 
             # tau = np.exp(-i / 0.95)
             if i != -1:
@@ -572,9 +585,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
+        # out_stu = self.student.lin.weight.data @ torch.transpose(gt_x, 0, 1)
+        # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+
+
         # print(n, "After backward pass", torch.cuda.memory_allocated(0))
 
-        train_loss.append(loss.item())
+        train_loss.append(loss_stu.item())
 
         # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         # loss_stu = self.loss_fn(out_stu, gt_y)
@@ -589,7 +606,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w = w_t.repeat(self.opt.batch_size, 1)
         # w = w_t.repeat(self.opt.batch_size, 1)
         gt_x_norm = gt_x / torch.norm(gt_x)
-        x = torch.cat((w, gt_x), dim=1)
+        x = torch.cat((w, z), dim=1)
 
         # generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
         generated_labels_onehot = onehot[generated_labels].cuda()
