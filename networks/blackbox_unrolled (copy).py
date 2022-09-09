@@ -44,7 +44,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return loss.to(torch.float32)
 
 
-class Generator(nn.Module):
+class Generator1(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator, self).__init__()
 
@@ -64,10 +64,12 @@ class Generator(nn.Module):
         self.model = nn.Sequential(
             # *block(self.opt.dim + self.opt.label_dim, 128, normalize=False),
             *block(in_channels, 128, normalize=False),
-            *block(128, 128),
-            *block(128, 128),
-            nn.Linear(128, self.opt.dim),
-            # nn.Tanh()
+            *block(128, 256),
+            *block(256, 512),
+            *block(512, 512),
+            *block(512, 1024),
+            nn.Linear(1024, int(np.prod(self.img_shape))),
+            nn.Tanh()
         )
 
     def forward(self, noise, labels):
@@ -78,7 +80,7 @@ class Generator(nn.Module):
         return img
 
 
-class Discriminator(nn.Module):
+class Discriminator1(nn.Module):
     def __init__(self, opt):
         super(Discriminator, self).__init__()
 
@@ -107,7 +109,7 @@ class Discriminator(nn.Module):
         return validity
 
 
-class Generator1(nn.Module):
+class Generator(nn.Module):
     """ G(z) """
     def __init__(self, opt, teacher, student):
         # initalize super module
@@ -177,7 +179,7 @@ class Generator1(nn.Module):
         return xy
 
 
-class Discriminator1(nn.Module):
+class Discriminator(nn.Module):
     """ D(x) """
     def __init__(self, opt):
         # initalize super module
@@ -535,11 +537,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # w = torch.cat((w_t, w_t-w_init), dim=1)
             w = w_t.repeat(self.opt.batch_size, 1)
             x = torch.cat((w, gt_x), dim=1)
-            # generated_x = self.generator(x, gt_y_onehot)
-            generated_x = self.generator(x, gt_y)
+            generated_x = self.generator(x, gt_y_onehot)
 
-            # generated_x = generated_x.view(self.opt.batch_size, -1)
-            # generated_x = generated_x @ self.proj_matrix.cuda()
+            generated_x = generated_x.view(self.opt.batch_size, -1)
+            generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
             # out = self.student(mixed_x)
@@ -595,11 +596,11 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         generated_labels_onehot = onehot[generated_labels].cuda()
         generated_labels_fill = fill[generated_labels].cuda()
 
-        # generated_samples = self.generator(x, generated_labels_onehot)
-        generated_samples = self.generator(x, gt_y)
+        generated_samples = self.generator(x, generated_labels_onehot)
 
-        # z_out = netD(generated_samples, generated_labels_fill)
-        # g_loss = self.adversarial_loss(z_out, real)
+        z_out = netD(generated_samples, generated_labels_fill)
+        g_loss = self.adversarial_loss(z_out, real)
+
 
         alpha = 1 # 0.001
         # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
@@ -614,4 +615,4 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                                        inputs=model_paramters,
                                        create_graph=False, retain_graph=False)
 
-        return grad_stu, loss_stu, generated_samples, train_loss
+        return grad_stu, loss_stu, g_loss, z_out, generated_samples, train_loss
