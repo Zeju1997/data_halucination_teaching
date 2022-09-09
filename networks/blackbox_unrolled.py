@@ -120,7 +120,7 @@ class Generator(nn.Module):
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim
+        in_channels = teacher.lin.weight.size(1) + self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -388,9 +388,11 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
                 tau = 0.95 * tau
 
             # self.student.eval()
-            out_stu = self.teacher(generated_x)
-            # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            # out_stu = self.student(gt_x)
+            # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+
+        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
         # w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
 
@@ -532,9 +534,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             gt_x_norm = gt_x / torch.norm(gt_x)
 
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            w = torch.cat((w_t, w_t-w_init), dim=1)
-            w = w.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, gt_x_norm), dim=1)
+            # w = torch.cat((w_t, w_t-w_init), dim=1)
+            w = w_t.repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, z), dim=1)
             generated_x = self.generator(x, gt_y_onehot)
 
             generated_x = generated_x.view(self.opt.batch_size, -1)
@@ -568,12 +570,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-            out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-            # print(n, "After backward pass", torch.cuda.memory_allocated(0))
+        # print(n, "After backward pass", torch.cuda.memory_allocated(0))
 
-            train_loss.append(loss.item())
+        # train_loss.append(loss.item())
 
         # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         # loss_stu = self.loss_fn(out_stu, gt_y)
@@ -584,8 +586,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w_t = w_t / torch.norm(w_t)
         z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
 
-        w = torch.cat((w_t, w_t-w_init), dim=1)
-        w = w.repeat(self.opt.batch_size, 1)
+        # w = torch.cat((w_t, w_t-w_init), dim=1)
+        w = w_t.repeat(self.opt.batch_size, 1)
         # w = w_t.repeat(self.opt.batch_size, 1)
         gt_x_norm = gt_x / torch.norm(gt_x)
         x = torch.cat((w, gt_x_norm), dim=1)

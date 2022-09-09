@@ -539,9 +539,9 @@ class Trainer:
 
                         gt_x = gt_x / torch.norm(gt_x)
 
-                        w = torch.cat((w_t, w_t-w_init), dim=1).repeat(self.opt.batch_size, 1)
-                        # w = w_t.repeat(self.opt.batch_size, 1)
-                        x = torch.cat((w, gt_x), dim=1)
+                        # w = torch.cat((w_t, w_t-w_init), dim=1).repeat(self.opt.batch_size, 1)
+                        w = w_t.repeat(self.opt.batch_size, 1)
+                        x = torch.cat((w, z), dim=1)
                         generated_sample = netG(x, gt_y_onehot)
 
                         if idx == 1:
@@ -587,7 +587,7 @@ class Trainer:
                     make_results_video_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
                 else:
                     make_results_img_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
-                    # make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
+                    make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):

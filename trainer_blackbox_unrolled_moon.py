@@ -461,6 +461,22 @@ class Trainer:
                         )
                         self.log("train", d_loss.item(), g_loss.item())
 
+                '''
+                plt.figure(figsize=(10, 5))
+                plt.title("Discriminator and Generator loss during Training")
+                # plot Discriminator and generator loss
+                plt.plot(test_loss, label="D Loss")
+                plt.legend()
+                plt.show()
+                '''
+                plt.figure(figsize=(10, 5))
+                plt.title("Discriminator and Generator loss during Training")
+                # plot Discriminator and generator loss
+                plt.plot(loss_student, label="D Loss")
+                plt.legend()
+                plt.show()
+
+
             if epoch % self.opt.save_frequency == 0 and epoch >= 1:
                 res_student = []
                 a_student = []
