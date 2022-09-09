@@ -320,20 +320,19 @@ class Trainer:
 
         # tmp_student.load_state_dict(torch.load('teacher_w0.pth'))
         # w_init = tmp_student.state_dict()
-        for idx in tqdm(range(self.opt.n_unroll)):
-            if idx != 0:
+        for _ in tqdm(range(self.opt.n_unroll)):
 
-                w_t = netG.state_dict()
-                gradients, loss, train_loss = unrolled_optimizer(w_t, w_star)
+            w_t = netG.state_dict()
+            gradients, loss, train_loss = unrolled_optimizer(w_t, w_star)
 
-                # loss_student.append(loss.item())
-                loss_student = loss_student + train_loss
+            # loss_student.append(loss.item())
+            loss_student = loss_student + train_loss
 
-                with torch.no_grad():
-                    for p, g in zip(netG.parameters(), gradients):
-                        p.grad = g
+            with torch.no_grad():
+                for p, g in zip(netG.parameters(), gradients):
+                    p.grad = g
 
-                optimizer.step()
+            optimizer.step()
 
         # plt.plot(loss_student, c='b', label="loss")
         # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")

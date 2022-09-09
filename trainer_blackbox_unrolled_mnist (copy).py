@@ -400,8 +400,40 @@ class Trainer:
         step = 0
         for epoch in tqdm(range(self.opt.n_epochs)):
             if epoch != 0:
-                for _ in tqdm(range(self.opt.n_unroll)):
+                epoch_D_losses = []
+                epoch_G_losses = []
+                epoch_Dx = []
+                epoch_DGz = []
+                # iterate through data loader generator object
+                for images, labels in tqdm(train_loader):
 
+                    real_samples = images.cuda() # real_samples
+                    real_labels = labels.long()
+
+                    step += 1
+
+                    ############################
+                    # Update G network: maximize log(D(G(z)))
+                    ###########################
+
+                    # if Ksteps of Discriminator training are done, update generator
+                    '''
+                    netG.zero_grad()
+    
+                    z_out = netD(generated_samples, generated_labels_fill)
+                    g_loss = adversarial_loss(z_out, real)
+    
+                    w_t = netG.state_dict()
+                    gradients, generator_loss, G_loss, z_out = unrolled_optimizer(w_t, w_star, w_init, netD, generated_samples, generated_labels_fill, real, g_loss)
+                    loss_student.append(generator_loss.item())
+    
+                    with torch.no_grad():
+                        for p, g in zip(netG.parameters(), gradients):
+                            p.grad = g
+    
+                    # G_loss.backward()
+                    optimG.step()
+                    '''
                     # netG.zero_grad()
 
                     generated_labels = (torch.rand(self.opt.batch_size, 1)*2).type(torch.LongTensor).squeeze(1)
@@ -418,9 +450,42 @@ class Trainer:
                         for p, g in zip(netG.parameters(), gradients):
                             p.grad = g
 
+                    '''
+                    z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+    
+    
+                    generated_samples = netG(z, generated_labels_onehot)
+    
+                    z_out = netD(generated_samples, generated_labels_fill)
+                    G_loss = adversarial_loss(z_out, real)
+                    '''
+
+                    epoch_DGz.append(z_out.mean().item())
+                    epoch_G_losses.append(G_loss.item())
+
                     # G_loss.backward()
                     optimG.step()
 
+                    ############################
+                    # Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                    ###########################
+
+                    for _ in range(self.opt.n_critic):
+                        real_labels_fill = fill[real_labels].cuda()
+                        real_preds = netD(real_samples, real_labels_fill)
+                        D_real_loss = adversarial_loss(real_preds, real)
+
+                        fake_preds = netD(generated_samples.detach(), generated_labels_fill)
+                        D_fake_loss = adversarial_loss(fake_preds, fake)
+                        D_loss = D_real_loss + D_fake_loss
+
+                        # save values for plots
+                        epoch_D_losses.append(D_loss.item())
+                        epoch_Dx.append(real_preds.mean().item())
+
+                        netD.zero_grad()
+                        D_loss.backward()
+                        optimD.step()
 
                 '''
                 plt.figure(figsize=(10, 5))
@@ -437,6 +502,15 @@ class Trainer:
                 plt.legend()
                 plt.show()
                 '''
+
+                # calculate average value for one epoch
+                D_losses.append(sum(epoch_D_losses)/len(epoch_D_losses))
+                G_losses.append(sum(epoch_G_losses)/len(epoch_G_losses))
+                Dx_values.append(sum(epoch_Dx)/len(epoch_Dx))
+                DGz_values.append(sum(epoch_DGz)/len(epoch_DGz))
+
+                print(f" Epoch {epoch}/{self.opt.n_epochs} Discriminator Loss {D_losses[-1]:.3f} Generator Loss {G_losses[-1]:.3f}"
+                     + f" D(x) {Dx_values[-1]:.3f} D(G(x)) {DGz_values[-1]:.3f}")
 
             if epoch % self.opt.save_frequency == 0 and epoch >= 1:
                 res_student = []
@@ -513,7 +587,7 @@ class Trainer:
                     make_results_video_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
                 else:
                     make_results_img_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
-                    # make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
+                    make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):

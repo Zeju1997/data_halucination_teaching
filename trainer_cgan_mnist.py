@@ -645,7 +645,7 @@ class Trainer:
                             i = torch.randint(0, nb_batch, size=(1,)).item()
                             gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
                             gt_y_onehot = onehot[gt_y.long()].cuda()
-                            gt_x = gt_x / torch.norm(gt_x)
+                            gt_x_norm = gt_x / torch.norm(gt_x)
 
                             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                             # z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim-))).cuda()
