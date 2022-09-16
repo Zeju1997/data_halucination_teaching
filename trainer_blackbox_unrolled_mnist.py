@@ -486,6 +486,7 @@ class Trainer:
                         optimD.step()
                     '''
 
+                '''
                 plt.figure(figsize=(10, 5))
                 plt.title("Discriminator and Generator loss during Training")
                 # plot Discriminator and generator loss
@@ -493,7 +494,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-                '''
+
                 plt.figure(figsize=(10, 5))
                 plt.title("Discriminator and Generator loss during Training")
                 # plot Discriminator and generator loss

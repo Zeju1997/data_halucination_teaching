@@ -926,7 +926,6 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
         if self.opt.train_student == True:
             # mixup student
             self.experiment = "Trained_Mixup_Second_Order"
