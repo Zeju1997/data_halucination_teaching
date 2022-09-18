@@ -1,6 +1,7 @@
 from torch.utils import data
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
+import torchvision.transforms as transforms
 
 from sklearn.datasets import make_moons
 from sklearn.preprocessing import StandardScaler
@@ -8,6 +9,10 @@ from sklearn.model_selection import train_test_split
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+
+from torchvision.datasets import MNIST
+
+import numpy as np
 
 
 
@@ -65,13 +70,35 @@ def create_halfmoon_dataset(n_samples=1000, noise=0.1, random_state=0, test_rati
 
 
 
-def load_data(dataset_name, batch_size):
+def load_data(dataset_name, batch_size, train_transform=None):
+
+    img_transform = transforms.Compose([
+        transforms.ToTensor()
+    ])
 
     if dataset_name == "HalfMoon":
         train_dataset, test_dataset = create_halfmoon_dataset(n_samples=1000, noise=0.1, random_state=0, test_ratio=0.2, to_plot=False)
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    elif dataset_name == "MNIST":
+        train_transform = img_transform if train_transform is None else train_transform
+        train_dataset = MNIST(root='../data/MNIST', download=True, train=True, transform=train_transform)
+        # Selecting classes 3, 5
+        idx = (train_dataset.targets==3) | (train_dataset.targets==5)
+        train_dataset.targets = train_dataset.targets[idx]
+        train_dataset.targets = np.where(train_dataset.targets == 3, 0, 1)
+        train_dataset.data = train_dataset.data[idx]
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        test_dataset = MNIST(root='../data/MNIST', download=True, train=False, transform=img_transform)
+        # Selecting classes 3, 5
+        idx = (test_dataset.targets==3) | (test_dataset.targets==5)
+        test_dataset.targets = test_dataset.targets[idx]
+        test_dataset.targets = np.where(test_dataset.targets == 3, 0, 1)
+        test_dataset.data = test_dataset.data[idx]
+        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     return train_dataloader, test_dataloader
 
