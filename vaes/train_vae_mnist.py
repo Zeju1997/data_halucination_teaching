@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision.utils
 
 from dataloader import load_data
-from models import VAE_MNIST
+from models import VAE_MNIST, VAE_bMNIST
 
 import numpy as np
 
@@ -15,18 +15,20 @@ plt.ion()
 
 
 
-num_epochs = 500
+num_epochs = 200
 batch_size = 128
 learning_rate = 1e-3
 use_gpu = True
 
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 print(device)
-vae = VAE_MNIST(device)
+# vae = VAE_MNIST(device)
+vae = VAE_bMNIST(device)
 vae = vae.to(device)
 
 
-train_dataloader, test_dataloader = load_data('MNIST', batch_size=batch_size)
+# train_dataloader, test_dataloader = load_data('MNIST', batch_size=batch_size)
+train_dataloader, test_dataloader = load_data('BinaryMNIST', batch_size=batch_size)
 
 optimizer = torch.optim.Adam(params=vae.parameters(), lr=learning_rate, weight_decay=1e-5)
 
@@ -61,6 +63,9 @@ for epoch in range(num_epochs):
         
     train_loss_avg[-1] /= num_batches
     print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, num_epochs, train_loss_avg[-1]))
+
+
+
 
 
 
