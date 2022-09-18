@@ -3,7 +3,7 @@ teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300 # 300 # 800 # 500 # 200
 learning_rate: 1e-3
-batch_size: 1 # 128
+batch_size: 128 # 128
 nb_train: 1000 # 10000
 nb_test: 100 # 1000
 dim: 24 # 784 # 24

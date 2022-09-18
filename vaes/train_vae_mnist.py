@@ -65,9 +65,6 @@ for epoch in range(num_epochs):
 
 
 
-
-
-
 # %%
 vae.eval()
 

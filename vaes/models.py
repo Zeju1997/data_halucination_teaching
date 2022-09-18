@@ -147,7 +147,7 @@ class VAE_MNIST(nn.Module):
     self.y_dim = 2
     self.x_h = 28
     self.x_w = 28
-    self.px_sigma = 0.25
+    self.px_sigma = 0.3 # 0.25
 
     # Layers for q(z|x,y):
     self.qz_conv1 = nn.Conv2d(in_channels=1+self.y_dim, out_channels=self.c, kernel_size=4, stride=2, padding=1) # out: c x 14 x 14
@@ -237,4 +237,3 @@ class VAE_MNIST(nn.Module):
     # elbo -= qz.log_prob(z)
 
     return -elbo.mean(), elbo
-    

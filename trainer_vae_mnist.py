@@ -40,7 +40,7 @@ from utils.visualize import make_results_video, make_results_video_2d, make_resu
 from utils.data import init_data
 from utils.network import initialize_weights
 
-from vaes.models import VAE
+from vaes.models import VAE_MNIST, VAE_HalfMoon
 
 import subprocess
 import glob
@@ -92,6 +92,18 @@ def approx_fprime(generator, f, epsilon, args=(), f0=None):
 
 def to_matrix(l, n):
     return [l[i:i+n] for i in range(0, len(l), n)]
+
+
+def to_img(x):
+    x = x.clamp(0, 1)
+    return x
+
+
+def show_image(img, title):
+    img = to_img(img)
+    npimg = img.numpy()
+    plt.title(title)
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 
 class Trainer:
@@ -323,8 +335,9 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
+
         '''
-        vae = VAE(self.device)
+        vae = VAE_MNIST(self.device)
         vae = vae.to(self.device)
 
         optimizer = torch.optim.Adam(params=vae.parameters(), lr=0.001, weight_decay=1e-5)
@@ -335,7 +348,7 @@ class Trainer:
         train_loss_avg = []
 
         print('Training ...')
-        self.opt.n_epochs = 600
+        self.opt.n_epochs = 300
         for epoch in range(self.opt.n_epochs):
             train_loss_avg.append(0)
             num_batches = 0
@@ -364,21 +377,17 @@ class Trainer:
 
         vae.eval()
         with torch.no_grad():
-            X, y_logits = vae.sample(num=1000)
 
-        X = X.data.cpu().numpy()
-        y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+            # sample images
+            img_samples, y_logits = vae.sample()
+            y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+            print("Samples:")
+            print(y)
+            img_samples = img_samples.cpu()
 
-        cm = plt.cm.RdBu
-        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
-
-        fig, ax = plt.subplots()
-        ax.set_title("Input data")
-
-        ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cm_bright, edgecolors='k')
-
-        plt.tight_layout()
-        plt.show()
+            fig, ax = plt.subplots(figsize=(5, 5))
+            show_image(torchvision.utils.make_grid(img_samples,10,5), "Samples")
+            plt.show()
 
         torch.save(vae.state_dict(), 'pretrained_vae.pth')
         '''
@@ -392,11 +401,11 @@ class Trainer:
 
             if self.opt.data_mode == "mnist":
                 netG = unrolled.Generator(self.opt, self.teacher, tmp_student).to(self.device)
-                vae = VAE(self.device).to(self.device)
+                vae = VAE_MNIST(self.device).to(self.device)
                 unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device), proj_matrix=proj_matrix)
             else:
                 netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).to(self.device)
-                vae = VAE(self.device).to(self.device)
+                vae = VAE_MNIST(self.device).to(self.device)
                 unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device))
 
             netG.apply(initialize_weights)
@@ -452,12 +461,10 @@ class Trainer:
                             gt_x = X_train[i_min:i_max].to(self.device)
                             y = Y_train[i_min:i_max].to(self.device)
 
-                            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                            noise = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).to(self.device)
-
-                            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                            x = torch.cat((w_t, w_t-w_star, noise), dim=1)
-                            # generated_sample = netG(x, y)
+                            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+                            w = torch.cat((w_t, w_t-w_star), dim=1)
+                            w = w.repeat(self.opt.batch_size, 1)
+                            x = torch.cat((w, z), dim=1)
 
                             z, qz_mu, qz_std = netG(x, y)
                             generated_sample, x_mu, x_std, y_logit = vae.p_xy(z)
@@ -499,8 +506,8 @@ class Trainer:
                         make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                         make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                     else:
-                        # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-                        make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix)
+                        make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+                        # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix)
 
                     save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                     if not os.path.exists(save_folder):

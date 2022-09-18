@@ -70,6 +70,8 @@ def init_data(opt):
                                         transforms.Normalize([0.5], [0.5])
         ])
 
+        # transform = transforms.Compose([transforms.ToTensor()])
+
         train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
 
