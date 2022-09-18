@@ -40,7 +40,7 @@ for epoch in range(num_epochs):
 
         x_batch = x_batch.to(device)
 
-        loss,_ = vae(x_batch, y_batch)
+        loss, _ = vae(x_batch, y_batch)
         
         # backpropagation
         loss.backward()
@@ -53,9 +53,6 @@ for epoch in range(num_epochs):
         
     train_loss_avg[-1] /= num_batches
     print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, num_epochs, train_loss_avg[-1]))
-
-
-
 
 vae.eval()
 with torch.no_grad():
@@ -70,8 +67,7 @@ cm_bright = ListedColormap(['#FF0000', '#0000FF'])
 fig, ax = plt.subplots()
 ax.set_title("Input data")
 
-ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cm_bright,
-            edgecolors='k')
+ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cm_bright, edgecolors='k')
 
 plt.tight_layout()
 plt.show()

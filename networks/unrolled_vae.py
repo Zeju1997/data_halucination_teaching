@@ -11,6 +11,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
+from torch import distributions as D
 
 class Generator_old_mnist(nn.Module):
     def __init__(self, opt, teacher, student):
@@ -209,27 +210,85 @@ class Discriminator(nn.Module):
         return xy
 
 
+class Generator_moon_1(nn.Module):
+    def __init__(self, opt, teacher, student):
+        super(Generator_moon, self).__init__()
+
+        self.opt = opt
+        self.z_dims = 20
+        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
+
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+
+        self.model = nn.Sequential(
+                        nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False),
+                        nn.ReLU(),
+                        nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False),
+                        nn.ReLU(),
+                    )
+
+        self.qz_mu = nn.Linear(in_features=self.opt.hidden_dim*2, out_features=self.z_dims)
+        self.qz_pre_sp = nn.Linear(in_features=self.opt.hidden_dim*2, out_features=self.z_dims)
+
+    def forward(self, z, label):
+        x = torch.cat((z, self.label_embedding(label.to(torch.int64))), dim=1)
+
+        x = self.model(x)
+        z_mu = self.qz_mu(x)
+        z_pre_sp = self.qz_pre_sp(x)
+        z_std = F.softplus(z_pre_sp)
+
+        return self.reparameterize(z_mu, z_std), z_mu, z_std
+
+    def reparameterize(self, mu, std):
+        eps = torch.randn(mu.size())
+        eps = eps.cuda()
+
+        return mu + eps * std
+
+
 class Generator_moon(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator_moon, self).__init__()
 
         self.opt = opt
+        self.x_dims = 2
+        self.z_dims = 20
+        self.y_dims = 2
+        self.px_sigma = 0.08
+
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
 
         in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
 
-        self.input_fc = nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False)
-        self.hidden_fc = nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False)
-        self.output_fc = nn.Linear(self.opt.hidden_dim*2, self.opt.dim, bias=False)
-        # self.activation = nn.LeakyReLU(0.1)
-        self.activation = nn.ReLU()
-        # self.activation = nn.Tanh()
+        # Layers for q(z|x,y):
+        self.qz_fc = nn.Sequential(
+                    nn.Linear(in_features=in_channels, out_features=128),
+                    nn.ReLU(),
+                    nn.Linear(128, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 128),
+                    nn.ReLU()
+                )
 
-    def forward(self, z, label):
-        x = torch.cat((z, self.label_embedding(label.to(torch.int64))), dim=1)
-        x = self.activation(self.input_fc(x))
-        x = self.activation(self.hidden_fc(x))
-        return self.output_fc(x)
+        self.qz_mu = nn.Linear(in_features=128, out_features=self.z_dims)
+        self.qz_pre_sp = nn.Linear(in_features=128, out_features=self.z_dims)
+
+    def forward(self, z, y):
+        h = torch.cat((z, self.label_embedding(y.to(torch.int64))), dim=1)
+        # h = torch.cat((x, self.label_embedding(y.to(torch.int64))), dim=1)
+
+        h1 = self.qz_fc(h)
+        z_mu = self.qz_mu(h1)
+        z_pre_sp = self.qz_pre_sp(h1)
+        z_std = F.softplus(z_pre_sp)
+        return self.reparameterize(z_mu, z_std), z_mu, z_std
+
+    def reparameterize(self, mu, std):
+        eps = torch.randn(mu.size()).cuda()
+        # eps = eps.cuda()
+
+        return mu + eps * std
 
 
 class Discriminator_moon(nn.Module):
@@ -312,6 +371,7 @@ class UnrolledOptimizer(nn.Module):
             self.generator.load_state_dict(weight)
             self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # self.vae.load_state_dict(torch.load('pretrained_vae.pth'))
 
         loss_stu = 0
         w_loss = 0
@@ -339,6 +399,7 @@ class UnrolledOptimizer(nn.Module):
             w = torch.cat((w_t, w_t-w_star), dim=1)
             w = w.repeat(self.opt.batch_size, 1)
             # x = torch.cat((w, z), dim=1)
+
             generated_x = self.generator(w, gt_y_onehot)
             generated_x = generated_x.view(self.opt.batch_size, -1)
             generated_x_proj = generated_x @ self.proj_matrix.cuda()
@@ -562,7 +623,7 @@ class UnrolledOptimizer_moon(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, X, Y):
+    def __init__(self, opt, teacher, student, generator, vae, X, Y):
         super(UnrolledOptimizer_moon, self).__init__()
 
         self.opt = opt
@@ -575,6 +636,8 @@ class UnrolledOptimizer_moon(nn.Module):
         self.teacher = teacher
         self.student = student
         self.generator = generator
+
+        self.vae = vae
 
         self.X = X
         self.Y = Y
@@ -590,7 +653,7 @@ class UnrolledOptimizer_moon(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, netD, valid):
+    def forward(self, weight, w_star):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -600,6 +663,7 @@ class UnrolledOptimizer_moon(nn.Module):
             self.generator.load_state_dict(weight)
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            self.vae.load_state_dict(torch.load('pretrained_vae.pth'))
             # for param1 in self.student.parameters():
             #     param1 = w_init
             # for param2 in self.teacher.parameters():
@@ -612,26 +676,28 @@ class UnrolledOptimizer_moon(nn.Module):
         new_weight = self.student.lin.weight
 
         model_paramters = list(self.generator.parameters())
+        optimizer = torch.optim.Adam(params=self.generator.parameters(), lr=1e-3, weight_decay=1e-5)
 
         for i in range(self.opt.n_unroll_blocks):
             w_t = self.student.lin.weight
+            w_t = w_t / torch.norm(w_t)
 
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
 
             # Sample noise and labels as generator input
-            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-            z = Variable(torch.randn(gt_x.shape)).cuda()
+            noise = Variable(torch.randn(gt_x.shape)).cuda()
+            w = torch.cat((w_t, w_t-w_star, noise), dim=1)
 
-            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-            x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            generated_x = self.generator(x, gt_y)
+            z, qz_mu, qz_std = self.generator(w, gt_y)
+            # x = self.generator(w, gt_y)
+
+            generated_x, x_mu, x_std, y_logit = self.vae.p_xy(z)
 
             # self.student.train()
             out = self.student(generated_x)
 
             loss = self.loss_fn(out, gt_y.float())
-
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
             # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
@@ -649,24 +715,10 @@ class UnrolledOptimizer_moon(nn.Module):
             # out_stu = self.student(generated_x)
             loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
-
-        '''
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
-
-
-        grad_stu_w = torch.autograd.grad(outputs=w_loss,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-        '''
-
-        # Loss measures generator's ability to fool the discriminator
-        # valid = Variable(torch.cuda.FloatTensor(self.batch_size, 1).fill_(1.0), requires_grad=False)
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
 
         w_t = self.student.lin.weight
+        w_t = w_t / torch.norm(w_t)
 
         i = torch.randint(0, self.nb_batch, size=(1,)).item()
         gt_x, generated_labels = self.data_sampler(i)
@@ -676,16 +728,25 @@ class UnrolledOptimizer_moon(nn.Module):
 
         # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
         x = torch.cat((w_t, w_t-w_star, z), dim=1)
-        generated_samples = self.generator(x, generated_labels)
+        # generated_samples = self.generator(x, generated_labels)
 
-        # generated_labels = generated_labels.float()
-        validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-        g_loss = self.adversarial_loss(validity, valid)
+        z, qz_mu, qz_std = self.generator(x, gt_y)
+        # x = self.generator(w, gt_y)
 
-        loss_stu = loss_stu + w_loss + g_loss
+        generated_x, x_mu, x_std, y_logit = self.vae.p_xy(z)
+
+        qz = D.normal.Normal(qz_mu, qz_std)
+        qz = D.independent.Independent(qz, 1)
+        pz = D.normal.Normal(torch.zeros_like(z), torch.ones_like(z))
+        pz = D.independent.Independent(pz, 1)
+
+        # For: - KL[qz || pz]
+        kl_loss = D.kl.kl_divergence(qz, pz)
+
+        loss_stu = loss_stu + w_loss # + kl_loss
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
                                        create_graph=True, retain_graph=True)
 
-        return grad_stu, loss_stu, g_loss.unsqueeze(0), validity, generated_samples, generated_labels
+        return grad_stu, loss_stu

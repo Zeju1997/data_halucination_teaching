@@ -23,6 +23,7 @@ from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
 import teachers.utils as utils
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import cv2
 
 from datasets import BaseDataset
@@ -30,7 +31,7 @@ from datasets import BaseDataset
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
 import networks.cgan as cgan
-import networks.unrolled_cgan as unrolled
+import networks.unrolled_vae as unrolled
 
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
@@ -38,6 +39,8 @@ from sklearn.model_selection import train_test_split
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
 from utils.data import init_data
 from utils.network import initialize_weights
+
+from vaes.models import VAE
 
 import subprocess
 import glob
@@ -74,14 +77,14 @@ def approx_fprime(generator, f, epsilon, args=(), f0=None):
     if f0 is None:
         f0 = f(*((xk,) + args))
     grad = np.zeros((xk.shape[0], xk.shape[1]), float)
-    # grad = torch.zeros(len(xk),).cuda()
+    # grad = torch.zeros(len(xk),).to(self.device)
     ei = np.zeros((xk.shape[0], xk.shape[1],), float)
-    # ei = torch.zeros(len(xk),).cuda()
+    # ei = torch.zeros(len(xk),).to(self.device)
     for j in range(xk.shape[0]):
         for k in range(xk.shape[1]):
             ei[j, k] = 1.0
             d = epsilon * ei
-            d = torch.Tensor(d).cuda()
+            d = torch.Tensor(d).to(self.device)
             grad[j, k] = (f(*((xk + d,) + args)) - f0) / d[j, k]
             ei[j, k] = 0.0
     return grad, f0
@@ -95,7 +98,7 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_cgan_" + self.opt.data_mode
+        self.opt.model_name = "whitebox_unrolled_vae_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -179,8 +182,8 @@ class Trainer:
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
 
-        x = X[i_min:i_max].cuda()
-        y = Y[i_min:i_max].cuda()
+        x = X[i_min:i_max].to(self.device)
+        y = Y[i_min:i_max].to(self.device)
 
         return x, y
 
@@ -200,6 +203,7 @@ class Trainer:
 
         if self.opt.init_data:
             init_data(self.opt)
+
         X = torch.load('X.pt')
         Y = torch.load('Y.pt')
 
@@ -280,7 +284,7 @@ class Trainer:
         #  Train Teacher
         # ---------------------
 
-        if self.opt.train_wstar == False:
+        if self.opt.train_wstar == True:
             wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             wstar_trainer.train(self.teacher)
 
@@ -292,7 +296,7 @@ class Trainer:
         #  Train SGD
         # ---------------------
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -307,7 +311,7 @@ class Trainer:
         #  Train IMT Baseline
         # ---------------------
 
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -319,6 +323,65 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
+        '''
+        vae = VAE(self.device)
+        vae = vae.to(self.device)
+
+        optimizer = torch.optim.Adam(params=vae.parameters(), lr=0.001, weight_decay=1e-5)
+
+        # set to training mode
+        vae.train()
+
+        train_loss_avg = []
+
+        print('Training ...')
+        self.opt.n_epochs = 600
+        for epoch in range(self.opt.n_epochs):
+            train_loss_avg.append(0)
+            num_batches = 0
+
+            for x_batch, y_batch in train_loader:
+                optimizer.zero_grad()
+
+                y_batch = F.one_hot(y_batch.long(), num_classes=2).type(torch.FloatTensor) * 2. - 1
+                y_batch = y_batch.to(self.device)
+
+                x_batch = x_batch.to(self.device)
+
+                loss, _ = vae(x_batch, y_batch)
+
+                # backpropagation
+                loss.backward()
+
+                # one step of the optmizer (using the gradients from backpropagation)
+                optimizer.step()
+
+                train_loss_avg[-1] += loss.item()
+                num_batches += 1
+
+            train_loss_avg[-1] /= num_batches
+            print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, self.opt.n_epochs, train_loss_avg[-1]))
+
+        vae.eval()
+        with torch.no_grad():
+            X, y_logits = vae.sample(num=1000)
+
+        X = X.data.cpu().numpy()
+        y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+
+        cm = plt.cm.RdBu
+        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
+
+        fig, ax = plt.subplots()
+        ax.set_title("Input data")
+
+        ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cm_bright, edgecolors='k')
+
+        plt.tight_layout()
+        plt.show()
+
+        torch.save(vae.state_dict(), 'pretrained_vae.pth')
+        '''
 
         if self.opt.train_student == True:
             self.experiment = "Student"
@@ -328,18 +391,15 @@ class Trainer:
             tmp_student = utils.BaseLinear(self.opt.dim)
 
             if self.opt.data_mode == "mnist":
-                netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
-                netD = unrolled.Discriminator(self.opt).cuda()
-                unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
+                netG = unrolled.Generator(self.opt, self.teacher, tmp_student).to(self.device)
+                vae = VAE(self.device).to(self.device)
+                unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device), proj_matrix=proj_matrix)
             else:
-                netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
-                netD = unrolled.Discriminator_moon(self.opt).cuda()
-                unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
+                netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).to(self.device)
+                vae = VAE(self.device).to(self.device)
+                unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device))
 
             netG.apply(initialize_weights)
-            netD.apply(initialize_weights)
-
-            optimD = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
             optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
             self.step = 0
@@ -351,15 +411,6 @@ class Trainer:
                 if epoch != 0:
                     for i, (data, labels) in enumerate(train_loader):
                         self.step = self.step + 1
-                        # Adversarial ground truths
-                        valid = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(1.0), requires_grad=False)
-                        fake = Variable(torch.cuda.FloatTensor(self.opt.batch_size, 1).fill_(0.0), requires_grad=False)
-
-                        # Configure input
-                        real_samples = Variable(data.type(torch.cuda.FloatTensor))
-                        # real_samples = data.view(data.size(0), *img_shape)
-                        # real_samples = Variable(real_samples.type(torch.cuda.FloatTensor))
-                        real_labels = Variable(labels.type(torch.cuda.LongTensor))
 
                         # -----------------
                         #  Train Generator
@@ -367,26 +418,8 @@ class Trainer:
 
                         optimG.zero_grad()
 
-                        # Generate a batch of images
-                        # w_stu = self.student.lin.weight
-
-                        # i = torch.randint(0, nb_batch, size=(1,)).item()
-                        # i_min = i * self.opt.batch_size
-                        # i_max = (i + 1) * self.opt.batch_size
-
-                        # gt_x = X_train[i_min:i_max].cuda()
-                        # generated_labels = Y_train[i_min:i_max].cuda()
-
-                        # x = torch.cat((w_stu, w_stu-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-                        # generated_samples = netG(x)
-
-                        # Loss measures generator's ability to fool the discriminator
-                        # validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-                        # g_loss = adversarial_loss(validity, valid)
-
-                        # Loss measures generator's ability to fool the discriminator
                         w_t = netG.state_dict()
-                        gradients, generator_loss, g_loss, validity, generated_samples, generated_labels = unrolled_optimizer(w_t, w_star, netD, valid)
+                        gradients, generator_loss = unrolled_optimizer(w_t, w_star)
 
                         loss_student.append(generator_loss.item())
 
@@ -396,33 +429,7 @@ class Trainer:
 
                         optimG.step()
 
-                        # ---------------------
-                        #  Train Discriminator
-                        # ---------------------
-
-                        for _ in range(self.opt.n_critic):
-                            optimD.zero_grad()
-
-                            # Loss for real images
-                            validity_real = netD(real_samples, real_labels)
-                            d_real_loss = adversarial_loss(validity_real, valid)
-
-                            # Loss for fake images
-                            validity_fake = netD(generated_samples.detach(), Variable(generated_labels.type(torch.cuda.LongTensor)))
-                            d_fake_loss = adversarial_loss(validity_fake, fake)
-
-                            # Total discriminator loss
-                            d_loss = (d_real_loss + d_fake_loss) / 2
-
-                            d_loss.backward()
-                            optimD.step()
-
-                        if i % self.opt.log_frequency == 0:
-                            print(
-                                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                                % (epoch, self.opt.n_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
-                            )
-                            self.log("train", d_loss.item(), g_loss.item())
+                        print("{}/{}".format(i, len(train_loader)))
 
                 if epoch % self.opt.save_frequency == 0 and epoch >= 1:
                     res_student = []
@@ -436,20 +443,24 @@ class Trainer:
                     for idx in tqdm(range(self.opt.n_iter)):
                         if idx != 0:
                             w_t = self.student.lin.weight
+                            w_t = w_t / torch.norm(w_t)
 
                             i = torch.randint(0, nb_batch, size=(1,)).item()
                             i_min = i * self.opt.batch_size
                             i_max = (i + 1) * self.opt.batch_size
 
-                            gt_x = X_train[i_min:i_max].cuda()
-                            y = Y_train[i_min:i_max].cuda()
+                            gt_x = X_train[i_min:i_max].to(self.device)
+                            y = Y_train[i_min:i_max].to(self.device)
 
                             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+                            noise = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).to(self.device)
 
                             # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                            x = torch.cat((w_t, w_t-w_star, z), dim=1)
-                            generated_sample = netG(x, y)
+                            x = torch.cat((w_t, w_t-w_star, noise), dim=1)
+                            # generated_sample = netG(x, y)
+
+                            z, qz_mu, qz_std = netG(x, y)
+                            generated_sample, x_mu, x_std, y_logit = vae.p_xy(z)
 
                             if idx == 1:
                                 generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
@@ -458,11 +469,11 @@ class Trainer:
                                 generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                                 generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
-                            # generated_sample = generated_sample @ proj_matrix.cuda()
+                            # generated_sample = generated_sample @ proj_matrix.to(self.device)
                             self.student.update(generated_sample.detach(), y)
 
                         self.student.eval()
-                        test = self.student(X_test.cuda()).cpu()
+                        test = self.student(X_test.to(self.device)).cpu()
 
                         a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
                         a_student.append(a)
@@ -486,7 +497,7 @@ class Trainer:
 
                     if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                         make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                     else:
                         # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
                         make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix)
@@ -497,10 +508,6 @@ class Trainer:
 
                     save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
                     to_save = netG.state_dict()
-                    torch.save(to_save, save_path)
-
-                    save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
-                    to_save = netD.state_dict()
                     torch.save(to_save, save_path)
 
                     # self.make_results_video_generated_data(generated_samples, epoch)
@@ -613,7 +620,7 @@ class Trainer:
 
                 self.teacher.update(inputs, targets)
 
-                outputs = self.teacher(inputs.cuda())
+                outputs = self.teacher(inputs.to(self.device))
                 predicted = torch.max(outputs, dim=1).indices
 
                 total += targets.size(0)
@@ -629,7 +636,7 @@ class Trainer:
                 for batch_idx, (inputs, targets) in enumerate(self.test_loader):
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-                    outputs = self.teacher(inputs.cuda())
+                    outputs = self.teacher(inputs.to(self.device))
                     predicted = torch.max(outputs, dim=1).indices
 
                     total += targets.size(0)
@@ -646,7 +653,7 @@ class Trainer:
         plt.legend()
         plt.show()
         '''
-            test = self.teacher(X_test.cuda()).cpu()
+            test = self.teacher(X_test.to(self.device)).cpu()
             tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
             nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             accuracies.append(nb_correct / X_test.size(0))
@@ -705,7 +712,7 @@ class Trainer:
         #to_optimise = self.criterion(output=pred,
         #                             target=target)
 
-        to_optimise = self.criterion(pred, target.type(torch.LongTensor).cuda())
+        to_optimise = self.criterion(pred, target.type(torch.LongTensor).to(self.device))
 
         total_loss += to_optimise
         losses["loss"] = total_loss

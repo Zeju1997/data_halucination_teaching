@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 # from trainer_blackbox_mixup_rl import Trainer
 # from trainer_blackbox_implicit_cnn import Trainer
-from trainer_blackbox_mixup_rl import Trainer
+from trainer_vae_moon import Trainer
 from options.options import Options
 import os
 import argparse
@@ -30,8 +30,7 @@ def load_config(config_name):
 
 
 if __name__ == "__main__":
-    config = load_config("mnist_blackbox_unrolled.yaml")
-    # config = load_config("moon.yaml")
+    config = load_config("moon.yaml")
     opts.set_defaults(**config)
 
     # generate data
