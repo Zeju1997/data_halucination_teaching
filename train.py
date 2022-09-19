@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 # from trainer_blackbox_mixup_rl import Trainer
 # from trainer_blackbox_implicit_cnn import Trainer
-from trainer_vae_mnist import Trainer
+from trainer_optimized import Trainer
 from options.options import Options
 import os
 import argparse
@@ -18,9 +18,6 @@ from types import SimpleNamespace
 # the directory that options.py resides in
 file_dir = os.path.dirname(__file__)
 
-options = Options()
-opts = options.parse()
-
 
 # Function to load yaml configuration file
 def load_config(config_name):
@@ -30,7 +27,10 @@ def load_config(config_name):
 
 
 if __name__ == "__main__":
-    config = load_config("mnist.yaml")
+    options = Options()
+    opts = options.parse()
+
+    config = load_config("moon.yaml")
     opts.set_defaults(**config)
 
     # generate data
@@ -38,3 +38,4 @@ if __name__ == "__main__":
     trainer = Trainer(opts.parse_args())
     trainer.main()
     # trainer.make_gif()
+    # trainer.plot_results()

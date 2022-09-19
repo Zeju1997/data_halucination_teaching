@@ -304,7 +304,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             sgd_trainer.train(sgd_example, w_star)
 
-        self.experiment = "SGD"
+        self.opt.experiment = "SGD"
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
@@ -317,7 +317,7 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        self.experiment = "IMT_Baseline"
+        self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
@@ -384,7 +384,7 @@ class Trainer:
         '''
 
         if self.opt.train_student == True:
-            self.experiment = "Student"
+            self.opt.experiment = "Student"
 
             adversarial_loss = torch.nn.BCELoss()
 
@@ -557,7 +557,7 @@ class Trainer:
     def load_experiment_result(self):
         """Write an event to the tensorboard events file
         """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
 
         if os.path.isfile(csv_path):
             acc = []

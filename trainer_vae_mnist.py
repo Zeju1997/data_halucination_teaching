@@ -37,10 +37,10 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, load_experiment_result
 from utils.network import initialize_weights
 
-from vaes.models import VAE_MNIST, VAE_HalfMoon
+from vaes.models import VAE_bMNIST, VAE_HalfMoon
 
 import subprocess
 import glob
@@ -308,6 +308,8 @@ class Trainer:
         #  Train SGD
         # ---------------------
 
+        self.opt.experiment = "SGD"
+
         if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
@@ -316,28 +318,37 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             sgd_trainer.train(sgd_example, w_star)
 
-        self.experiment = "SGD"
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
         # ---------------------
-
+        '''
         if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        self.experiment = "IMT_Baseline"
+        self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
+        '''
+        self.opt.experiment = "IMT_Baseline_random_label"
+        # self.opt.experiment = "IMT_Baseline"
+        if self.opt.train_baseline == True:
+            self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
+
+            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
+            imt_trainer.train(self.baseline, self.teacher, w_star)
+
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
         # ---------------------
 
         '''
-        vae = VAE_MNIST(self.device)
+        vae = VAE_bMNIST(self.device)
         vae = vae.to(self.device)
 
         optimizer = torch.optim.Adam(params=vae.parameters(), lr=0.001, weight_decay=1e-5)
@@ -390,10 +401,12 @@ class Trainer:
             plt.show()
 
         torch.save(vae.state_dict(), 'pretrained_vae.pth')
+        
+        sys.exit()
         '''
 
         if self.opt.train_student == True:
-            self.experiment = "Student"
+            self.opt.experiment = "Student"
 
             adversarial_loss = torch.nn.BCELoss()
 
@@ -401,11 +414,11 @@ class Trainer:
 
             if self.opt.data_mode == "mnist":
                 netG = unrolled.Generator(self.opt, self.teacher, tmp_student).to(self.device)
-                vae = VAE_MNIST(self.device).to(self.device)
+                vae = VAE_bMNIST(self.device).to(self.device)
                 unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device), proj_matrix=proj_matrix)
             else:
                 netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).to(self.device)
-                vae = VAE_MNIST(self.device).to(self.device)
+                vae = VAE_bMNIST(self.device).to(self.device)
                 unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, vae=vae, X=X_train.to(self.device), Y=Y_train.to(self.device))
 
             netG.apply(initialize_weights)
@@ -440,6 +453,13 @@ class Trainer:
 
                         print("{}/{}".format(i, len(train_loader)))
 
+                    fig = plt.figure()
+                    plt.plot(loss_student, c="b", label="Teacher (CNN)")
+                    plt.xlabel("Epoch")
+                    plt.ylabel("Accuracy")
+                    plt.legend()
+                    plt.show()
+
                 if epoch % self.opt.save_frequency == 0 and epoch >= 1:
                     res_student = []
                     a_student = []
@@ -467,7 +487,7 @@ class Trainer:
                             x = torch.cat((w, z), dim=1)
 
                             z, qz_mu, qz_std = netG(x, y)
-                            generated_sample, x_mu, x_std, y_logit = vae.p_xy(z)
+                            generated_sample, y_logit = vae.p_xy(z)
 
                             if idx == 1:
                                 generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
@@ -476,7 +496,8 @@ class Trainer:
                                 generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                                 generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
-                            # generated_sample = generated_sample @ proj_matrix.to(self.device)
+                            generated_sample = generated_sample.view(self.opt.batch_size, -1)
+                            generated_sample = generated_sample @ proj_matrix.to(self.device)
                             self.student.update(generated_sample.detach(), y)
 
                         self.student.eval()
@@ -506,8 +527,8 @@ class Trainer:
                         make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                         make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                     else:
-                        make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-                        # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix)
+                        make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
 
                     save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                     if not os.path.exists(save_folder):
@@ -561,24 +582,6 @@ class Trainer:
                 # plt.close()
                 plt.show()
 
-    def load_experiment_result(self):
-        """Write an event to the tensorboard events file
-        """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
-
-        if os.path.isfile(csv_path):
-            acc = []
-            w_diff = []
-            with open(csv_path, 'r') as csvfile:
-                lines = csv.reader(csvfile, delimiter=',')
-                for idx, row in enumerate(lines):
-                    if idx != 0:
-                        acc.append(row[1])
-                        w_diff.append(row[2])
-            acc_np = np.asarray(acc).astype(float)
-            w_diff_np = np.asarray(w_diff).astype(float)
-
-        return acc_np, w_diff_np
 
     def compute_gradient_penalty(self, D, real_samples, fake_samples):
         """Calculates the gradient penalty loss for WGAN GP"""

@@ -3,6 +3,8 @@ import torch
 import sys
 import torch.nn as nn
 
+import numpy as np
+
 
 def __example_difficulty__(student, X, y):
     """
@@ -106,6 +108,50 @@ def __select_example__(teacher, student, X, y, batch_size):
     return arg_min
 
 
+def __select_example_random_label__(teacher, student, X, y, batch_size):
+    """
+    Selectionne un exemple selon le teacher et le student
+    :param teacher: Le teacher de classe mère BaseLinear
+    :param student: Le student devant implémenter les deux méthodes example_difficulty et example_usefulness
+    :param X: Les données
+    :param y: les labels des données
+    :param batch_size: La taille d'un batch de données
+    :return: L'indice de l'exemple à enseigner au student
+    """
+    nb_example = X.size(0)
+    nb_batch = int(nb_example / batch_size)
+
+    min_score = sys.float_info.max
+    arg_min = 0
+
+    # TODO
+    # - one "forward" scoring pass
+    # - sort n * log(n)
+    # - get first examples
+
+    random_label = torch.from_numpy(np.random.randint(0, 2, batch_size)).cuda()
+
+    for i in range(nb_batch):
+        i_min = i * batch_size
+        i_max = (i + 1) * batch_size
+
+        data = X[i_min:i_max]
+        label = y[i_min:i_max]
+
+        if random_label == label:
+            lr = student.optim.param_groups[0]["lr"]
+
+            # Calculate the score per batch
+            s = (lr ** 2) * student.example_difficulty(data, label)
+            s -= lr * 2 * student.example_usefulness(teacher.lin.weight, data, label)
+
+            if s < min_score:
+                min_score = s
+                arg_min = i
+
+    return arg_min
+
+
 class OmniscientLinearStudent(BaseLinear):
     """
     Classe pour le student du omniscient teacher
@@ -139,6 +185,9 @@ class OmniscientLinearTeacher(BaseLinear):
     """
     def select_example(self, student, X, y, batch_size):
         return __select_example__(self, student, X, y, batch_size)
+
+    def select_example_random_label(self, student, X, y, batch_size):
+        return __select_example_random_label__(self, student, X, y, batch_size)
 
 
 class OmniscientConvTeacher(BaseConv):

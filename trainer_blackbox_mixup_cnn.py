@@ -336,7 +336,7 @@ class Trainer:
         self.init_test_loss = 0
         self.init_feat_sim = 0
 
-        self.experiment = "teacher"
+        self.opt.experiment = "teacher"
 
         self.query_set_1, self.query_set_2 = self.get_query_set()
         # self.query_set = self.get_query_set()
@@ -582,9 +582,9 @@ class Trainer:
 
         if self.opt.train_baseline == False:
             # mixup baseline
-            self.experiment = "Vanilla_Mixup"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Vanilla_Mixup"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -654,9 +654,9 @@ class Trainer:
 
         if self.opt.train_baseline == False:
             # mixup baseline
-            self.experiment = "Vanilla_Mixup_Batch"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Vanilla_Mixup_Batch"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -741,9 +741,9 @@ class Trainer:
 
         if self.opt.train_student == False:
             # mixup student
-            self.experiment = "Trained_Mixup_First_Order"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Trained_Mixup_First_Order"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -928,9 +928,9 @@ class Trainer:
 
         if self.opt.train_student == True:
             # mixup student
-            self.experiment = "Trained_Mixup_Second_Order"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Trained_Mixup_Second_Order"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1077,9 +1077,9 @@ class Trainer:
             # for param in self.student.parameters():
             #    w_student2.append(param.data.clone())
 
-            self.experiment = "Trained_Mixup_fixed_G"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Trained_Mixup_fixed_G"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1213,9 +1213,9 @@ class Trainer:
 
         if self.opt.train_sgd == False:
             # train example
-            self.experiment = "SGD"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "SGD"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1296,9 +1296,9 @@ class Trainer:
 
         if self.opt.train_baseline == False:
             # mixup baseline
-            self.experiment = "Vanilla_Mixup"
-            print("Start training {} ...".format(self.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+            self.opt.experiment = "Vanilla_Mixup"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1676,7 +1676,7 @@ class Trainer:
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         # if epoch % 1 == 0 or acc > self.best_acc:
-        #    self.save_model(model=model, name=self.experiment)
+        #    self.save_model(model=model, name=self.opt.experiment)
         if netG is not None:
             self.save_model(model=netG, name='netG')
         if acc > self.best_acc:
@@ -1883,7 +1883,7 @@ class Trainer:
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("{}/{}/{}".format(self.experiment, mode, name), value, step)
+        writer.add_scalar("{}/{}/{}".format(self.opt.experiment, mode, name), value, step)
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with

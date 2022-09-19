@@ -90,6 +90,7 @@ class Generator(nn.Module):
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
 
         in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         # Layers for q(z|x,y):
         self.qz_fc = nn.Sequential(
@@ -291,8 +292,8 @@ class UnrolledOptimizer(nn.Module):
             x = torch.cat((w, z), dim=1)
 
             z, qz_mu, qz_std = self.generator(x, gt_y)
-            generated_x, x_mu, x_std, y_logit = self.vae.p_xy(z)
-
+            generated_x, y_logit = self.vae.p_xy(z)
+            generated_x = generated_x.view(self.opt.batch_size, -1)
             generated_x_proj = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
@@ -337,9 +338,8 @@ class UnrolledOptimizer(nn.Module):
         x = torch.cat((w, z), dim=1)
 
         z, qz_mu, qz_std = self.generator(x, gt_y)
-        # x = self.generator(w, gt_y)
 
-        generated_x, x_mu, x_std, y_logit = self.vae.p_xy(z)
+        generated_x, y_logit = self.vae.p_xy(z)
 
         qz = D.normal.Normal(qz_mu, qz_std)
         qz = D.independent.Independent(qz, 1)

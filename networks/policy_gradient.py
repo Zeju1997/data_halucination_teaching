@@ -30,7 +30,7 @@ class PolicyGradient:
         NUM_STEPS = 4
         GAMMA = 0.99
 
-        self.experiment = "policy gradient"
+        self.opt.experiment = "policy gradient"
 
         self.student = student
         # self.student.lin2.register_forward_hook(self.get_activation('latent'))
@@ -573,4 +573,4 @@ class PolicyGradient:
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("{}/{}/{}".format(self.experiment, mode, name), value, step)
+        writer.add_scalar("{}/{}/{}".format(self.opt.experiment, mode, name), value, step)

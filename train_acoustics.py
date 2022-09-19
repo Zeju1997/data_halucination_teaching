@@ -208,7 +208,7 @@ class Trainer:
 
         self.device = "A"
 
-        self.experiment = "teacher"
+        self.opt.experiment = "teacher"
 
 
     def set_train(self):
@@ -305,7 +305,7 @@ class Trainer:
         train_loader, val_loader, test_loader = self.load_data(self.device)
 
         # train example
-        self.experiment = "SGD"
+        self.opt.experiment = "SGD"
         res_example = []
         res_loss_example = []
         a_example = []
@@ -424,7 +424,7 @@ class Trainer:
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         if epoch == 0 or acc > self.best_acc:
-            self.save_model(model=model, name=self.experiment)
+            self.save_model(model=model, name=self.opt.experiment)
         if acc > self.best_acc:
             best_acc = acc
 
@@ -599,7 +599,7 @@ class Trainer:
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("{}/{}/{}".format(self.experiment, mode, name), value, step)
+        writer.add_scalar("{}/{}/{}".format(self.opt.experiment, mode, name), value, step)
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with

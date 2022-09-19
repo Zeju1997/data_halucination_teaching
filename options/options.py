@@ -10,9 +10,9 @@ class Options:
         # TODO: Write the arguments
         self.parser = argparse.ArgumentParser(description="Retouch options")
 
-        self.parser.add_argument('-config', help="configuration file *.yml", type=str, required=False, default='config.yml')
-        self.parser.add_argument('-seed', help="configuration file *.yml", type=int, required=False, default=1)
-        self.parser.add_argument('-init_data', help="configuration file *.yml", type=bool, required=False, default=True)
+        self.parser.add_argument('--config', help="configuration file *.yml", type=str, required=False, default='config.yml')
+        self.parser.add_argument('--seed', help="configuration file *.yml", type=int, required=False, default=1)
+        self.parser.add_argument('--init_data', help="configuration file *.yml", type=bool, required=False, default=True)
 
         # PATHS
         self.parser.add_argument("--base_dir", type=str, help="path to the training data", default=os.path.join("datasets/retouch-dataset/pre_processed"))

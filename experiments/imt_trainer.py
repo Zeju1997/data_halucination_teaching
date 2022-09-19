@@ -26,17 +26,14 @@ class IMTTrainer(nn.Module):
 
         self.opt = opt
 
-        self.experiment = "SGD"
-
         self.X_train = X_train
         self.Y_train = Y_train
         self.X_test = X_test
         self.Y_test = Y_test
 
     def train(self, model, teacher, w_star):
-        self.experiment = "IMT_Baseline"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        print("Start training {} ...".format(self.opt.experiment))
+        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')
@@ -49,8 +46,11 @@ class IMTTrainer(nn.Module):
 
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
-                i = teacher.select_example(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)
-                # i = torch.randint(0, nb_batch, size=(1,)).item()
+                if self.opt.experiment == "IMT_Baseline":
+                    i = teacher.select_example(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)
+                    # i = torch.randint(0, 1000, size=(1,)).item()
+                else:
+                    i = teacher.select_example_random_label(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)
 
                 best_data, best_label = self.data_sampler(self.X_train, self.Y_train, i)
 

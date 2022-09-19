@@ -18,6 +18,8 @@ from sklearn.model_selection import train_test_split
 
 # import utils
 
+import csv
+
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
@@ -66,11 +68,12 @@ def init_data(opt):
         print("Loading MNIST data ...")
 
         # MNIST normalizing
-        transform = transforms.Compose([transforms.ToTensor(),
-                                        transforms.Normalize([0.5], [0.5])
-        ])
+        # transform = transforms.Compose([transforms.ToTensor(),
+        #                                 transforms.Normalize([0.5], [0.5])
+        # ])
 
-        # transform = transforms.Compose([transforms.ToTensor()])
+        transform = transforms.Compose([transforms.ToTensor(),
+                                        lambda x: torch.round(x)])
 
         train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
@@ -188,3 +191,98 @@ def init_data(opt):
     torch.save(X, 'X.pt')
     torch.save(Y, 'Y.pt')
 
+
+def load_experiment_result(opt):
+    """Write an event to the tensorboard events file
+    """
+    csv_path = os.path.join(opt.log_path, 'results' + '_' + opt.experiment + '_' + str(opt.seed) + '.csv')
+
+    if os.path.isfile(csv_path):
+        acc = []
+        w_diff = []
+        with open(csv_path, 'r') as csvfile:
+            lines = csv.reader(csvfile, delimiter=',')
+            for idx, row in enumerate(lines):
+                if idx != 0:
+                    acc.append(row[1])
+                    w_diff.append(row[2])
+        acc_np = np.asarray(acc).astype(float)
+        w_diff_np = np.asarray(w_diff).astype(float)
+
+    return acc_np, w_diff_np
+
+
+def adjust_lightness(color, amount=0.5):
+    import matplotlib.colors as mc
+    import colorsys
+    try:
+        c = mc.cnames[color]
+    except:
+        c = color
+    c = colorsys.rgb_to_hls(*mc.to_rgb(c))
+    return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
+
+
+# from unittest import result
+import torch
+import pdb
+import matplotlib.pyplot as plt
+from glob import glob
+import os
+import sys
+import numpy as np
+# from liftoff import parse_opts
+# from matplotlib.pyplot import cm
+# from loss_capacity.functions import HSIC
+import matplotlib as mpl
+from tqdm import tqdm
+
+
+def plot_graphs(rootdir, experiment_dict, experiment_lst):
+    mpl.rcParams['figure.dpi'] = 120
+    mpl.rcParams['savefig.dpi'] = 200
+
+
+
+    plt.figure()
+
+    for experiment in experiment_lst:
+
+        acc_np = 0
+        w_diff_np = 0
+
+        for i, file in tqdm(enumerate(sorted(experiment_dict[experiment]))):
+            file_path = os.path.join(rootdir, file)
+            if os.path.isfile(file_path):
+                acc = []
+                w_diff = []
+                with open(file_path, 'r') as csvfile:
+                    lines = csv.reader(csvfile, delimiter=',')
+                    for idx, row in enumerate(lines):
+                        if idx != 0:
+                            acc.append(row[1])
+                            w_diff.append(row[2])
+                tmp_acc_np = np.asarray(acc).astype(float)
+                tmp_w_diff_np = np.asarray(w_diff).astype(float)
+                if i == 0:
+                    acc_np = tmp_acc_np[np.newaxis, :]
+                    w_diff_np = tmp_w_diff_np[np.newaxis, :]
+                else:
+                    acc_np = np.concatenate((acc_np, tmp_acc_np[np.newaxis, :]), axis=0)
+                    w_diff_np = np.concatenate((w_diff_np, tmp_w_diff_np[np.newaxis, :]), axis=0)
+
+        acc_mean = np.mean(acc_np, axis=0)
+        acc_std = np.std(acc_np, axis=0)
+        w_diff_mean = np.mean(w_diff_np, axis=0)
+        w_diff_std = np.std(w_diff_np, axis=0)
+
+        x = np.arange(len(acc_mean))
+        plt.plot(x, acc_mean, label=r'acc', c='r')
+        plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=adjust_lightness('r', amount=0.5), alpha=0.3)
+
+    plt.xlabel('latent_dim')
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.title(r'DCI&HSIC')
+
+    plt.savefig(os.path.join(rootdir, '{}_v5.png'.format(experiment)), bbox_inches='tight')
+    sys.exit()

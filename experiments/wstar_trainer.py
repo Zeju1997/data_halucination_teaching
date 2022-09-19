@@ -30,7 +30,7 @@ class WSTARTrainer(nn.Module):
 
         self.opt = opt
 
-        self.experiment = "SGD"
+        self.opt.experiment = "SGD"
 
         self.X_train = X_train
         self.Y_train = Y_train
@@ -38,9 +38,9 @@ class WSTARTrainer(nn.Module):
         self.Y_test = Y_test
 
     def train(self, model):
-        self.experiment = "WSTAR"
-        print("Start training {} ...".format(self.experiment))
-        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.experiment + '_' + str(self.opt.seed) + '.csv')
+        self.opt.experiment = "WSTAR"
+        print("Start training {} ...".format(self.opt.experiment))
+        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')

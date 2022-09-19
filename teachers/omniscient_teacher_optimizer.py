@@ -13,9 +13,9 @@ import numdifftools as nd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 
-import numpy_ml.neural_nets.schedulers as schedulers
+# import numpy_ml.neural_nets.schedulers as schedulers
 
 from tqdm import tqdm
 
@@ -319,7 +319,8 @@ def __select_example__(teacher, student, X, y, batch_size):
 
     # print("arg min", arg_min, "s", s)
 
-    return best_data, best_label
+    # return best_data, best_label
+    return arg_min
 
 
 def __generate_example__working__(teacher, student, X, y, batch_size, lr_factor, gd_n, t, optim):
