@@ -14,8 +14,7 @@ from tensorboardX import SummaryWriter
 import torch.nn as nn
 import json
 import os
-import networks
-import data
+
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
@@ -29,22 +28,12 @@ import matplotlib.pyplot as plt
 
 from utils.data import plot_graphs
 
-import pathlib
-
-from utils.data import init_data, load_experiment_result
-
-from torchvision.utils import save_image, make_grid
-
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
 from utils.data import init_data, load_experiment_result
 from utils.network import initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
 
 import subprocess
 import glob
