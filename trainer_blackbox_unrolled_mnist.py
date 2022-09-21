@@ -547,7 +547,7 @@ class Trainer:
                         #     generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
                         #     generated_sample = generated_sample @ proj_matrix.cuda()
 
-                        self.student.update(generated_sample.detach(), gt_y)
+                        self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
                     self.student.eval()
                     test = self.student(X_test.cuda()).cpu()
@@ -797,7 +797,7 @@ class Trainer:
                             generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
                         generated_sample_proj = generated_sample @ proj_matrix.cuda()
-                        self.student.update(generated_sample_proj, y)
+                        self.student.update(generated_sample_proj, y.unsqueeze(1))
 
                     self.student.eval()
                     test = self.student(X_test.cuda()).cpu()
@@ -872,7 +872,7 @@ class Trainer:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                     generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
 
-                self.student.update(generated_sample, gt_y)
+                self.student.update(generated_sample, gt_y.unsqueeze(1))
 
                 #self.student(generated_sample)
                 #out = self.student(generated_sample)

@@ -668,7 +668,7 @@ class Trainer:
                                 generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
                                 generated_sample = generated_sample.detach().clone() @ proj_matrix.cuda()
 
-                            self.student.update(generated_sample, gt_y)
+                            self.student.update(generated_sample, gt_y.unsqueeze(1))
 
                         self.student.eval()
                         test = self.student(X_test.cuda()).cpu()

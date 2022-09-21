@@ -324,7 +324,7 @@ class Trainer:
             x_t = X_train[i_min:i_max].cuda()
             y_t = Y_train[i_min:i_max].cuda()
 
-            self.student.update(x_t, y_t)
+            self.student.update(x_t, y_t.unsqueeze(1))
 
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()

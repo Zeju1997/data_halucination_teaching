@@ -498,7 +498,7 @@ class Trainer:
 
                             generated_sample = generated_sample.view(self.opt.batch_size, -1)
                             generated_sample = generated_sample @ proj_matrix.to(self.device)
-                            self.student.update(generated_sample.detach(), y)
+                            self.student.update(generated_sample.detach(), y.unsqueeze(1))
 
                         self.student.eval()
                         test = self.student(X_test.to(self.device)).cpu()

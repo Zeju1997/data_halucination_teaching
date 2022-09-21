@@ -254,7 +254,7 @@ class Trainer:
                     generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
                     generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
 
-                self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
+                self.student.update(torch.cuda.FloatTensor(new_data), new_labels.unsqueeze(1))
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
 
@@ -323,7 +323,6 @@ class Trainer:
 
     def plot_results(self):
 
-        seed_list = [1, 2]
         experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
         rootdir = self.opt.log_path
 
@@ -340,72 +339,6 @@ class Trainer:
                         experiment_dict[experiment].append(file)
 
         plot_graphs(rootdir, experiment_dict, experiments_lst)
-
-        sys.exit()
-
-        jpgFilenamesList = glob.glob('results_*.jpg')
-
-        sys.exit()
-
-        X_test = next(iter(self.test_loader))[0].numpy()
-        Y_test = next(iter(self.test_loader))[1].numpy()
-
-        accuracies = []
-        for epoch in tqdm(range(100)):
-            print('\nEpoch: %d' % epoch)
-            self.teacher.train()
-            train_loss = 0
-            correct = 0
-            total = 0
-            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                self.teacher.update(inputs, targets)
-
-                outputs = self.teacher(inputs.cuda())
-                predicted = torch.max(outputs, dim=1).indices
-
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # print('Acc: %.3f%% (%d/%d)'% (100.*correct/total, correct, total))
-
-            self.teacher.eval()
-            test_loss = 0
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(self.test_loader):
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                    outputs = self.teacher(inputs.cuda())
-                    predicted = torch.max(outputs, dim=1).indices
-
-                    total += targets.size(0)
-                    correct += predicted.eq(targets).sum().item()
-
-            # Save checkpoint.
-            acc = 100.*correct/total
-            accuracies.append(acc)
-
-            print("Epoch", epoch, "Acc", acc)
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        #plt.show()
-        '''
-            test = self.teacher(X_test.cuda()).cpu()
-            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            accuracies.append(nb_correct / X_test.size(0))
-
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
 
     def process_batch(self, inputs):
         #for key, ipt in inputs.items():

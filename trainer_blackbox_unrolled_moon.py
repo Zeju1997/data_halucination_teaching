@@ -516,7 +516,7 @@ class Trainer:
                             generated_sample = generated_sample.view(self.opt.batch_size, -1)
                             generated_sample = generated_sample @ proj_matrix.cuda()
 
-                        self.student.update(generated_sample, gt_y)
+                        self.student.update(generated_sample, gt_y.unsqueeze(1))
 
                     self.student.eval()
                     test = self.student(X_test.cuda()).cpu()
@@ -596,7 +596,7 @@ class Trainer:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
                     generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
 
-                self.student.update(generated_sample, gt_y)
+                self.student.update(generated_sample, gt_y.unsqueeze(1))
 
                 #self.student(generated_sample)
                 #out = self.student(generated_sample)

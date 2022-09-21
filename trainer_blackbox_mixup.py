@@ -674,7 +674,7 @@ class Trainer:
 
                 mixed_y = targets_a * alpha + targets_b * (1 - alpha)
 
-                self.student.update(mixed_x, mixed_y)
+                self.student.update(mixed_x, mixed_y.unsqueeze(1))
 
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()

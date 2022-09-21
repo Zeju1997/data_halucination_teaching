@@ -316,10 +316,10 @@ class Trainer:
         for _ in tqdm(range(self.opt.n_unroll)):
 
             w_t = netG.state_dict()
-            gradients, loss, train_loss = unrolled_optimizer(w_t, w_star)
+            gradients, loss = unrolled_optimizer(w_t, w_star)
 
             # loss_student.append(loss.item())
-            loss_student = loss_student + train_loss
+            # loss_student = loss_student + train_loss
 
             with torch.no_grad():
                 for p, g in zip(netG.parameters(), gradients):
@@ -363,12 +363,12 @@ class Trainer:
 
                 if idx == 1:
                     generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                    generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
+                    generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
                 else:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                    generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
+                    generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
-                self.student.update(generated_sample.detach(), gt_y)
+                self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
                 #self.student(generated_sample)
                 #out = self.student(generated_sample)
@@ -402,11 +402,11 @@ class Trainer:
             print("acc", acc)
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-            # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-            # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
         if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
