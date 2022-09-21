@@ -55,12 +55,14 @@ class WSTARTrainer(nn.Module):
                 for i in range(nb_batch):
                     i_min = i * self.opt.batch_size
                     i_max = (i + 1) * self.opt.batch_size
-                    model.update(self.X_train[i_min:i_max].cuda(), self.Y_train[i_min:i_max].cuda())
+                    x = self.X_train[i_min:i_max].cuda()
+                    y = self.Y_train[i_min:i_max].cuda()
+                    model.update(x, y.unsqueeze(1))
 
             model.eval()
             test = model(self.X_test.cuda()).cpu()
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable" or self.opt.data_mode == "covid":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == self.Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":

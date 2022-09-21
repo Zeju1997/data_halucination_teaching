@@ -63,7 +63,7 @@ class SGDTrainer(nn.Module):
                     random_samples = np.concatenate((random_samples, random_data), axis=0)
                     random_labels = np.concatenate((random_labels, random_label), axis=0)
 
-                model.update(data, label)
+                model.update(data, label.unsqueeze(1))
 
             model.eval()
             test = model(self.X_test.cuda()).cpu()
@@ -72,7 +72,7 @@ class SGDTrainer(nn.Module):
             # a_example.append(a)
             # b_example.append(b)
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "covid":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == self.Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":

@@ -355,6 +355,7 @@ def __generate_example__working__(teacher, student, X, y, batch_size, lr_factor,
     # generate an initial point
     # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
     label_new = torch.randint(0, 2, (batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
     # run the gradient descent updates
 
     s1 = []
@@ -516,7 +517,7 @@ def __generate_example__working__(teacher, student, X, y, batch_size, lr_factor,
     return data_new, label_new
 
 
-def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t, optim):
+def __generate_example__(teacher, opt, student, X, y):
     """
     Selectionne un exemple selon le teacher et le student
     :param teacher: Le teacher de classe mère BaseLinear
@@ -528,7 +529,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     """
 
     nb_example = X.size(0)
-    nb_batch = int(nb_example / batch_size)
+    nb_batch = int(nb_example / opt.batch_size)
 
     s = 1000
 
@@ -547,7 +548,8 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
 
     # generate an initial point
     # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
-    label_new = torch.randint(0, 2, (batch_size,), dtype=torch.float).cuda()
+    label_new = torch.randint(0, 2, (opt.batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
     # run the gradient descent updates
 
     s1 = []
@@ -557,7 +559,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     xx = []
     yy = []
     data_trajectory = []
-    init_point = torch.zeros(batch_size, X.shape[1]).cuda()
+    init_point = torch.zeros(opt.batch_size, X.shape[1]).cuda()
     init_point.requires_grad = True
 
     # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
@@ -575,7 +577,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
 
 
     s1 = []
-    for t in range(gd_n):
+    for t in range(opt.gd_n):
         init_point.requires_grad = True
         lr = student.optim.param_groups[0]["lr"]
         example_difficulty = ExampleDifficulty(student, lr, label_new)
@@ -594,7 +596,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
 
         score_loss = ScoreLoss(example_difficulty, example_usefulness)
 
-        # eps = np.sqrt(np.finfo(float).eps)
+        eps = np.sqrt(np.finfo(float).eps)
         # eps_list = [np.sqrt(200) * eps] * X.shape[1]
         # grad = approx_fprime(init_point, score_loss, eps_list)
         # grad = torch.Tensor(grad).cuda()
@@ -602,7 +604,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
         # build a solution one variable at a time
         for i in range(bounds.shape[0]):
             if not constraints[i]:
-                if optim == "adam":
+                if opt.optim == "adam":
                     # adam: convergence problem!
                     # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
                     m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
@@ -957,8 +959,8 @@ class OmniscientLinearTeacher(BaseLinear):
     Omniscient teacher.
     Pour un classifieur linéaire de classe OmniscientLinearStudent
     """
-    def generate_example(self, student, X, y, batch_size, lr_factor, gd_n, t, optim):
-        return __generate_example__(self, student, X, y, batch_size, lr_factor, gd_n, t, optim)
+    def generate_example(self, opt, student, X, y):
+        return __generate_example__(self, opt, student, X, y)
 
     def select_example(self, student, X, y, batch_size):
         return __select_example__(self, student, X, y, batch_size)

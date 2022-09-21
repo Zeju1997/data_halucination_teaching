@@ -11,7 +11,7 @@ class Options:
         self.parser = argparse.ArgumentParser(description="Retouch options")
 
         self.parser.add_argument('--config', help="configuration file *.yml", type=str, required=False, default='config.yml')
-        self.parser.add_argument('--seed', help="configuration file *.yml", type=int, required=False, default=1)
+        self.parser.add_argument('--seed', help="configuration file *.yml", type=int, required=False, default=86239)
         self.parser.add_argument('--init_data', help="configuration file *.yml", type=bool, required=False, default=True)
 
         # PATHS

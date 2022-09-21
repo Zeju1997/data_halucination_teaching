@@ -16,6 +16,10 @@ import torch.nn as nn
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
+from networks.resnet import ResNet50
+
+from datasets import CovidCTDataset
+
 # import utils
 
 import csv
@@ -100,9 +104,9 @@ def init_data(opt):
         X = next(iter(loader))[0].numpy()
         Y = next(iter(loader))[1].numpy()
 
-        # (N, W, H) = train_dataset.data.shape
-        # dim = W*H
-        # X = X.reshape((N, dim))
+        (N, W, H) = train_dataset.data.shape
+        dim = W*H
+        X = X.reshape((N, dim))
 
         # create new data set with class 1 as 0 and class 2 as 1
         f = (Y == opt.class_1) | (Y == opt.class_2)
@@ -184,6 +188,96 @@ def init_data(opt):
             plt.title('Linearly Seperable Data')
             # plt.show()
             plt.close()
+
+    elif opt.data_mode == "covid":
+        print("Loading Covid CT data ...")
+
+        base_dir = os.path.join(CONF.PATH.DATA, 'CovidCT')
+
+        encode_data = False
+        if encode_data:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            train_transformer = transforms.Compose([
+                transforms.Resize(256),
+                # transforms.RandomResizedCrop((224),scale=(0.5, 1.0)),
+                # transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize
+            ])
+
+            val_transformer = transforms.Compose([
+                transforms.Resize(256), # transforms.Resize(224),
+                # transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize
+            ])
+
+            net = ResNet50()
+
+            trainset = CovidCTDataset(root_dir=base_dir,
+                                      txt_COVID='/Data-split/COVID/trainCT_COVID.txt',
+                                      txt_NonCOVID='/Data-split/NonCOVID/trainCT_NonCOVID.txt',
+                                      transform=train_transformer)
+            valset = CovidCTDataset(root_dir=base_dir,
+                                      txt_COVID='/Data-split/COVID/valCT_COVID.txt',
+                                      txt_NonCOVID='/Data-split/NonCOVID/valCT_NonCOVID.txt',
+                                      transform=val_transformer)
+            testset = CovidCTDataset(root_dir=base_dir,
+                                      txt_COVID='/Data-split/COVID/testCT_COVID.txt',
+                                      txt_NonCOVID='/Data-split/NonCOVID/testCT_NonCOVID.txt',
+                                      transform=val_transformer)
+            print(trainset.__len__())
+            print(valset.__len__())
+            print(testset.__len__())
+
+            train_loader = DataLoader(trainset, batch_size=1, drop_last=False, shuffle=True)
+            val_loader = DataLoader(valset, batch_size=1, drop_last=False, shuffle=True)
+            test_loader = DataLoader(testset, batch_size=1, drop_last=False, shuffle=False)
+
+            for i, data in tqdm(enumerate(train_loader)):
+                feat = net(data['img'])
+                data['img'] = feat
+                data_path = os.path.join(base_dir, 'train', '{}.pt'.format(i))
+                torch.save(data, data_path)
+
+            for i, data in tqdm(enumerate(val_loader)):
+                feat = net(data['img'])
+                data['img'] = feat
+                data_path = os.path.join(base_dir, 'val', '{}.pt'.format(i))
+                torch.save(data, data_path)
+
+            for i, data in tqdm(enumerate(test_loader)):
+                feat = net(data['img'])
+                data['img'] = feat
+                data_path = os.path.join(base_dir, 'test', '{}.pt'.format(i))
+                torch.save(data, data_path)
+
+        nb_train = 425
+        nb_val = 118
+        nb_test = 203
+        X = torch.empty(nb_train + nb_val + nb_test, 2048)
+        Y = torch.empty(nb_train + nb_val + nb_test, 1)
+
+        for i in range(nb_train):
+            data_path = os.path.join(base_dir, 'train', '{}.pt'.format(i))
+            data = torch.load(data_path)
+            X[i, :] = data['img']
+            Y[i, :] = data['label']
+
+        for i in range(nb_val):
+            data_path = os.path.join(base_dir, 'val', '{}.pt'.format(i))
+            data = torch.load(data_path)
+            X[i+nb_train, :] = data['img']
+            Y[i+nb_train, :] = data['label']
+
+        for i in range(nb_test):
+            data_path = os.path.join(base_dir, 'test', '{}.pt'.format(i))
+            data = torch.load(data_path)
+            X[i+nb_train+nb_val, :] = data['img']
+            Y[i+nb_train+nb_val, :] = data['label']
+
+        Y = Y.squeeze(1)
+
     else:
         print("Unrecognized data!")
         sys.exit()

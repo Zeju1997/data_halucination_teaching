@@ -2,9 +2,14 @@ import torch
 from torchvision.utils import save_image, make_grid
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import imageio
 import glob
 import os
+
+cm = plt.cm.RdBu
+cm_bright = ListedColormap(['#FF0000', '#0000FF'])
+
 
 
 def make_results_video(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
@@ -95,7 +100,7 @@ def make_results_video(opt, X, Y, a_student, b_student, generated_samples, gener
     '''
 
 
-def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
+def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed, proj_matrix=None):
 
     print("generated samples", generated_samples.shape)
 
@@ -205,12 +210,12 @@ def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generat
     plt.close()
     '''
 
-def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch):
+def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
     fig.set_size_inches(20, 5.8)
     # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-    ax1.scatter(X[:, 0], X[:, 1], c=Y)
-    ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
+    ax1.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+    ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:, 0], cmap=cm_bright, marker='^', edgecolors='k')
     ax1.legend(loc="upper right")
     ax1.set_title("Data Generation")
     #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
@@ -238,20 +243,20 @@ def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, gene
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
 
-def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch):
+def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
         fig.set_size_inches(20, 5.8)
         #ax1.plot(a, b, '-k', label='Teacher Classifier')
         # ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
+        ax1.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+        ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1, 0], cmap=cm_bright, marker='^', edgecolors='k')
         ax1.set_title("Data Generation (Ours)")
         # ax1.set_xlim([X.min()-0.5, X.max()+0.5])
         # ax1.set_ylim([X.min()-0.5, X.max()+0.5])
@@ -298,7 +303,7 @@ def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, ge
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
-    gif_path = os.path.join(video_dir, 'results_{}_{}.gif'.format(opt.data_mode, epoch))
+    gif_path = os.path.join(video_dir, 'results_{}_{}_{}.gif'.format(opt.data_mode, epoch, seed))
     imageio.mimsave(gif_path, images, fps=20)
     # optimize(gif_path)
 
@@ -313,7 +318,7 @@ def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, ge
     '''
 
 
-def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, proj_matrix=None):
+def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
         # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
@@ -372,7 +377,7 @@ def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_sampl
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
-    gif_path = os.path.join(video_dir, 'results_{}_{}.gif'.format(opt.data_mode, epoch))
+    gif_path = os.path.join(video_dir, 'results_{}_{}_{}.gif'.format(opt.data_mode, epoch, seed))
     imageio.mimsave(gif_path, images, fps=20)
     # optimize(gif_path)
 
@@ -387,7 +392,7 @@ def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_sampl
     '''
 
 
-def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, proj_matrix=None):
+def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
 
     print("generated samples", generated_samples.shape)
 
@@ -427,7 +432,7 @@ def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -482,12 +487,12 @@ def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples
     plt.close()
     '''
 
-def make_results_img_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch):
+def make_results_img_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     fig.set_size_inches(13.3, 5.8)
     # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-    ax1.scatter(X[:, 0], X[:, 1], c=Y)
-    ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
+    ax1.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+    ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:, 0], cmap=cm_bright, marker='^', edgecolors='k')
     ax1.legend(loc="upper right")
     ax1.set_title("Data Generation")
     #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
@@ -505,20 +510,20 @@ def make_results_img_2d_blackbox(opt, X, Y, a_student, b_student, generated_samp
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
 
-def make_results_video_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch):
+def make_results_video_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
         fig, (ax1, ax2) = plt.subplots(1, 2)
         fig.set_size_inches(13.3, 5.8)
         #ax1.plot(a, b, '-k', label='Teacher Classifier')
         # ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
+        ax1.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+        ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1, 0], cmap=cm_bright, marker='^')
         ax1.set_title("Data Generation (Ours)")
         # ax1.set_xlim([X.min()-0.5, X.max()+0.5])
         # ax1.set_ylim([X.min()-0.5, X.max()+0.5])
@@ -555,7 +560,7 @@ def make_results_video_2d_blackbox(opt, X, Y, a_student, b_student, generated_sa
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
-    gif_path = os.path.join(video_dir, 'results_{}_{}.gif'.format(opt.data_mode, epoch))
+    gif_path = os.path.join(video_dir, 'results_{}_{}_{}.gif'.format(opt.data_mode, epoch, seed))
     imageio.mimsave(gif_path, images, fps=20)
     # optimize(gif_path)
 

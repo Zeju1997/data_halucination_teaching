@@ -123,7 +123,7 @@ class Discriminator_moon(nn.Module):
         return validity
 
 
-class UnrolledOptimizer1(nn.Module):
+class UnrolledOptimizer(nn.Module):
     """
     Args:
         - nscale : number of scales
@@ -131,7 +131,7 @@ class UnrolledOptimizer1(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix):
+    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
         super(UnrolledOptimizer, self).__init__()
 
         self.opt = opt
@@ -162,26 +162,31 @@ class UnrolledOptimizer1(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init):
+    def forward(self, weight, w_star):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
         with torch.no_grad():
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #    param2 = w_star
 
         loss_stu = 0
         w_loss = 0
         tau = 1
 
-        new_weight = w_init
+        new_weight = self.student.lin.weight
+
+        train_loss = []
 
         model_paramters = list(self.generator.parameters())
+        student_paramters = list(self.student.parameters())
 
         for i in range(self.opt.n_unroll_blocks):
             w_t = self.student.lin.weight
@@ -198,10 +203,11 @@ class UnrolledOptimizer1(nn.Module):
             x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
             generated_x = self.generator(x, gt_y)
 
-            generated_x_proj = generated_x @ self.proj_matrix.cuda()
+            if self.proj_matrix is not None:
+                generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
-            out = self.student(generated_x_proj)
+            out = self.student(generated_x)
 
             loss = self.loss_fn(out, gt_y.float())
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
@@ -216,13 +222,12 @@ class UnrolledOptimizer1(nn.Module):
             else:
                 tau = 0.95 * tau
 
-            # self.student.eval()
-            out_stu = self.teacher(generated_x_proj)
-            # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+        # self.student.eval()
+        out_stu = self.teacher(generated_x)
+        # out_stu = self.student(generated_x)
+        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-        new_weight = new_weight / torch.norm(new_weight)
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
 
         loss_stu = loss_stu + w_loss
 
@@ -233,7 +238,7 @@ class UnrolledOptimizer1(nn.Module):
         return grad_stu, loss_stu
 
 
-class UnrolledOptimizer(nn.Module):
+class UnrolledOptimizer1(nn.Module):
     """
     Args:
         - nscale : number of scales

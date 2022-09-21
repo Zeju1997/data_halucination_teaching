@@ -18,6 +18,10 @@ from types import SimpleNamespace
 # the directory that options.py resides in
 file_dir = os.path.dirname(__file__)
 
+import numpy as np
+import torch
+
+import random
 
 # Function to load yaml configuration file
 def load_config(config_name):
@@ -33,9 +37,18 @@ if __name__ == "__main__":
     config = load_config("moon.yaml")
     opts.set_defaults(**config)
 
+    args = opts.parse_args()
+
     # generate data
-    opts.init_data = True
-    trainer = Trainer(opts.parse_args())
+    args.init_data = True
+
+    # set seed
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    trainer = Trainer(args)
+    # trainer = Trainer(opts.parse_args())
     trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()

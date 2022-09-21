@@ -27,7 +27,7 @@ class BaseLinear(linear.LinearClassifier):
         self.train()
         self.optim.zero_grad()
         out = self(X)
-        loss = self.loss_fn(out.squeeze(1), y)
+        loss = self.loss_fn(out, y)
         # loss = self.loss_fn(out, y)
         loss.backward()
         self.optim.step()

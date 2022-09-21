@@ -63,7 +63,7 @@ class IMTTrainer(nn.Module):
                     selected_samples = np.concatenate((selected_samples, selected_data), axis=0)
                     selected_labels = np.concatenate((selected_labels, selected_label), axis=0)
 
-                model.update(best_data, best_label)
+                model.update(best_data, best_label.unsqueeze(1))
 
             model.eval()
             test = model(self.X_test.cuda()).cpu()
@@ -72,7 +72,7 @@ class IMTTrainer(nn.Module):
             # a_baseline.append(a)
             # b_baseline.append(b)
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable" or self.opt.data_mode == "covid":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == self.Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
