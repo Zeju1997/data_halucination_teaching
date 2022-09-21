@@ -208,13 +208,6 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         print("Training")
         # self.set_train()
 
@@ -252,7 +245,7 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-         # ---------------------
+        # ---------------------
         #  Train Teacher
         # ---------------------
 
@@ -268,6 +261,7 @@ class Trainer:
         #  Train SGD
         # ---------------------
 
+        self.opt.experiment = "SGD"
         if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
@@ -276,20 +270,19 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             sgd_trainer.train(sgd_example, w_star)
 
-        self.opt.experiment = "SGD"
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
         #  Train IMT Baseline
         # ---------------------
 
+        self.opt.experiment = "IMT_Baseline"
         if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
@@ -410,10 +403,10 @@ class Trainer:
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
             make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-            make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
+            # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
         else:
-            # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-            make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
 
         if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
