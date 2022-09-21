@@ -155,7 +155,7 @@ def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generat
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}.png'.format(opt.data_mode, epoch))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
