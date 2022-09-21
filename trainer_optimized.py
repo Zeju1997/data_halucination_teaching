@@ -2,27 +2,20 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import time
-import json
 
 import sys
 
 import torch
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from tensorboardX import SummaryWriter
+
 import torch.nn as nn
 import json
 import os
 
 from tqdm import tqdm
-import torchvision
-from torchvision import transforms
-from torchvision.transforms import ToTensor
+
 from train_utils import *
-from eval import EvalMetrics
+
 import teachers.omniscient_teacher_optimizer as omniscient
-import teachers.surrogate_teacher_optimizer as surrogate
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 
@@ -34,17 +27,11 @@ from utils.network import initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
-
-import subprocess
 import glob
-
-import imageio
-# from pygifsicle import optimize
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
-import re
 
 def init_weights(m):
     if isinstance(m, nn.Linear):

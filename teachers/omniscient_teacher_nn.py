@@ -1,21 +1,9 @@
 from teachers.utils import BaseLinear, BaseConv
 import torch
-import sys
 import torch.nn as nn
-from torch.autograd import grad
-from torch.autograd import Variable
-import scipy.optimize as spo
-from torch.autograd.functional import hessian
-from scipy import optimize
-
-import numdifftools as nd
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-from mpl_toolkits.mplot3d import Axes3D
-
-import numpy_ml.neural_nets.schedulers as schedulers
 
 from tqdm import tqdm
 
