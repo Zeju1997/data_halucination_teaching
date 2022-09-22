@@ -26,7 +26,7 @@ import teachers.utils as utils
 import matplotlib.pyplot as plt
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, plot_graphs
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -347,8 +347,13 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
-
-        adversarial_loss = torch.nn.BCELoss()
+        self.opt.experiment = "Student"
+        print("Start training {} ...".format(self.opt.experiment))
+        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['iter', 'test acc', 'w diff'])
 
         tmp_student = utils.BaseLinear(self.opt.dim)
 
@@ -452,6 +457,10 @@ class Trainer:
             diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_student.append(diff.detach().clone().cpu())
 
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([idx, acc, diff.item()])
+
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
             make_results_img_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
             # make_results_video_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
@@ -511,6 +520,25 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
+
 
     def load_experiment_result(self):
         """Write an event to the tensorboard events file

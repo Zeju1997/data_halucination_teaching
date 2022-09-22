@@ -350,7 +350,6 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
             file_path = os.path.join(rootdir, file)
             if os.path.isfile(file_path):
                 acc = []
-                w_diff = []
                 with open(file_path, 'r') as csvfile:
                     lines = csv.reader(csvfile, delimiter=',')
                     for idx, row in enumerate(lines):
