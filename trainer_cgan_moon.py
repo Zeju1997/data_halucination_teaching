@@ -36,7 +36,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, plot_graphs
 from utils.network import initialize_weights
 
 import subprocess
@@ -486,6 +486,10 @@ class Trainer:
                         diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                         w_diff_student.append(diff.detach().clone().cpu())
 
+                        with open(logname, 'a') as logfile:
+                            logwriter = csv.writer(logfile, delimiter=',')
+                            logwriter.writerow([idx, acc, diff.item()])
+
                     if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                         make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                         # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
@@ -548,6 +552,25 @@ class Trainer:
                 # plt.savefig('results_mnist_final.jpg')
                 # plt.close()
                 plt.show()
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
 
     def load_experiment_result(self):
         """Write an event to the tensorboard events file

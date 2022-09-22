@@ -50,4 +50,4 @@ if __name__ == "__main__":
     # trainer = Trainer(opts.parse_args())
     trainer.main()
     # trainer.make_gif()
-    # trainer.plot_results()
+    trainer.plot_results()
