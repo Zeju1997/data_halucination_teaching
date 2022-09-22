@@ -20,8 +20,8 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
         in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]
@@ -86,6 +86,7 @@ class Generator_moon(nn.Module):
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
 
         in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         self.input_fc = nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False)
         self.hidden_fc = nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False)
@@ -199,8 +200,9 @@ class UnrolledOptimizer(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
+            gt_x = gt_x / torch.norm(gt_x)
             x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+            # x = torch.cat((w_t, w_t-w_star), dim=1)
             generated_x = self.generator(x, gt_y)
 
             if self.proj_matrix is not None:
@@ -222,10 +224,10 @@ class UnrolledOptimizer(nn.Module):
             else:
                 tau = 0.95 * tau
 
-        # self.student.eval()
-        out_stu = self.teacher(generated_x)
-        # out_stu = self.student(generated_x)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            # self.student.eval()
+            out_stu = self.teacher(generated_x)
+            # out_stu = self.student(generated_x)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
         w_loss = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
 

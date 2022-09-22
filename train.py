@@ -13,15 +13,14 @@ import yaml
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
-from types import SimpleNamespace
-
-# the directory that options.py resides in
-file_dir = os.path.dirname(__file__)
-
 import numpy as np
 import torch
 
 import random
+
+# the directory that options.py resides in
+file_dir = os.path.dirname(__file__)
+
 
 # Function to load yaml configuration file
 def load_config(config_name):
@@ -34,7 +33,7 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist_whitebox_unrolled.yaml")
+    config = load_config("moon_whitebox_unrolled.yaml")
     opts.set_defaults(**config)
 
     args = opts.parse_args()

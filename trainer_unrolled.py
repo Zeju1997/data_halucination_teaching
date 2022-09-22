@@ -262,7 +262,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -277,7 +277,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -288,6 +288,13 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
+        self.opt.experiment = "Student"
+        print("Start training {} ...".format(self.opt.experiment))
+        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['iter', 'test acc', 'w diff'])
 
         tmp_student = utils.BaseLinear(self.opt.dim)
 
@@ -300,7 +307,7 @@ class Trainer:
 
         netG.train()
         netG.apply(weights_init)
-        optimizer = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        optimG = torch.optim.Adam(netG.parameters(), lr=0.002, betas=(0.5, 0.999))
 
         res_student = []
         a_student = []
@@ -325,7 +332,7 @@ class Trainer:
                 for p, g in zip(netG.parameters(), gradients):
                     p.grad = g
 
-            optimizer.step()
+            optimG.step()
 
         # plt.plot(loss_student, c='b', label="loss")
         # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
@@ -398,6 +405,10 @@ class Trainer:
             w = w / torch.norm(w)
             diff = torch.linalg.norm(w_star - w, ord=2) ** 2
             w_diff_student.append(diff.detach().clone().cpu())
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([idx, acc, diff.item()])
 
             print("acc", acc)
 
