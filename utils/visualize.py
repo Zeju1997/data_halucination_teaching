@@ -248,6 +248,8 @@ def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, gene
     plt.close()
 
 
+
+
 def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
