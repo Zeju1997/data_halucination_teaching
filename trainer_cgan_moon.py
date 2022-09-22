@@ -280,7 +280,7 @@ class Trainer:
         #  Train Teacher
         # ---------------------
 
-        if self.opt.train_wstar == False:
+        if self.opt.train_wstar == True:
             wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             wstar_trainer.train(self.teacher)
 
@@ -292,6 +292,7 @@ class Trainer:
         #  Train SGD
         # ---------------------
 
+        self.opt.experiment = "SGD"
         if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
@@ -300,20 +301,19 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             sgd_trainer.train(sgd_example, w_star)
 
-        self.opt.experiment = "SGD"
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
         #  Train IMT Baseline
         # ---------------------
 
+        self.opt.experiment = "IMT_Baseline"
         if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
@@ -322,6 +322,12 @@ class Trainer:
 
         if self.opt.train_student == True:
             self.opt.experiment = "Student"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
 
             adversarial_loss = torch.nn.BCELoss()
 
@@ -438,28 +444,24 @@ class Trainer:
                             w_t = self.student.lin.weight
 
                             i = torch.randint(0, nb_batch, size=(1,)).item()
-                            i_min = i * self.opt.batch_size
-                            i_max = (i + 1) * self.opt.batch_size
-
-                            gt_x = X_train[i_min:i_max].cuda()
-                            y = Y_train[i_min:i_max].cuda()
+                            gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
 
                             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
                             # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
                             x = torch.cat((w_t, w_t-w_star, z), dim=1)
-                            generated_sample = netG(x, y)
+                            generated_sample = netG(x, gt_y)
 
                             if idx == 1:
                                 generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                                generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
+                                generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
                             else:
                                 generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                                generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
+                                generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
                             # generated_sample = generated_sample @ proj_matrix.cuda()
-                            self.student.update(generated_sample.detach(), y.unsqueeze(1))
+                            self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
                         self.student.eval()
                         test = self.student(X_test.cuda()).cpu()
@@ -485,11 +487,11 @@ class Trainer:
                         w_diff_student.append(diff.detach().clone().cpu())
 
                     if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                        make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                        # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                     else:
-                        # make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-                        make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix)
+                        make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
+                        # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
 
                     save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                     if not os.path.exists(save_folder):
