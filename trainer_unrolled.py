@@ -45,6 +45,7 @@ import glob
 
 import csv
 
+from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
 from utils.data import init_data
 
@@ -307,7 +308,8 @@ class Trainer:
 
         netG.train()
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.002, betas=(0.5, 0.999))
+        optimG = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        # optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
         res_student = []
         a_student = []
@@ -325,7 +327,7 @@ class Trainer:
             w_t = netG.state_dict()
             gradients, loss = unrolled_optimizer(w_t, w_star)
 
-            # loss_student.append(loss.item())
+            loss_student.append(loss.item())
             # loss_student = loss_student + train_loss
 
             with torch.no_grad():
@@ -341,7 +343,9 @@ class Trainer:
         # plt.legend()
         # plt.show()
 
-        loss111 = []
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+
         self.student.load_state_dict(torch.load('teacher_w0.pth'))
         w_init = self.student.lin.weight
         for idx in tqdm(range(self.opt.n_iter)):
@@ -361,7 +365,8 @@ class Trainer:
 
                 z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
-                x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+                # gt_x = gt_x / torch.norm(gt_x)
+                x = torch.cat((w_t, w_t-w_star), dim=1)
                 # x = torch.cat((w_t, w_t-w_star), dim=1)
                 generated_sample = netG(x, gt_y)
 
@@ -485,6 +490,27 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
+
 
     def make_gif(self):
         video_dir = os.path.join(self.opt.log_path, "video")

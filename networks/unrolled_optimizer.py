@@ -20,8 +20,8 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
         # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]
@@ -47,6 +47,76 @@ class Generator(nn.Module):
         img = self.model(gen_input)
         # img = img.view(img.size(0), *self.img_shape)
         return img
+
+
+class Generator1(nn.Module):
+    """ G(z) """
+    def __init__(self, opt, teacher, student):
+        # initalize super module
+        super(Generator, self).__init__()
+
+        self.opt = opt
+        # self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
+        self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
+
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim
+
+        # noise z input layer : (batch_size, 100, 1, 1)
+        self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        nn.BatchNorm2d(128),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        nn.ReLU(),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        )
+
+        # label input layer : (batch_size, 10, 1, 1)
+        self.layer_y = nn.Sequential(nn.ConvTranspose2d(in_channels=self.opt.n_classes, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        nn.BatchNorm2d(128),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        nn.ReLU(),
+                                                        # out size : (batch_size, 128, 3, 3)
+                                                        )
+
+        # noise z and label concat input layer : (batch_size, 256, 3, 3)
+        self.layer_xy = nn.Sequential(nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=3, stride=2, padding=0, bias=False),
+                                                        # out size : (batch_size, 128, 7, 7)
+                                                        nn.BatchNorm2d(128),
+                                                        # out size : (batch_size, 128, 7, 7)
+                                                        nn.ReLU(),
+                                                        # out size : (batch_size, 128, 7, 7)
+                                                        nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=4, stride=2, padding=1, bias=False),
+                                                        # out size : (batch_size, 64, 14, 14)
+                                                        nn.BatchNorm2d(64),
+                                                        # out size : (batch_size, 64, 14, 14)
+                                                        nn.ReLU(),
+                                                        # out size : (batch_size, 64, 14, 14)
+                                                        nn.ConvTranspose2d(in_channels=64, out_channels=1, kernel_size=4, stride=2, padding=1, bias=False),
+                                                        # out size : (batch_size, 1, 28, 28)
+                                                        nn.Tanh())
+                                                        # out size : (batch_size, 1, 28, 28)
+
+    def forward(self, x, y):
+        # x size : (batch_size, 100)
+        x = x.view(x.shape[0], x.shape[1], 1, 1)
+        # x size : (batch_size, 100, 1, 1)
+        x = self.layer_x(x)
+        # x size : (batch_size, 128, 3, 3)
+
+        # y size : (batch_size, 10)
+        y = y.view(y.shape[0], y.shape[1], 1, 1)
+        # y size : (batch_size, 100, 1, 1)
+        y = self.layer_y(y)
+        # y size : (batch_size, 128, 3, 3)
+
+        # concat x and y
+        xy = torch.cat([x, y], dim=1)
+        # xy size : (batch_size, 256, 3, 3)
+        xy = self.layer_xy(xy)
+        # xy size : (batch_size, 1, 28, 28)
+        return xy
 
 
 class Discriminator(nn.Module):
@@ -122,6 +192,127 @@ class Discriminator_moon(nn.Module):
         d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
         validity = self.model(d_in)
         return validity
+
+
+class UnrolledOptimizer_moon(nn.Module):
+    """
+    Args:
+        - nscale : number of scales
+        - alpha : scale factor in the softmax in the expansion (rho in the paper)
+        - nblock : number of stages (K in the paper)
+        - K : kernel size
+    """
+    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
+        super(UnrolledOptimizer_moon, self).__init__()
+
+        self.opt = opt
+
+        self.optim_blocks = nn.ModuleList()
+
+        self.loss_fn = nn.MSELoss()
+        # self.adversarial_loss = nn.BCELoss()
+        self.adversarial_loss = nn.MSELoss()
+
+        self.teacher = teacher
+        self.student = student
+        self.generator = generator
+
+        self.X = X
+        self.Y = Y
+
+        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
+
+        self.proj_matrix = proj_matrix
+
+    def data_sampler(self, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = self.X[i_min:i_max].cuda()
+        y = self.Y[i_min:i_max].cuda()
+
+        return x, y
+
+    def forward(self, weight, w_star):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
+
+        with torch.no_grad():
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            self.generator.load_state_dict(weight)
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #    param2 = w_star
+
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
+
+        new_weight = self.student.lin.weight
+
+        train_loss = []
+
+        model_paramters = list(self.generator.parameters())
+        student_paramters = list(self.student.parameters())
+
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+
+        for i in range(self.opt.n_unroll_blocks):
+            w_t = self.student.lin.weight
+            w_t = w_t / torch.norm(w_t)
+
+            i = torch.randint(0, self.nb_batch, size=(1,)).item()
+            gt_x, gt_y = self.data_sampler(i)
+
+            # Sample noise and labels as generator input
+            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
+            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+
+            # gt_x = gt_x / torch.norm(gt_x)
+            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+            # x = torch.cat((w_t, w_t-w_star), dim=1)
+
+            generated_x = self.generator(x, gt_y)
+
+            if self.proj_matrix is not None:
+                generated_x = generated_x @ self.proj_matrix.cuda()
+
+            # self.student.train()
+            out = self.student(generated_x)
+
+            loss = self.loss_fn(out, gt_y.float())
+            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
+            # new_weight = self.student.lin.weight - 0.001 * grad[0]
+            new_weight = new_weight - 0.001 * grad[0]
+            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
+            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+
+            # tau = np.exp(-i / 0.95)
+            if i != -1:
+                tau = 1
+            else:
+                tau = 0.95 * tau
+
+            # self.student.eval()
+            out_stu = self.teacher(generated_x)
+            loss_teacher = tau * self.loss_fn(out_stu, gt_y)
+            loss_stu = loss_stu + loss_teacher
+
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
+
+        loss_stu = loss_stu + w_loss
+
+        grad_stu = torch.autograd.grad(outputs=loss_stu,
+                                       inputs=model_paramters,
+                                       create_graph=True, retain_graph=True)
+
+
+        return grad_stu, loss_stu
 
 
 class UnrolledOptimizer(nn.Module):
@@ -200,10 +391,11 @@ class UnrolledOptimizer(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            gt_x = gt_x / torch.norm(gt_x)
-            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+            w = torch.cat((w_t, w_t-w_star), dim=1)
+            # w = w.repeat(self.opt.batch_size, 1)
+            # x = torch.cat((w, gt_x), dim=1)
             # x = torch.cat((w_t, w_t-w_star), dim=1)
-            generated_x = self.generator(x, gt_y)
+            generated_x = self.generator(w, gt_y)
 
             if self.proj_matrix is not None:
                 generated_x = generated_x @ self.proj_matrix.cuda()
@@ -238,131 +430,3 @@ class UnrolledOptimizer(nn.Module):
                                        create_graph=True, retain_graph=True)
 
         return grad_stu, loss_stu
-
-
-class UnrolledOptimizer1(nn.Module):
-    """
-    Args:
-        - nscale : number of scales
-        - alpha : scale factor in the softmax in the expansion (rho in the paper)
-        - nblock : number of stages (K in the paper)
-        - K : kernel size
-    """
-    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
-        super(UnrolledOptimizer, self).__init__()
-
-        self.opt = opt
-
-        self.optim_blocks = nn.ModuleList()
-
-        # self.loss_fn = nn.MSELoss()
-        self.loss_fn = nn.BCELoss()
-        self.adversarial_loss = nn.BCELoss()
-
-        self.teacher = teacher
-        self.student = student
-        self.generator = generator
-
-        self.X = X
-        self.Y = Y
-
-        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
-
-        self.proj_matrix = proj_matrix
-
-        self.optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
-
-    def data_sampler(self, i):
-        i_min = i * self.opt.batch_size
-        i_max = (i + 1) * self.opt.batch_size
-
-        x = self.X[i_min:i_max].cuda()
-        y = self.Y[i_min:i_max].cuda()
-
-        return x, y
-
-    def forward(self, weight, w_star):
-        # self.generator.linear.weight = weight
-        # self.student.lin.weight = w_init
-
-        with torch.no_grad():
-            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.generator.load_state_dict(weight)
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            # for param1 in self.student.parameters():
-            #     param1 = w_init
-            # for param2 in self.teacher.parameters():
-            #    param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        new_weight = self.student.lin.weight
-
-        train_loss = []
-
-        model_paramters = list(self.generator.parameters())
-        student_paramters = list(self.student.parameters())
-
-        for i in range(self.opt.n_unroll_blocks):
-            w_t = self.student.lin.weight
-            w_t = w_t / torch.norm(w_t)
-
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = self.data_sampler(i)
-
-            # Sample noise and labels as generator input
-            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-            z = Variable(torch.randn(gt_x.shape)).cuda()
-
-            # w = torch.cat((w_t, w_t-w_star), dim=1)
-            w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, gt_x), dim=1)
-            # x = torch.cat((w_t, w_t-w_star), dim=1)
-            generated_x = self.generator(x, gt_y)
-
-            if self.proj_matrix is not None:
-                generated_x = generated_x @ self.proj_matrix.cuda()
-
-            # self.student.train()
-            out = self.student(generated_x)
-
-            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
-            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
-
-            # with torch.no_grad():
-            #    for p, g in zip(self.student.parameters(), grad):
-            #        p.grad = g
-
-            #self.optim.step()
-
-            # new_weight = self.student.lin.weight - 0.001 * grad[0]
-            new_weight = new_weight - 0.001 * grad[0]
-            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
-
-            # tau = np.exp(-i / 0.95)
-            if i != -1:
-                tau = 1
-            else:
-                tau = 0.95 * tau
-
-            # self.student.eval()
-            out_stu = self.teacher(generated_x)
-            loss_teacher = tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
-            loss_stu = loss_stu + loss_teacher
-            train_loss.append(loss_teacher.item())
-
-        # new_weight = new_weight / torch.norm(new_weight)
-        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
-
-        loss_stu = loss_stu + w_loss
-
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
-        return grad_stu, loss_stu, train_loss

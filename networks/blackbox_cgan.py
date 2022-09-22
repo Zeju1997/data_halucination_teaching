@@ -386,7 +386,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
             # out_stu = self.student(generated_x)
             loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-        w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
 
         '''
         grad_stu = torch.autograd.grad(outputs=loss_stu,

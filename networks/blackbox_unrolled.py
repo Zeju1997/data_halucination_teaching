@@ -328,7 +328,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
 
         return x, y
 
-    def forward(self, weight, w_star, w_init, netD=None, valid=None):
+    def forward(self, weight):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -392,51 +392,11 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
         loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
-        # w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
-
-        '''
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
                                        create_graph=True, retain_graph=True)
 
-
-
-        grad_stu_w = torch.autograd.grad(outputs=w_loss,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-        '''
-
-        # Loss measures generator's ability to fool the discriminator
-        # valid = Variable(torch.cuda.FloatTensor(self.batch_size, 1).fill_(1.0), requires_grad=False)
-
-        w_t = self.student.lin.weight
-
-        i = torch.randint(0, self.nb_batch, size=(1,)).item()
-        i_min = i * self.opt.batch_size
-        i_max = (i + 1) * self.opt.batch_size
-
-        # gt_x = self.X[i_min:i_max].cuda()
-        generated_labels = self.Y[i_min:i_max].cuda()
-
-        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-        # z = Variable(torch.randn(gt_x.shape)).cuda()
-
-        # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-        x = torch.cat((w_t, z), dim=1)
-        generated_samples = self.generator(x, generated_labels)
-
-        # generated_labels = generated_labels.float()
-
-        validity = netD(generated_samples, Variable(generated_labels.type(torch.cuda.LongTensor)))
-        g_loss = self.adversarial_loss(validity, valid)
-
-        # loss_stu = loss_stu + w_loss + g_loss
-
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
-        return grad_stu, loss_stu, generated_samples, generated_labels, g_loss
+        return grad_stu, loss_stu
 
 
 class UnrolledBlackBoxOptimizer(nn.Module):

@@ -20,10 +20,8 @@ import teachers.omniscient_teacher_optimizer as omniscient
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 
-from utils.data import plot_graphs
-
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data, load_experiment_result
+from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.network import initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
