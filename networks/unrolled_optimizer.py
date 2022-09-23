@@ -209,7 +209,7 @@ class UnrolledOptimizer_moon(nn.Module):
 
         self.optim_blocks = nn.ModuleList()
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
         # self.adversarial_loss = nn.BCELoss()
         self.adversarial_loss = nn.MSELoss()
 
@@ -285,7 +285,7 @@ class UnrolledOptimizer_moon(nn.Module):
             # self.student.train()
             out = self.student(generated_x)
 
-            loss = self.loss_fn(out, gt_y.float())
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
             # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
@@ -300,7 +300,7 @@ class UnrolledOptimizer_moon(nn.Module):
 
             # self.student.eval()
             out_stu = self.teacher(generated_x)
-            loss_teacher = tau * self.loss_fn(out_stu, gt_y)
+            loss_teacher = tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
             loss_stu = loss_stu + loss_teacher
 
         w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
@@ -310,7 +310,6 @@ class UnrolledOptimizer_moon(nn.Module):
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
                                        create_graph=True, retain_graph=True)
-
 
         return grad_stu, loss_stu
 

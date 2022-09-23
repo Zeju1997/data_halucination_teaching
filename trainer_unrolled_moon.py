@@ -284,12 +284,11 @@ class Trainer:
             unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
         else:
             netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
+            unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
 
         netG.train()
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
-        # optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
         res_student = []
         a_student = []
@@ -346,7 +345,7 @@ class Trainer:
                 z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
                 # gt_x = gt_x / torch.norm(gt_x)
-                x = torch.cat((w_t, w_t-w_star), dim=1)
+                x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                 # x = torch.cat((w_t, w_t-w_star), dim=1)
                 generated_sample = netG(x, gt_y)
 
