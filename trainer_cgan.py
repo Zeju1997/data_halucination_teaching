@@ -840,9 +840,9 @@ class Trainer:
                     w_diff_student.append(diff.detach().clone().cpu())
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch)
+                    self.make_results_img_2d(X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch)
                 else:
-                    self.make_results_img(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix)
+                    self.make_results_img(X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):
@@ -868,7 +868,7 @@ class Trainer:
         plt.close()
 
         if self.visualize == False:
-            self.make_results_video(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student)
+            self.make_results_video(X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student)
 
     def compute_gradient_penalty(self, D, real_samples, fake_samples):
         """Calculates the gradient penalty loss for WGAN GP"""
@@ -891,7 +891,7 @@ class Trainer:
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
-    def make_results_img(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
+    def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch, proj_matrix):
         # unproj_matrix = np.linalg.pinv(proj_matrix)
         n_rows = 10
         indices = torch.randint(0, len(generated_samples), (n_rows**2,))
@@ -942,7 +942,7 @@ class Trainer:
         plt.savefig(img_path)
         plt.close()
 
-    def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch):
+    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, epoch):
         fig, (ax1, ax2) = plt.subplots(1, 2)
         fig.set_size_inches(14, 6)
         ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
@@ -973,7 +973,7 @@ class Trainer:
         plt.close()
 
 
-    def make_results_video(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
+    def make_results_video(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
         # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
         for i in tqdm(range(len(w_diff_student))):
             fig, (ax1, ax2) = plt.subplots(1, 2)

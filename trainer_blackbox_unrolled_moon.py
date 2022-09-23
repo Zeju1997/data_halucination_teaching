@@ -462,11 +462,11 @@ class Trainer:
                 logwriter.writerow([idx, acc, diff.item()])
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
-            # make_results_video_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            make_results_img_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
-            # make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
+            make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
+            # make_results_video_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
 
         save_folder = os.path.join(self.opt.log_path, "models")
         if not os.path.exists(save_folder):

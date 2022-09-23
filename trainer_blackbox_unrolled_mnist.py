@@ -38,6 +38,7 @@ import networks.blackbox_unrolled as blackbox
 import csv
 
 from utils.visualize import make_results_video_blackbox, make_results_video_2d_blackbox, make_results_img_blackbox, make_results_img_2d_blackbox
+from utils.network import initialize_weights
 
 import subprocess
 import glob
@@ -161,14 +162,10 @@ class Trainer:
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
-
+            self.teacher.apply(initialize_weights)
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -292,13 +289,14 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            data_train = BaseDataset(X_train, Y_train)
-            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+            # data_train = BaseDataset(X_train, Y_train)
+            # train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
 
-            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
-            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
+            # X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            # X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
-            proj_matrix = torch.load('proj_matrix.pt')
+            proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
+            # proj_matrix = torch.load('proj_matrix.pt')
 
             X_train = X_train.float() @ proj_matrix
             X_test = X_test.float() @ proj_matrix
@@ -334,7 +332,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -471,7 +469,7 @@ class Trainer:
             plt.plot(loss_student, label="D Loss")
             plt.legend()
             plt.show()
-                '''
+            '''
 
         res_student = []
         a_student = []
@@ -537,7 +535,6 @@ class Trainer:
             acc = nb_correct / X_test.size(0)
             res_student.append(acc)
 
-            # diff = self.teacher.lin.weight - example.lin.weight
             w = self.student.lin.weight
             w = w / torch.norm(w)
             diff = torch.linalg.norm(w_star - w, ord=2) ** 2
@@ -548,11 +545,11 @@ class Trainer:
                 logwriter.writerow([idx, acc, diff.item()])
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
-            # make_results_video_2d_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            make_results_img_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed, proj_matrix)
-            # make_results_video_blackbox(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed, proj_matrix)
+            make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed, proj_matrix)
+            # make_results_video_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed, proj_matrix)
 
         save_folder = os.path.join(self.opt.log_path, "models")
         if not os.path.exists(save_folder):
@@ -795,9 +792,9 @@ class Trainer:
                     w_diff_student.append(diff.detach().clone().cpu())
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch)
+                    self.make_results_img_2d(X, Y, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch)
                 else:
-                    self.make_results_img(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix)
+                    self.make_results_img(X, Y, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):

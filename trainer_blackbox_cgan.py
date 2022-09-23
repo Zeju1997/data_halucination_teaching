@@ -845,9 +845,9 @@ class Trainer:
                     # test_samples = netG(z, test_labels_onehot)
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                    self.make_results_img_2d(X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
                 else:
-                    self.make_results_img(a_student, b_student, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, G_losses, D_losses, epoch, proj_matrix)
+                    self.make_results_img(res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, G_losses, D_losses, epoch, proj_matrix)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):
@@ -1077,9 +1077,9 @@ class Trainer:
                     w_diff_student.append(diff.detach().clone().cpu())
 
                 if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    self.make_results_img_2d(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch)
+                    self.make_results_img_2d(X, Y, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch)
                 else:
-                    self.make_results_img(X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix)
+                    self.make_results_img(X, Y, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix)
 
                 save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                 if not os.path.exists(save_folder):
@@ -1198,7 +1198,7 @@ class Trainer:
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
 
-    def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
+    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
         fig.set_size_inches(20, 5.8)
         ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
@@ -1240,7 +1240,7 @@ class Trainer:
         # plt.show()
         plt.close()
 
-    def make_results_img(self, a_student, b_student, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
+    def make_results_img(self, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
         n_rows = 2
         # indices = torch.randint(0, len(generated_samples), (n_rows**2,))
         # labels = generated_labels[indices]

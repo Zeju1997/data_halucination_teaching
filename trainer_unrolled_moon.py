@@ -47,7 +47,7 @@ import csv
 
 from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -110,21 +110,6 @@ def to_matrix(l, n):
     return [l[i:i+n] for i in range(0, len(l), n)]
 
 
-def initialize_weights(m):
-  if isinstance(m, nn.Conv2d):
-      nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
-      if m.bias is not None:
-          nn.init.constant_(m.bias.data, 0)
-  elif isinstance(m, nn.BatchNorm2d):
-      if m.bias is not None:
-          nn.init.constant_(m.weight.data, 1)
-          nn.init.constant_(m.bias.data, 0)
-  elif isinstance(m, nn.Linear):
-      if m.bias is not None:
-          nn.init.kaiming_uniform_(m.weight.data)
-          nn.init.constant_(m.bias.data, 0)
-
-
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -151,14 +136,9 @@ class Trainer:
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
             self.teacher.apply(initialize_weights)
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
-
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -308,7 +288,7 @@ class Trainer:
 
         netG.train()
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        optimG = torch.optim.Adam(netG.parameters(), lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
         # optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
         res_student = []
@@ -418,11 +398,11 @@ class Trainer:
             print("acc", acc)
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
-            # make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
-            # make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
         if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)

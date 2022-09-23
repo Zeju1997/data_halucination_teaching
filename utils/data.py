@@ -432,3 +432,18 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
     plt.legend(loc='lower left', fontsize=16)
 
     plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.jpg'), bbox_inches='tight')
+
+
+def initialize_weights(m):
+  if isinstance(m, nn.Conv2d):
+      nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
+      if m.bias is not None:
+          nn.init.constant_(m.bias.data, 0)
+  elif isinstance(m, nn.BatchNorm2d):
+      if m.bias is not None:
+          nn.init.constant_(m.weight.data, 1)
+          nn.init.constant_(m.bias.data, 0)
+  elif isinstance(m, nn.Linear):
+      if m.bias is not None:
+          nn.init.kaiming_uniform_(m.weight.data)
+          nn.init.constant_(m.bias.data, 0)

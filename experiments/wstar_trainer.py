@@ -41,6 +41,8 @@ class WSTARTrainer(nn.Module):
         self.opt.experiment = "WSTAR"
         print("Start training {} ...".format(self.opt.experiment))
         logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+        if os.path.exists(logname):
+            os.remove(logname)
         if not os.path.exists(logname):
             with open(logname, 'w') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')

@@ -38,7 +38,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -133,17 +133,10 @@ class Trainer:
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
-
+            self.teacher.apply(initialize_weights)
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
-
-        self.student.load_state_dict(torch.load('teacher_w0.pth'))
-        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -274,8 +267,8 @@ class Trainer:
             X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
             X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
-            X_train = X_train.float() @ proj_matrix
-            X_test = X_test.float() @ proj_matrix
+            X_train = X_train @ proj_matrix
+            X_test = X_test @ proj_matrix
 
         else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
@@ -440,7 +433,8 @@ class Trainer:
         #  Train SGD
         # ---------------------
 
-        if self.opt.train_sgd == True:
+        self.opt.experiment = "SGD"
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -448,20 +442,19 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             sgd_trainer.train(sgd_example, w_star)
 
-        self.opt.experiment = "SGD"
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
         #  Train IMT Baseline
         # ---------------------
 
-        if self.opt.train_baseline == True:
+        self.opt.experiment = "IMT_Baseline"
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
@@ -469,6 +462,14 @@ class Trainer:
         # ---------------------
 
         if self.opt.train_student == True:
+            self.opt.experiment = "Student"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
+
             adversarial_loss = torch.nn.BCELoss()
 
             tmp_student = utils.BaseLinear(self.opt.dim)
@@ -659,10 +660,10 @@ class Trainer:
 
                             if idx == 1:
                                 generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                                generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
+                                generated_labels = gt_y.cpu().unsqueeze(1).detach().numpy()  # [np.newaxis, :]
                             else:
                                 generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                                generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
+                                generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
                             if self.opt.data_mode == "mnist":
                                 generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
@@ -695,6 +696,10 @@ class Trainer:
                         diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                         w_diff_student.append(diff.detach().clone().cpu())
 
+                        with open(logname, 'a') as logfile:
+                            logwriter = csv.writer(logfile, delimiter=',')
+                            logwriter.writerow([idx, acc, diff.item()])
+
                     '''
                     if self.opt.data_mode == "mnist":
                         save_folder = os.path.join(self.opt.log_path, "imgs")
@@ -719,11 +724,11 @@ class Trainer:
                     '''
 
                     if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                        make_results_img_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        make_results_video_2d(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                        # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                     else:
-                        make_results_img(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        make_results_video(self.opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                        # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
 
                     save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
                     if not os.path.exists(save_folder):
@@ -838,7 +843,7 @@ class Trainer:
             os.remove(file_name)
 
 
-    def make_results_video(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
+    def make_results_video(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
         # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
         for i in tqdm(range(len(w_diff_student))):
             fig, (ax1, ax2) = plt.subplots(1, 2)

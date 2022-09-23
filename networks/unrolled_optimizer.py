@@ -20,8 +20,8 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]
@@ -330,7 +330,7 @@ class UnrolledOptimizer(nn.Module):
 
         self.optim_blocks = nn.ModuleList()
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
         # self.adversarial_loss = nn.BCELoss()
         self.adversarial_loss = nn.MSELoss()
 
@@ -391,7 +391,7 @@ class UnrolledOptimizer(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            w = torch.cat((w_t, w_t-w_star), dim=1)
+            w = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
             # w = w.repeat(self.opt.batch_size, 1)
             # x = torch.cat((w, gt_x), dim=1)
             # x = torch.cat((w_t, w_t-w_star), dim=1)
@@ -403,8 +403,11 @@ class UnrolledOptimizer(nn.Module):
             # self.student.train()
             out = self.student(generated_x)
 
-            loss = self.loss_fn(out, gt_y.float())
-            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
+            grad = torch.autograd.grad(loss,
+                                       self.student.lin.weight,
+                                       create_graph=True, retain_graph=True)
+
             # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
             self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
@@ -418,12 +421,12 @@ class UnrolledOptimizer(nn.Module):
 
             # self.student.eval()
             out_stu = self.teacher(generated_x)
-            # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
 
-        w_loss = torch.linalg.norm(self.teacher.lin.weight - self.student.lin.weight, ord=2) ** 2
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
+        # w_loss = torch.linalg.norm(self.student.lin.weight, ord=2) ** 2
 
-        loss_stu = loss_stu + w_loss
+        loss_stu = w_loss + loss_stu
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,

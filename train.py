@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 # from trainer_blackbox_mixup_rl import Trainer
 # from trainer_blackbox_implicit_cnn import Trainer
-from trainer_vae_moon import Trainer
+from trainer_unrolled_mnist import Trainer
+
 from options.options import Options
 import os
 import argparse
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("moon_whitebox_vae.yaml")
+    config = load_config("mnist_whitebox_unrolled.yaml")
     opts.set_defaults(**config)
 
     args = opts.parse_args()
@@ -51,3 +52,4 @@ if __name__ == "__main__":
     trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()
+

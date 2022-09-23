@@ -7,12 +7,14 @@ import imageio
 import glob
 import os
 
+import seaborn as sns
+
 cm = plt.cm.RdBu
 cm_bright = ListedColormap(['#FF0000', '#0000FF'])
 
 
 
-def make_results_video(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
+def make_results_video(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
         # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
@@ -100,13 +102,12 @@ def make_results_video(opt, X, Y, a_student, b_student, generated_samples, gener
     '''
 
 
-def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed, proj_matrix=None):
+def make_results_img(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed, proj_matrix=None):
 
     print("generated samples", generated_samples.shape)
 
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
-        # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
         generated_samples = generated_samples @ unproj_matrix
         img_shape = (1, 28, 28)
         generated_samples = np.reshape(generated_samples, (generated_samples.shape[0], *img_shape))
@@ -210,7 +211,7 @@ def make_results_img(opt, X, Y, a_student, b_student, generated_samples, generat
     plt.close()
     '''
 
-def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
+def make_results_img_2d(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
     fig.set_size_inches(20, 5.8)
     # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
@@ -248,9 +249,32 @@ def make_results_img_2d(opt, X, Y, a_student, b_student, generated_samples, gene
     plt.close()
 
 
+def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
+    sns.set()
+
+    save_folder = os.path.join(opt.log_path, "generated_samples")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    iterations = [1, 75, 150, 225, 299]
+    for i in iterations:
+
+        fig = plt.figure()
+        fig.set_size_inches(5.8, 5.8)
+        plt.plot(a_star, b_star, '-k', label='W star')
+        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
+        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
+        plt.legend(loc="upper right", fontsize=16)
+        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
+        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
+
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path)
+        plt.close()
 
 
-def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
+def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
@@ -320,7 +344,7 @@ def make_results_video_2d(opt, X, Y, a_student, b_student, generated_samples, ge
     '''
 
 
-def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
+def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
         # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
@@ -394,7 +418,7 @@ def make_results_video_blackbox(opt, X, Y, a_student, b_student, generated_sampl
     '''
 
 
-def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
+def make_results_img_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
 
     print("generated samples", generated_samples.shape)
 
@@ -489,7 +513,7 @@ def make_results_img_blackbox(opt, X, Y, a_student, b_student, generated_samples
     plt.close()
     '''
 
-def make_results_img_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
+def make_results_img_2d_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     fig.set_size_inches(13.3, 5.8)
     # ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
@@ -517,7 +541,7 @@ def make_results_img_2d_blackbox(opt, X, Y, a_student, b_student, generated_samp
     plt.close()
 
 
-def make_results_video_2d_blackbox(opt, X, Y, a_student, b_student, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
+def make_results_video_2d_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
         fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -575,3 +599,19 @@ def make_results_video_2d_blackbox(opt, X, Y, a_student, b_student, generated_sa
     for file_name in glob.glob("*.png"):
         os.remove(file_name)
     '''
+
+import torch.nn as nn
+def plot_classifier(model, max, min):
+    max = max.values.detach().numpy()
+    min = min.values.detach().numpy()
+
+    w = 0
+    for layer in model.children():
+        if isinstance(layer, nn.Linear):
+            w = layer.state_dict()['weight'].cpu().numpy()
+
+    slope = (-w[0, 0]/w[0, 1] - 1) / (1 + w[0, 1]/w[0, 0])
+
+    x = np.linspace(min-0.5, max+0.5, 100)
+    y = slope * x
+    return x, y

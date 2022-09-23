@@ -1272,7 +1272,7 @@ class Trainer:
         model_features = [current_iter, avg_training_loss, best_val_loss]
         return torch.FloatTensor(model_features).cuda()
 
-    def make_results_img_2d(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
+    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
         fig.set_size_inches(20, 5.8)
         ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
@@ -1314,7 +1314,7 @@ class Trainer:
         # plt.show()
         plt.close()
 
-    def make_results_img(self, X, Y, a_student, b_student, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
+    def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
         # unproj_matrix = np.linalg.pinv(proj_matrix)
         n_rows = 10
         indices = torch.randint(0, len(generated_samples), (n_rows**2,))
