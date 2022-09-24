@@ -423,7 +423,7 @@ class Trainer:
                 z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
                 # z = Variable(torch.randn(gt_x.shape)).cuda()
 
-                x = torch.cat((w_t, z), dim=1)
+                x = torch.cat((w_t, gt_x), dim=1)
                 generated_sample = netG(x, gt_y)
 
                 if idx == 1:
