@@ -309,8 +309,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -333,9 +332,9 @@ class Trainer:
         self.opt.experiment = "IMT_Baseline"
         res_baseline, w_diff_baseline = self.load_experiment_result()
         '''
-        self.opt.experiment = "IMT_Baseline_random_label"
-        # self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        # self.opt.experiment = "IMT_Baseline_random_label"
+        self.opt.experiment = "IMT_Baseline"
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -346,69 +345,70 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
+        if self.visualize == False:
+            vae = VAE_bMNIST(self.device)
+            vae = vae.to(self.device)
 
-        '''
-        vae = VAE_bMNIST(self.device)
-        vae = vae.to(self.device)
+            optimizer = torch.optim.Adam(params=vae.parameters(), lr=0.001, weight_decay=1e-5)
 
-        optimizer = torch.optim.Adam(params=vae.parameters(), lr=0.001, weight_decay=1e-5)
+            # set to training mode
+            vae.train()
 
-        # set to training mode
-        vae.train()
+            train_loss_avg = []
 
-        train_loss_avg = []
+            print('Training ...')
+            self.opt.n_epochs = 300
+            for epoch in range(self.opt.n_epochs):
+                train_loss_avg.append(0)
+                num_batches = 0
 
-        print('Training ...')
-        self.opt.n_epochs = 300
-        for epoch in range(self.opt.n_epochs):
-            train_loss_avg.append(0)
-            num_batches = 0
+                for x_batch, y_batch in train_loader:
+                    optimizer.zero_grad()
 
-            for x_batch, y_batch in train_loader:
-                optimizer.zero_grad()
+                    y_batch = F.one_hot(y_batch.long(), num_classes=2).type(torch.FloatTensor) * 2. - 1
+                    y_batch = y_batch.to(self.device)
+                    x_batch = x_batch.to(self.device)
 
-                y_batch = F.one_hot(y_batch.long(), num_classes=2).type(torch.FloatTensor) * 2. - 1
-                y_batch = y_batch.to(self.device)
+                    loss, _ = vae(x_batch, y_batch)
 
-                x_batch = x_batch.to(self.device)
+                    # backpropagation
+                    loss.backward()
 
-                loss, _ = vae(x_batch, y_batch)
+                    # one step of the optmizer (using the gradients from backpropagation)
+                    optimizer.step()
 
-                # backpropagation
-                loss.backward()
+                    train_loss_avg[-1] += loss.item()
+                    num_batches += 1
 
-                # one step of the optmizer (using the gradients from backpropagation)
-                optimizer.step()
+                train_loss_avg[-1] /= num_batches
+                print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, self.opt.n_epochs, train_loss_avg[-1]))
 
-                train_loss_avg[-1] += loss.item()
-                num_batches += 1
+            vae.eval()
+            with torch.no_grad():
 
-            train_loss_avg[-1] /= num_batches
-            print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, self.opt.n_epochs, train_loss_avg[-1]))
+                # sample images
+                img_samples, y_logits = vae.sample()
+                y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+                print("Samples:")
+                print(y)
+                img_samples = img_samples.cpu()
 
-        vae.eval()
-        with torch.no_grad():
+                fig, ax = plt.subplots(figsize=(5, 5))
+                show_image(torchvision.utils.make_grid(img_samples,10,5), "Samples")
+                plt.show()
 
-            # sample images
-            img_samples, y_logits = vae.sample()
-            y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
-            print("Samples:")
-            print(y)
-            img_samples = img_samples.cpu()
+            torch.save(vae.state_dict(), 'pretrained_vae.pth')
 
-            fig, ax = plt.subplots(figsize=(5, 5))
-            show_image(torchvision.utils.make_grid(img_samples,10,5), "Samples")
-            plt.show()
-
-        torch.save(vae.state_dict(), 'pretrained_vae.pth')
-        
-        sys.exit()
-        '''
+            sys.exit()
 
         if self.opt.train_student == True:
             self.opt.experiment = "Student"
-
-            adversarial_loss = torch.nn.BCELoss()
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
 
             tmp_student = utils.BaseLinear(self.opt.dim)
 
@@ -453,92 +453,98 @@ class Trainer:
 
                         print("{}/{}".format(i, len(train_loader)))
 
-                    fig = plt.figure()
-                    plt.plot(loss_student, c="b", label="Teacher (CNN)")
-                    plt.xlabel("Epoch")
-                    plt.ylabel("Accuracy")
-                    plt.legend()
-                    plt.show()
+                    # fig = plt.figure()
+                    # plt.plot(loss_student, c="b", label="Teacher (CNN)")
+                    # plt.xlabel("Epoch")
+                    # plt.ylabel("Accuracy")
+                    # plt.legend()
+                    # plt.show()
 
-                if epoch % self.opt.save_frequency == 0 and epoch >= 1:
-                    res_student = []
-                    a_student = []
-                    b_student = []
-                    w_diff_student = []
+            res_student = []
+            a_student = []
+            b_student = []
+            w_diff_student = []
 
-                    self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
-                    generated_samples = np.zeros(2)
-                    for idx in tqdm(range(self.opt.n_iter)):
-                        if idx != 0:
-                            w_t = self.student.lin.weight
-                            w_t = w_t / torch.norm(w_t)
+            generated_samples = np.zeros(2)
+            for idx in tqdm(range(self.opt.n_iter)):
+                if idx != 0:
+                    w_t = self.student.lin.weight
+                    w_t = w_t / torch.norm(w_t)
 
-                            i = torch.randint(0, nb_batch, size=(1,)).item()
-                            i_min = i * self.opt.batch_size
-                            i_max = (i + 1) * self.opt.batch_size
+                    i = torch.randint(0, nb_batch, size=(1,)).item()
+                    i_min = i * self.opt.batch_size
+                    i_max = (i + 1) * self.opt.batch_size
 
-                            gt_x = X_train[i_min:i_max].to(self.device)
-                            y = Y_train[i_min:i_max].to(self.device)
+                    gt_x = X_train[i_min:i_max].to(self.device)
+                    y = Y_train[i_min:i_max].to(self.device)
 
-                            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-                            w = torch.cat((w_t, w_t-w_star), dim=1)
-                            w = w.repeat(self.opt.batch_size, 1)
-                            x = torch.cat((w, z), dim=1)
+                    z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+                    w = torch.cat((w_t, w_t-w_star), dim=1)
+                    w = w.repeat(self.opt.batch_size, 1)
+                    x = torch.cat((w, gt_x), dim=1)
 
-                            z, qz_mu, qz_std = netG(x, y)
-                            generated_sample, y_logit = vae.p_xy(z)
+                    z, qz_mu, qz_std = netG(x, y)
+                    generated_sample, y_logit = vae.p_xy(z)
 
-                            if idx == 1:
-                                generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                                generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
-                            else:
-                                generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                                generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
-
-                            generated_sample = generated_sample.view(self.opt.batch_size, -1)
-                            generated_sample = generated_sample @ proj_matrix.to(self.device)
-                            self.student.update(generated_sample.detach(), y.unsqueeze(1))
-
-                        self.student.eval()
-                        test = self.student(X_test.to(self.device)).cpu()
-
-                        a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-                        a_student.append(a)
-                        b_student.append(b)
-
-                        if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                        elif self.opt.data_mode == "cifar10":
-                            tmp = torch.max(test, dim=1).indices
-                            nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                        else:
-                            sys.exit()
-                        acc = nb_correct / X_test.size(0)
-                        res_student.append(acc)
-
-                        w = self.student.lin.weight
-                        w = w / torch.norm(w)
-                        diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-                        w_diff_student.append(diff.detach().clone().cpu())
-
-                    if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                        make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                    if idx == 1:
+                        generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
+                        generated_labels = y.cpu().detach().numpy()  # [np.newaxis, :]
                     else:
-                        make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
-                        make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch)
+                        generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
+                        generated_labels = np.concatenate((generated_labels, y.cpu().detach().numpy()), axis=0)
 
-                    save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
-                    if not os.path.exists(save_folder):
-                        os.makedirs(save_folder)
+                    generated_sample = generated_sample.view(self.opt.batch_size, -1)
+                    generated_sample = generated_sample @ proj_matrix.to(self.device)
+                    self.student.update(generated_sample.detach(), y.unsqueeze(1))
 
-                    save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
-                    to_save = netG.state_dict()
-                    torch.save(to_save, save_path)
+                self.student.eval()
+                test = self.student(X_test.to(self.device)).cpu()
 
-                    # self.make_results_video_generated_data(generated_samples, epoch)
+                a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+                a_student.append(a)
+                b_student.append(b)
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_student.append(acc)
+
+                w = self.student.lin.weight
+                w = w / torch.norm(w)
+                diff = torch.linalg.norm(w_star - w, ord=2) ** 2
+                w_diff_student.append(diff.detach().clone().cpu())
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([idx, acc, diff.item()])
+
+            if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+                # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+
+                # a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
+                # plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+            else:
+                make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+                # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+
+            save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+
+            save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
+            to_save = netG.state_dict()
+            torch.save(to_save, save_path)
+
+            # self.make_results_video_generated_data(generated_samples, epoch)
 
             '''
             plt.figure(figsize=(10,5))

@@ -218,7 +218,7 @@ class UnrolledOptimizer(nn.Module):
 
         self.optim_blocks = nn.ModuleList()
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
         self.adversarial_loss = nn.BCELoss()
 
         self.teacher = teacher
@@ -281,7 +281,7 @@ class UnrolledOptimizer(nn.Module):
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
             gt_y_onehot = onehot[gt_y.long()].cuda()
-            gt_x = gt_x / torch.norm(gt_x)
+            # gt_x = gt_x / torch.norm(gt_x)
 
             # Sample noise and labels as generator input
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
@@ -289,7 +289,7 @@ class UnrolledOptimizer(nn.Module):
 
             w = torch.cat((w_t, w_t-w_star), dim=1)
             w = w.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, z), dim=1)
+            x = torch.cat((w, gt_x), dim=1)
 
             z, qz_mu, qz_std = self.generator(x, gt_y)
             generated_x, y_logit = self.vae.p_xy(z)
@@ -299,7 +299,7 @@ class UnrolledOptimizer(nn.Module):
             # self.student.train()
             out = self.student(generated_x_proj)
 
-            loss = self.loss_fn(out, gt_y.float())
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
 
             grad = torch.autograd.grad(loss,
                                        self.student.lin.weight,
@@ -321,7 +321,7 @@ class UnrolledOptimizer(nn.Module):
             # self.student.eval()
             out_stu = self.teacher(generated_x_proj)
             # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y)
+            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
 
         w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
 
@@ -335,7 +335,7 @@ class UnrolledOptimizer(nn.Module):
         z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
         w = torch.cat((w_t, w_t-w_star), dim=1)
         w = w.repeat(self.opt.batch_size, 1)
-        x = torch.cat((w, z), dim=1)
+        x = torch.cat((w, gt_x), dim=1)
 
         z, qz_mu, qz_std = self.generator(x, gt_y)
 

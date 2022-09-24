@@ -447,7 +447,7 @@ class Trainer:
                     noise = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).to(self.device)
 
                     # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                    x = torch.cat((w_t, w_t-w_star, noise), dim=1)
+                    x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                     # generated_sample = netG(x, y)
 
                     z, qz_mu, qz_std = netG(x, y)

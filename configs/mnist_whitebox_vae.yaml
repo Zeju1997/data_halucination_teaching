@@ -3,7 +3,7 @@ teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300
 learning_rate: 1e-3
-batch_size: 1 # 128
+batch_size: 1
 batch_size_gan: 32 # 128
 nb_train: 1000 # 10000
 nb_test: 100 # 1000
@@ -18,7 +18,7 @@ hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000
 n_unroll_blocks: 60
-n_epochs: 20 # 35
+n_epochs: 3 # 35
 start_saving: 0
 save_frequency: 1
 label_dim: 10
