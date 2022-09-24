@@ -288,8 +288,7 @@ class Trainer:
 
         netG.train()
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
-        # optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
         res_student = []
         a_student = []
@@ -315,12 +314,12 @@ class Trainer:
 
             optimG.step()
 
-        plt.plot(loss_student, c='b', label="loss")
-        plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        plt.xlabel("Iteration")
-        plt.ylabel("Loss")
-        plt.legend()
-        plt.show()
+        # plt.plot(loss_student, c='b', label="loss")
+        # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+        # plt.xlabel("Iteration")
+        # plt.ylabel("Loss")
+        # plt.legend()
+        # plt.show()
 
         cls = torch.arange(self.opt.n_classes)
         onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
