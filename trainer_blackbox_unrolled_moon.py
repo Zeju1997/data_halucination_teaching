@@ -345,6 +345,19 @@ class Trainer:
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
         # ---------------------
+        #  Train IMT Baseline
+        # ---------------------
+
+        self.opt.experiment = "IMT_Baseline"
+        if self.opt.train_baseline == False:
+            self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
+
+            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
+            imt_trainer.train(self.baseline, self.teacher, w_star)
+
+        res_baseline, w_diff_baseline = self.load_experiment_result()
+
+        # ---------------------
         #  Train Student
         # ---------------------
         self.opt.experiment = "Student"
@@ -365,17 +378,9 @@ class Trainer:
             unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
 
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        optimG = torch.optim.Adam(netG.parameters(), lr=0.002, betas=(0.5, 0.999))
 
-
-        res_student = []
-        a_student = []
-        b_student = []
         loss_student = []
-        loss_g = []
-        loss_d = []
-        w_diff_student = []
-        # w, h = generator.linear.weight.shape
 
         self.step = 0
 
@@ -462,7 +467,7 @@ class Trainer:
                 logwriter.writerow([idx, acc, diff.item()])
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
             # make_results_video_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
         else:
             make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)

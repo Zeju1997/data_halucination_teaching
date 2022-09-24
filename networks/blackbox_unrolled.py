@@ -304,9 +304,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
 
         self.optim_blocks = nn.ModuleList()
 
-        self.loss_fn = nn.MSELoss()
-        # self.adversarial_loss = nn.BCELoss()
-        self.adversarial_loss = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
 
         self.teacher = teacher
         self.student = student
@@ -374,7 +372,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
             # self.student.train()
             out = self.student(generated_x)
 
-            loss = self.loss_fn(out, gt_y.float())
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
             grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
             # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
@@ -391,8 +389,10 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
             # out_stu = self.student(gt_x)
             # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
 
+        act = torch.nn.Sigmoid()
         out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+        out_stu = act(out_stu)
+        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,

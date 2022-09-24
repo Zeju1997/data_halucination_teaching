@@ -15,8 +15,8 @@ gd_n: 300
 optim: Adam
 hidden_dim: 8
 latent_dim: 2
-n_unroll: 2000
-n_unroll_blocks: 50 # 10
+n_unroll: 1000 # 2000
+n_unroll_blocks: 40 # 50
 n_epochs: 4
 start_saving: 0
 save_frequency: 1
