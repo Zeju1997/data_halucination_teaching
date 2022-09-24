@@ -309,7 +309,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -334,7 +334,7 @@ class Trainer:
         '''
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
