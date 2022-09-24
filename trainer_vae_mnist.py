@@ -37,7 +37,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data, load_experiment_result
+from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.network import initialize_weights
 
 from vaes.models import VAE_bMNIST, VAE_HalfMoon
@@ -527,11 +527,11 @@ class Trainer:
                     logwriter.writerow([idx, acc, diff.item()])
 
             if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+                # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
                 # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
 
-                # a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
-                # plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+                a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
+                plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
             else:
                 make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
@@ -588,6 +588,24 @@ class Trainer:
                 # plt.close()
                 plt.show()
 
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
 
     def compute_gradient_penalty(self, D, real_samples, fake_samples):
         """Calculates the gradient penalty loss for WGAN GP"""

@@ -274,6 +274,32 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
         plt.close()
 
 
+def plot_generated_samples(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
+    sns.set()
+
+    save_folder = os.path.join(opt.log_path, "generated_samples")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    iterations = [1, 75, 150, 225, 299]
+    for i in iterations:
+
+        fig = plt.figure()
+        fig.set_size_inches(5.8, 5.8)
+        plt.plot(a_star, b_star, '-k', label='W star')
+        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
+        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
+        plt.legend(loc="upper right", fontsize=16)
+        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
+        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
+
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path)
+        plt.close()
+
+
+
 def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):

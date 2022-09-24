@@ -72,12 +72,15 @@ def init_data(opt):
         print("Loading MNIST data ...")
 
         # MNIST normalizing
-        # transform = transforms.Compose([transforms.ToTensor(),
-        #                                 transforms.Normalize([0.5], [0.5])
-        # ])
-
-        transform = transforms.Compose([transforms.ToTensor(),
-                                        lambda x: torch.round(x)])
+        if opt.generator_type == "cgan":
+            transform = transforms.Compose([transforms.ToTensor(),
+                                            transforms.Normalize([0.5], [0.5])
+            ])
+        elif opt.generator_type == "vae":
+            transform = transforms.Compose([transforms.ToTensor(),
+                                           lambda x: torch.round(x)])
+        else:
+            sys.exit()
 
         train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
@@ -105,8 +108,8 @@ def init_data(opt):
         Y = next(iter(loader))[1].numpy()
 
         (N, W, H) = train_dataset.data.shape
-        dim = W*H
-        X = X.reshape((N, dim))
+        # dim = W*H
+        # X = X.reshape((N, dim))
 
         # create new data set with class 1 as 0 and class 2 as 1
         f = (Y == opt.class_1) | (Y == opt.class_2)

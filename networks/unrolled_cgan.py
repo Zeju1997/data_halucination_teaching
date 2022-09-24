@@ -346,7 +346,7 @@ class UnrolledOptimizer(nn.Module):
             # self.student.train()
             out = self.student(generated_x_proj)
 
-            loss = self.loss_fn(out, gt_y.float())
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
 
             grad = torch.autograd.grad(loss,
                                        self.student.lin.weight,
@@ -368,7 +368,7 @@ class UnrolledOptimizer(nn.Module):
             # self.student.eval()
             out_stu = self.teacher(generated_x_proj)
             # out_stu = self.student(generated_x)
-            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y)
+            loss_stu = loss_stu + self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
 
         w_loss = torch.linalg.norm(w_star - new_weight, ord=2) ** 2
 
