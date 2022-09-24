@@ -528,11 +528,12 @@ class Trainer:
 
     def plot_results(self):
 
-        experiments_lst = ['SGD', 'Student']
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
         rootdir = self.opt.log_path
 
         experiment_dict = {
             'SGD': [],
+            'IMT_Baseline': [],
             'Student': []
         }
 
