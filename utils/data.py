@@ -105,8 +105,8 @@ def init_data(opt):
         Y = next(iter(loader))[1].numpy()
 
         (N, W, H) = train_dataset.data.shape
-        # dim = W*H
-        # X = X.reshape((N, dim))
+        dim = W*H
+        X = X.reshape((N, dim))
 
         # create new data set with class 1 as 0 and class 2 as 1
         f = (Y == opt.class_1) | (Y == opt.class_2)

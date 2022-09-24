@@ -519,10 +519,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             else:
                 tau = 0.95 * tau
 
-        act = torch.nn.Sigmoid()
-        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        out_stu = act(out_stu)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
+            act = torch.nn.Sigmoid()
+            out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+            out_stu = act(out_stu)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,

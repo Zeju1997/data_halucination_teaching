@@ -416,7 +416,7 @@ class Trainer:
                     z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
                     # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                    x = torch.cat((w_t, w_t-w_star, z), dim=1)
+                    x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                     generated_sample = netG(x, gt_y)
 
                     if idx == 1:

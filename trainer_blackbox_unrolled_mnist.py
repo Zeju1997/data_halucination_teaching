@@ -26,7 +26,7 @@ import teachers.utils as utils
 import matplotlib.pyplot as plt
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, plot_graphs
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -332,7 +332,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -347,7 +347,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -377,7 +377,8 @@ class Trainer:
             unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
 
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        # optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        optimG = torch.optim.Adam(netG.parameters(), lr=0.001, betas=(0.5, 0.999))
 
         self.step = 0
         loss_student = []
@@ -406,6 +407,13 @@ class Trainer:
 
             # G_loss.backward()
             optimG.step()
+
+        fig = plt.figure()
+        plt.plot(loss_student, c="b", label="Teacher (CNN)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.show()
 
         res_student = []
         a_student = []
@@ -479,8 +487,8 @@ class Trainer:
                 logwriter.writerow([idx, acc, diff.item()])
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
-            # make_results_video_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
         else:
             # make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed, proj_matrix)
             make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
@@ -534,6 +542,26 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
 
 
     def load_experiment_result(self):
