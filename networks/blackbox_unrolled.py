@@ -485,7 +485,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # x = torch.cat((w_t, w_t-w_star, z), dim=1)
             # w = torch.cat((w_t, w_t-w_init), dim=1)
             w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, z), dim=1)
+            x = torch.cat((w, gt_x), dim=1)
             # generated_x = self.generator(x, gt_y_onehot)
             generated_x = self.generator(x, gt_y)
 
