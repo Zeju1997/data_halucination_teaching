@@ -21,7 +21,7 @@ def plot_classifier(model, max, min):
 
 
 class SGDTrainer(nn.Module):
-    def __init__(self, opt, X_train, Y_train, X_test, Y_test):
+    def __init__(self, opt, X_train, Y_train, X_test, Y_test, data=None):
         super(SGDTrainer, self).__init__()
 
         self.opt = opt
@@ -32,6 +32,8 @@ class SGDTrainer(nn.Module):
         self.Y_train = Y_train
         self.X_test = X_test
         self.Y_test = Y_test
+
+        self.data = data
 
     def train(self, model, w_star):
         self.opt.experiment = "SGD"
@@ -52,18 +54,25 @@ class SGDTrainer(nn.Module):
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 i = torch.randint(0, nb_batch, size=(1,)).item()
-                data, label = self.data_sampler(self.X_train, self.Y_train, i)
+                sample, label = self.data_sampler(self.X_train, self.Y_train, i)
 
-                random_data = data.detach().clone().cpu().numpy()
-                random_label = label.detach().clone().cpu().numpy()
-                if idx == 1:
-                    random_samples = random_data # [np.newaxis, :]
-                    random_labels = random_label # [np.newaxis, :]
+                if self.data is not None:
+                    random_sample, random_label = self.data[i]
+                    if idx == 1:
+                        random_samples = random_sample.unsqueeze(0).cpu().detach().numpy()  # [np.newaxis, :]
+                        random_labels = random_label.unsqueeze(0).unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
+                    else:
+                        random_samples = np.concatenate((random_samples, random_sample.unsqueeze(0).cpu().detach().numpy()), axis=0)
+                        random_labels = np.concatenate((random_labels, random_label.unsqueeze(0).unsqueeze(1).cpu().detach().numpy()), axis=0)
                 else:
-                    random_samples = np.concatenate((random_samples, random_data), axis=0)
-                    random_labels = np.concatenate((random_labels, random_label), axis=0)
+                    if idx == 1:
+                        random_samples = sample.cpu().detach().numpy()  # [np.newaxis, :]
+                        random_labels = label.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
+                    else:
+                        random_samples = np.concatenate((random_samples, sample.cpu().detach().numpy()), axis=0)
+                        random_labels = np.concatenate((random_labels, label.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
-                model.update(data, label.unsqueeze(1))
+                model.update(sample, label.unsqueeze(1))
 
             model.eval()
             test = model(self.X_test.cuda()).cpu()
@@ -92,6 +101,8 @@ class SGDTrainer(nn.Module):
             with open(logname, 'a') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')
                 logwriter.writerow([idx, acc, diff.item()])
+
+        return random_samples, random_labels
 
     def data_sampler(self, X, Y, i):
         i_min = i * self.opt.batch_size

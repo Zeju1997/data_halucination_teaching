@@ -319,8 +319,6 @@ class UnrolledOptimizer(nn.Module):
 
         new_weight = self.student.lin.weight
 
-        n = 0
-
         model_paramters = list(self.generator.parameters())
 
         for i in range(self.opt.n_unroll_blocks):

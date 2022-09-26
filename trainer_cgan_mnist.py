@@ -37,8 +37,8 @@ import networks.unrolled_cgan as unrolled
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data, initialize_weights
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples
+from utils.data import init_data, initialize_weights, plot_graphs
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -211,7 +211,6 @@ class Trainer:
 
         X = torch.load('X.pt')
         Y = torch.load('Y.pt')
-        proj_matrix = torch.load('proj_matrix.pt')
 
         # Shuffle datasets
         # randomize = np.arange(X.shape[0])
@@ -267,6 +266,7 @@ class Trainer:
             X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
             X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
+            proj_matrix = torch.empty(self.opt.img_size**2, self.opt.dim).normal_(mean=0, std=0.1)
             X_train = X_train @ proj_matrix
             X_test = X_test @ proj_matrix
 
@@ -434,13 +434,13 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            sgd_trainer.train(sgd_example, w_star)
+            _, _ = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
@@ -449,11 +449,11 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            imt_trainer.train(self.baseline, self.teacher, w_star)
+            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
@@ -630,7 +630,6 @@ class Trainer:
                     print(f" Epoch {epoch+1}/{self.opt.n_epochs} Discriminator Loss {D_losses[-1]:.3f} Generator Loss {G_losses[-1]:.3f}"
                          + f" D(x) {Dx_values[-1]:.3f} D(G(x)) {DGz_values[-1]:.3f}")
 
-
             res_student = []
             a_student = []
             b_student = []
@@ -730,8 +729,10 @@ class Trainer:
                 # a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
                 # plot_generated_samples(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
             else:
-                make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                # make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+
+                plot_generated_samples(self.opt, X, Y, generated_samples, generated_labels, epoch, self.opt.seed)
 
             save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
             if not os.path.exists(save_folder):
@@ -788,6 +789,26 @@ class Trainer:
                 # plt.savefig('results_mnist_final.jpg')
                 # plt.close()
                 plt.show()
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
+
 
     def load_experiment_result(self):
         """Write an event to the tensorboard events file

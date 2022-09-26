@@ -211,15 +211,20 @@ class Trainer:
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.long)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test])
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
+
         elif self.opt.data_mode == "mnist":
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
+            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
+
+            proj_matrix = torch.empty(self.opt.img_size**2, self.opt.dim).normal_(mean=0, std=0.1)
             X_train = X_train @ proj_matrix
             X_test = X_test @ proj_matrix
+
         else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
@@ -249,7 +254,7 @@ class Trainer:
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            sgd_trainer.train(sgd_example, w_star)
+            _, _ = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
@@ -262,7 +267,7 @@ class Trainer:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            imt_trainer.train(self.baseline, self.teacher, w_star)
+            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = self.load_experiment_result()
 

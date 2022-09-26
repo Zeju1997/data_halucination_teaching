@@ -30,8 +30,6 @@ class WSTARTrainer(nn.Module):
 
         self.opt = opt
 
-        self.opt.experiment = "SGD"
-
         self.X_train = X_train
         self.Y_train = Y_train
         self.X_test = X_test

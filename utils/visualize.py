@@ -256,7 +256,7 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    iterations = [1, 75, 150, 225, 299]
+    iterations = [1, 75, 150, 225, -1]
     for i in iterations:
 
         fig = plt.figure()
@@ -274,26 +274,28 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
         plt.close()
 
 
-def plot_generated_samples(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
-    sns.set()
+def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch, seed):
 
     save_folder = os.path.join(opt.log_path, "generated_samples")
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    iterations = [1, 75, 150, 225, 299]
+    iterations = [1, 75, 150, 225, -1]
     for i in iterations:
+
+        generated_sample = generated_samples[i, :].squeeze()
+        generated_label = generated_labels[i]
+
+        if generated_label == 0.0:
+            generated_label = opt.class_1
+        else:
+            generated_label = opt.class_2
 
         fig = plt.figure()
         fig.set_size_inches(5.8, 5.8)
-        plt.plot(a_star, b_star, '-k', label='W star')
-        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
-        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
+        plt.imshow(generated_sample, cmap='gray')
         plt.legend(loc="upper right", fontsize=16)
-        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
-        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
-
+        plt.title("Data Generation - Label {}".format(generated_label), fontsize=16)
         img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
         plt.savefig(img_path)
         plt.close()

@@ -36,7 +36,7 @@ import networks.unrolled_vae as unrolled
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples
 from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.network import initialize_weights
 
@@ -309,13 +309,13 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            sgd_trainer.train(sgd_example, w_star)
+            _, _ = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
@@ -334,11 +334,11 @@ class Trainer:
         '''
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            imt_trainer.train(self.baseline, self.teacher, w_star)
+            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
@@ -527,14 +527,13 @@ class Trainer:
                     logwriter.writerow([idx, acc, diff.item()])
 
             if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+                make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
                 # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
 
-                a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
-                plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
             else:
-                make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+                # make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                plot_generated_samples(self.opt, X, Y, generated_samples, generated_labels, epoch, self.opt.seed)
 
             save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
             if not os.path.exists(save_folder):

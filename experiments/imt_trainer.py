@@ -21,7 +21,7 @@ def plot_classifier(model, max, min):
 
 
 class IMTTrainer(nn.Module):
-    def __init__(self, opt, X_train, Y_train, X_test, Y_test):
+    def __init__(self, opt, X_train, Y_train, X_test, Y_test, data=None):
         super(IMTTrainer, self).__init__()
 
         self.opt = opt
@@ -30,6 +30,8 @@ class IMTTrainer(nn.Module):
         self.Y_train = Y_train
         self.X_test = X_test
         self.Y_test = Y_test
+
+        self.data = data
 
     def train(self, model, teacher, w_star):
         print("Start training {} ...".format(self.opt.experiment))
@@ -52,18 +54,25 @@ class IMTTrainer(nn.Module):
                 else:
                     i = teacher.select_example_random_label(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)
 
-                best_data, best_label = self.data_sampler(self.X_train, self.Y_train, i)
+                best_sample, best_label = self.data_sampler(self.X_train, self.Y_train, i)
 
-                selected_data = best_data.detach().clone().cpu().numpy()
-                selected_label = best_label.detach().clone().cpu().numpy()
-                if t == 1:
-                    selected_samples = selected_data # [np.newaxis, :]
-                    selected_labels = selected_label # [np.newaxis, :]
+                if self.data is not None:
+                    selected_sample, selected_label = self.data[i]
+                    if t == 1:
+                        selected_samples = selected_sample.unsqueeze(0).cpu().detach().numpy()  # [np.newaxis, :]
+                        selected_labels = selected_label.unsqueeze(0).unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
+                    else:
+                        selected_samples = np.concatenate((selected_samples, selected_sample.unsqueeze(0).cpu().detach().numpy()), axis=0)
+                        selected_labels = np.concatenate((selected_labels, selected_label.unsqueeze(0).unsqueeze(1).cpu().detach().numpy()), axis=0)
                 else:
-                    selected_samples = np.concatenate((selected_samples, selected_data), axis=0)
-                    selected_labels = np.concatenate((selected_labels, selected_label), axis=0)
+                    if t == 1:
+                        selected_samples = best_sample.cpu().detach().numpy()  # [np.newaxis, :]
+                        selected_labels = best_label.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
+                    else:
+                        selected_samples = np.concatenate((selected_samples, best_sample.cpu().detach().numpy()), axis=0)
+                        selected_labels = np.concatenate((selected_labels, best_label.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
-                model.update(best_data, best_label.unsqueeze(1))
+                model.update(best_sample, best_label.unsqueeze(1))
 
             model.eval()
             test = model(self.X_test.cuda()).cpu()
@@ -98,6 +107,8 @@ class IMTTrainer(nn.Module):
             with open(logname, 'a') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')
                 logwriter.writerow([t, acc_base, diff.item()])
+
+        return selected_samples, selected_labels
 
     def data_sampler(self, X, Y, i):
         i_min = i * self.opt.batch_size

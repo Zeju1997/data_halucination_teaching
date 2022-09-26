@@ -289,17 +289,12 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            # data_train = BaseDataset(X_train, Y_train)
-            # train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
-            # X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
-            # X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
-
-            proj_matrix = torch.empty(X.shape[1], self.opt.dim).normal_(mean=0, std=0.1)
-            # proj_matrix = torch.load('proj_matrix.pt')
-
-            X_train = X_train.float() @ proj_matrix
-            X_test = X_test.float() @ proj_matrix
+            proj_matrix = torch.empty(self.opt.img_size**2, self.opt.dim).normal_(mean=0, std=0.1)
+            X_train = X_train @ proj_matrix
+            X_test = X_test @ proj_matrix
 
         else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
@@ -332,13 +327,13 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            sgd_trainer.train(sgd_example, w_star)
+            _, _ = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
@@ -347,11 +342,11 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            imt_trainer.train(self.baseline, self.teacher, w_star)
+            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
@@ -377,8 +372,8 @@ class Trainer:
             unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
 
         netG.apply(weights_init)
-        # optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.001, betas=(0.5, 0.999))
+        optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        # optimG = torch.optim.Adam(netG.parameters(), lr=0.001, betas=(0.5, 0.999))
 
         self.step = 0
         loss_student = []
@@ -407,13 +402,6 @@ class Trainer:
 
             # G_loss.backward()
             optimG.step()
-
-        fig = plt.figure()
-        plt.plot(loss_student, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
 
         res_student = []
         a_student = []

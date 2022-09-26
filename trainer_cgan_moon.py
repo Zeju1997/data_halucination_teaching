@@ -284,7 +284,7 @@ class Trainer:
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            sgd_trainer.train(sgd_example, w_star)
+            _, _ = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
@@ -297,7 +297,7 @@ class Trainer:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            imt_trainer.train(self.baseline, self.teacher, w_star)
+            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = self.load_experiment_result()
 

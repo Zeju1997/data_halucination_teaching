@@ -11,40 +11,8 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from tqdm import tqdm
 
-
-def mixup_data(gt_x, generated_x, gt_y, generated_y, alpha=1.0, use_cuda=True):
-    '''Returns mixed inputs, pairs of targets, and lambda'''
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-        # lam = 1
-    else:
-        lam = 1
-
-    '''
-    batch_size = gt_x.size()[0]
-    if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    '''
-    y_a = gt_y
-    y_b = generated_y
-    mixed_x = lam * gt_x + (1 - lam) * generated_x
-
-    return mixed_x, y_a, y_b, lam
-
-
-def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    return loss.to(torch.float32)
-
-
-class Generator(nn.Module):
+class Generator1(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator, self).__init__()
 
@@ -52,7 +20,8 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]
@@ -80,36 +49,7 @@ class Generator(nn.Module):
         return img
 
 
-class Discriminator(nn.Module):
-    def __init__(self, opt):
-        super(Discriminator, self).__init__()
-
-        self.opt = opt
-        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
-        self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
-
-        self.model = nn.Sequential(
-            nn.Linear(opt.label_dim + int(np.prod(self.img_shape)), 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
-            nn.Dropout(0.4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
-            nn.Dropout(0.4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, img, labels):
-        # Concatenate label embedding and image to produce input
-        # d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
-        d_in = torch.cat((img, self.label_embedding(labels)), -1)
-        validity = self.model(d_in)
-        return validity
-
-
-class Generator1(nn.Module):
+class Generator(nn.Module):
     """ G(z) """
     def __init__(self, opt, teacher, student):
         # initalize super module
@@ -119,8 +59,8 @@ class Generator1(nn.Module):
         # self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + self.opt.latent_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim # + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.latent_dim
 
         # noise z input layer : (batch_size, 100, 1, 1)
         self.layer_x = nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding=0, bias=False),
@@ -179,68 +119,6 @@ class Generator1(nn.Module):
         return xy
 
 
-class Discriminator1(nn.Module):
-    """ D(x) """
-    def __init__(self, opt):
-        # initalize super module
-        super(Discriminator, self).__init__()
-
-        self.opt = opt
-
-        # creating layer for image input , input size : (batch_size, 1, 28, 28)
-        self.layer_x = nn.Sequential(nn.Conv2d(in_channels=1, out_channels=32, kernel_size=4, stride=2, padding=1, bias=False),
-                                    # out size : (batch_size, 32, 14, 14)
-                                    nn.LeakyReLU(0.2, inplace=True),
-                                    # out size : (batch_size, 32, 14, 14)
-                                    )
-
-        # creating layer for label input, input size : (batch_size, 10, 28, 28)
-        self.layer_y = nn.Sequential(nn.Conv2d(in_channels=self.opt.n_classes, out_channels=32, kernel_size=4, stride=2, padding=1, bias=False),
-                                     # out size : (batch_size, 32, 14, 14)
-                                     nn.LeakyReLU(0.2, inplace=True),
-                                     # out size : (batch_size, 32, 14, 14)
-                                     )
-
-        # layer for concat of image layer and label layer, input size : (batch_size, 64, 14, 14)
-        self.layer_xy = nn.Sequential(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, stride=2, padding=1, bias=False),
-                                       # out size : (batch_size, 128, 7, 7)
-                                       nn.BatchNorm2d(128),
-                                       # out size : (batch_size, 128, 7, 7)
-                                       nn.LeakyReLU(0.2, inplace=True),
-                                       # out size : (batch_size, 128, 7, 7)
-                                       nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=2, padding=0, bias=False),
-                                       # out size : (batch_size, 256, 3, 3)
-                                       nn.BatchNorm2d(256),
-                                       # out size : (batch_size, 256, 3, 3)
-                                       nn.LeakyReLU(0.2, inplace=True),
-                                       # out size : (batch_size, 256, 3, 3)
-                                       # Notice in below layer, we are using out channels as 1, we don't need to use Linear layer
-                                       # Same is recommended in DCGAN paper also
-                                       nn.Conv2d(in_channels=256, out_channels=1, kernel_size=3, stride=1, padding=0, bias=False),
-                                       # out size : (batch_size, 1, 1, 1)
-                                       # sigmoid layer to convert in [0,1] range
-                                       nn.Sigmoid()
-                                       )
-
-    def forward(self, x, y):
-        # size of x : (batch_size, 1, 28, 28)
-        x = self.layer_x(x)
-        # size of x : (batch_size, 32, 14, 14)
-
-        # size of y : (batch_size, 10, 28, 28)
-        y = self.layer_y(y)
-        # size of y : (batch_size, 32, 14, 14)
-
-        # concat image layer and label layer output
-        xy = torch.cat([x,y], dim=1)
-        # size of xy : (batch_size, 64, 14, 14)
-        xy = self.layer_xy(xy)
-        # size of xy : (batch_size, 1, 1, 1)
-        xy = xy.view(xy.shape[0], -1)
-        # size of xy : (batch_size, 1)
-        return xy
-
-
 class Generator_moon(nn.Module):
     def __init__(self, opt, teacher, student):
         super(Generator_moon, self).__init__()
@@ -248,48 +126,24 @@ class Generator_moon(nn.Module):
         self.opt = opt
         self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
 
-        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
+        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
 
         self.input_fc = nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False)
         self.hidden_fc = nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False)
         self.output_fc = nn.Linear(self.opt.hidden_dim*2, self.opt.dim, bias=False)
         # self.activation = nn.LeakyReLU(0.1)
         self.activation = nn.ReLU()
-        self.out_activation = nn.Sigmoid()
+        # self.activation = nn.Tanh()
 
     def forward(self, z, label):
         x = torch.cat((z, self.label_embedding(label.to(torch.int64))), dim=1)
         x = self.activation(self.input_fc(x))
         x = self.activation(self.hidden_fc(x))
-        x = self.output_fc(x)
-        # x = self.out_activation(x) * 4 - 2
-        return x
+        return self.output_fc(x)
 
 
-class Discriminator_moon(nn.Module):
-    def __init__(self, opt):
-        super(Discriminator_moon, self).__init__()
-
-        self.opt = opt
-        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
-
-        self.model = nn.Sequential(
-            nn.Linear(opt.label_dim + self.opt.dim, self.opt.hidden_dim, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(self.opt.hidden_dim, 1, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, img, labels):
-        # Concatenate label embedding and image to produce input
-        d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
-        validity = self.model(d_in)
-        return validity
-
-
-class UnrolledBlackBoxOptimizer_moon(nn.Module):
+class UnrolledOptimizer_moon(nn.Module):
     """
     Args:
         - nscale : number of scales
@@ -298,13 +152,15 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         - K : kernel size
     """
     def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
-        super(UnrolledBlackBoxOptimizer_moon, self).__init__()
+        super(UnrolledOptimizer_moon, self).__init__()
 
         self.opt = opt
 
         self.optim_blocks = nn.ModuleList()
 
         self.loss_fn = nn.BCELoss()
+        # self.adversarial_loss = nn.BCELoss()
+        self.adversarial_loss = nn.MSELoss()
 
         self.teacher = teacher
         self.student = student
@@ -324,25 +180,22 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         x = self.X[i_min:i_max].cuda()
         y = self.Y[i_min:i_max].cuda()
 
-        # y = y.to(torch.int64)
-
         return x, y
 
-    def forward(self, weight):
+    def forward(self, weight, w_star):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
         with torch.no_grad():
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             # for param1 in self.generator.parameters():
             #    param1 = weight
-            # self.generator.load_state_dict(weight)
+            self.generator.load_state_dict(weight)
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
             # for param1 in self.student.parameters():
             #     param1 = w_init
             # for param2 in self.teacher.parameters():
-            #     param2 = w_star
-            self.generator.load_state_dict(weight)
-            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            #    param2 = w_star
 
         loss_stu = 0
         w_loss = 0
@@ -350,7 +203,13 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
 
         new_weight = self.student.lin.weight
 
+        train_loss = []
+
         model_paramters = list(self.generator.parameters())
+        student_paramters = list(self.student.parameters())
+
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
 
         for i in range(self.opt.n_unroll_blocks):
             w_t = self.student.lin.weight
@@ -363,11 +222,14 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
             # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-            x = torch.cat((w_t, gt_x), dim=1)
+            # gt_x = gt_x / torch.norm(gt_x)
+            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+            # x = torch.cat((w_t, w_t-w_star), dim=1)
+
             generated_x = self.generator(x, gt_y)
 
-            # generated_x = generated_x @ self.proj_matrix.cuda()
+            if self.proj_matrix is not None:
+                generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
             out = self.student(generated_x)
@@ -386,13 +248,13 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
                 tau = 0.95 * tau
 
             # self.student.eval()
-            # out_stu = self.student(gt_x)
-            # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
+            out_stu = self.teacher(generated_x)
+            loss_teacher = tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
+            loss_stu = loss_stu + loss_teacher
 
-        act = torch.nn.Sigmoid()
-        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        out_stu = act(out_stu)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
+
+        loss_stu = loss_stu + w_loss
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
@@ -401,7 +263,7 @@ class UnrolledBlackBoxOptimizer_moon(nn.Module):
         return grad_stu, loss_stu
 
 
-class UnrolledBlackBoxOptimizer(nn.Module):
+class UnrolledOptimizer(nn.Module):
     """
     Args:
         - nscale : number of scales
@@ -409,25 +271,34 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, teacher, student, generator, X, Y, proj_matrix=None):
-        super(UnrolledBlackBoxOptimizer, self).__init__()
+    def __init__(self, opt, teacher, student, generator, feature_extractor, X, Y, X_val, Y_val, feat_privacy_set, proj_matrix=None):
+        super(UnrolledOptimizer, self).__init__()
 
         self.opt = opt
+
         self.optim_blocks = nn.ModuleList()
 
         self.loss_fn = nn.BCELoss()
-        self.adversarial_loss = nn.BCELoss()
+        # self.adversarial_loss = nn.BCELoss()
+        self.adversarial_loss = nn.MSELoss()
 
         self.teacher = teacher
         self.student = student
         self.generator = generator
+        self.feature_extractor = feature_extractor
 
         self.X = X
         self.Y = Y
 
+        self.X_val = X_val
+        self.Y_val = Y_val
+
+        self.feat_privacy_set = feat_privacy_set
+
         self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
 
         self.proj_matrix = proj_matrix
+        self.unproj_matrix = torch.linalg.pinv(proj_matrix)
 
     def data_sampler(self, i):
         i_min = i * self.opt.batch_size
@@ -436,42 +307,41 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         x = self.X[i_min:i_max].cuda()
         y = self.Y[i_min:i_max].cuda()
 
-        # y = y.to(torch.int64)
-
         return x, y
 
-    def forward(self, weight):
+    def forward(self, weight, w_star):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
+        # convert labels to onehot encoding
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+        # reshape labels to image size, with number of labels as channel
+        fill = torch.zeros([self.opt.n_classes, self.opt.n_classes, self.opt.img_size, self.opt.img_size])
+        for i in range(self.opt.n_classes):
+            fill[i, i, :, :] = 1
+
         with torch.no_grad():
+            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             # for param1 in self.generator.parameters():
             #    param1 = weight
             self.generator.load_state_dict(weight)
-            self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             # for param1 in self.student.parameters():
             #     param1 = w_init
             # for param2 in self.teacher.parameters():
-            #     param2 = w_star
+            #    param2 = w_star
 
         loss_stu = 0
         w_loss = 0
+        perceptual_loss = 0
         tau = 1
-
-        student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
 
         new_weight = self.student.lin.weight
 
-        w_init = self.student.lin.weight
-        w_init = w_init / torch.norm(w_init)
-
-        model_paramters = list(self.generator.parameters())
-        student_paramters = list(self.student.parameters())
-
         train_loss = []
 
-        self.generator.train()
+        model_paramters = list(self.generator.parameters())
 
         for i in range(self.opt.n_unroll_blocks):
             w_t = self.student.lin.weight
@@ -479,23 +349,20 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             i = torch.randint(0, self.nb_batch, size=(1,)).item()
             gt_x, gt_y = self.data_sampler(i)
+            gt_y_onehot = onehot[gt_y.long()].cuda()
 
             # Sample noise and labels as generator input
-            # z = Variable(torch.randn(gt_x.shape)).cuda()
+            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
             z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-            # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            # w = torch.cat((w_t, w_t-w_init), dim=1)
-            w = w_t.repeat(self.opt.batch_size, 1)
+            w = torch.cat((w_t, w_t-w_star), dim=1)
+            w = w.repeat(self.opt.batch_size, 1)
             x = torch.cat((w, gt_x), dim=1)
-            # generated_x = self.generator(x, gt_y_onehot)
-            generated_x = self.generator(x, gt_y)
+            generated_x = self.generator(x, gt_y_onehot)
+            generated_x = generated_x.view(self.opt.batch_size, -1)
+            generated_x = generated_x @ self.proj_matrix.cuda()
 
             # self.student.train()
-
-            if self.proj_matrix is not None:
-                generated_x = generated_x @ self.proj_matrix.cuda()
-
             out = self.student(generated_x)
 
             loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
@@ -504,16 +371,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                                        self.student.lin.weight,
                                        create_graph=True, retain_graph=True)
 
+            # new_weight = self.student.lin.weight - 0.001 * grad[0]
             new_weight = new_weight - 0.001 * grad[0]
             self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight.data = self.student.lin.weight.data - 0.001 * grad[0]
             # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
-
-            # with torch.no_grad():
-            # for p, g in zip(self.student.parameters(), grad):
-            #    p.grad = g
-
-            # student_optim.step()
 
             # tau = np.exp(-i / 0.95)
             if i != -1:
@@ -521,13 +382,52 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             else:
                 tau = 0.95 * tau
 
-        act = torch.nn.Sigmoid()
-        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        out_stu = act(out_stu)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
+            # self.student.eval()
+            out_stu = self.teacher(generated_x)
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
+
+            # loss_stu = loss_stu - perceptual_loss
+
+        w_loss = torch.linalg.norm(self.teacher.lin.weight - new_weight, ord=2) ** 2
+
+        i = torch.randint(0, self.nb_batch, size=(1,)).item()
+        gt_x, gt_y = self.data_sampler(i)
+        gt_y_onehot = onehot[gt_y.long()].cuda()
+
+        z = torch.randn(self.opt.batch_size, self.opt.latent_dim).cuda()
+        w = torch.cat((w_t, w_t-w_star), dim=1)
+        w = w.repeat(self.opt.batch_size, 1)
+        x = torch.cat((w, gt_x), dim=1)
+        generated_x = self.generator(x, gt_y_onehot)
+
+        # generated_x = generated_x @ self.unproj_matrix.cuda()
+        # img_shape = (1, 28, 28)
+        # generated_x = torch.reshape(generated_x, (generated_x.shape[0], *img_shape))
+
+        # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        # feat = self.feature_extractor(generated_x)
+        # tmp_score = cos(feat, self.feat_privacy_set)
+        # perceptual_loss = tmp_score.mean()
+
+        # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        feat = self.feature_extractor(generated_x)
+        feat = feat.repeat(100, 1)
+        # define an instance of the PairwiseDistance
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        # compute the pairwise distance
+        perceptual_loss = pdist(feat, self.feat_privacy_set).mean()
+        # perceptual_loss = torch.cdist(feat, self.feat_privacy_set, p=2.0) ** 2
+
+        print(perceptual_loss)
+
+        alpha = 0.01
+        loss_stu = w_loss + loss_stu - alpha * perceptual_loss
+        # loss_stu = - perceptual_loss
 
         grad_stu = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
-                                       create_graph=False, retain_graph=False)
+                                       create_graph=True, retain_graph=True)
 
         return grad_stu, loss_stu
+
