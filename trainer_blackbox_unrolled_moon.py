@@ -36,6 +36,7 @@ from datasets import BaseDataset
 import networks.blackbox_unrolled as blackbox
 
 import csv
+import seaborn as sns
 
 from utils.visualize import make_results_video_blackbox, make_results_video_2d_blackbox, make_results_img_blackbox, make_results_img_2d_blackbox
 
@@ -330,7 +331,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -345,7 +346,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -413,7 +414,8 @@ class Trainer:
                 w_t = self.student.lin.weight
                 w_t = w_t / torch.norm(w_t)
 
-                gt_x, gt_y = self.data_sampler(X_train, Y_train, idx)
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
 
                 # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
                 z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
@@ -463,8 +465,8 @@ class Trainer:
                 logwriter.writerow([idx, acc, diff.item()])
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
-            # make_results_video_2d_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0, self.opt.seed)
+            # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
         else:
             make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
             # make_results_video_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)

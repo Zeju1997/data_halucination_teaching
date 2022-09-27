@@ -33,6 +33,8 @@ import networks.unrolled_privacy as unrolled
 
 from datasets import BaseDataset
 
+import seaborn as sns
+
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
@@ -251,7 +253,7 @@ class Trainer:
         #  Train Teacher
         # ---------------------
 
-        if self.opt.train_wstar == True:
+        if self.opt.train_wstar == False:
             wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             wstar_trainer.train(self.teacher)
 
@@ -264,7 +266,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
 
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
@@ -279,7 +281,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test, data_train)
@@ -290,6 +292,7 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
+
         self.opt.experiment = "Student"
         print("Start training {} ...".format(self.opt.experiment))
         logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
@@ -510,6 +513,64 @@ class Trainer:
                         experiment_dict[experiment].append(file)
 
         plot_graphs(rootdir, experiment_dict, experiments_lst)
+
+
+    def plot_perceptual_loss(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        file_lst = []
+
+        for file in os.listdir(rootdir):
+            if file.endswith('.csv'):
+                if 'PERCEPTUAL' in file:
+                    file_lst.append(file)
+
+        sns.set()
+
+        # Plot acc results
+        plt.figure()
+
+        for idx, experiment in enumerate(experiments_lst):
+            value_np = 0
+            for i, file in tqdm(enumerate(sorted(file_lst))):
+                file_path = os.path.join(rootdir, file)
+                if os.path.isfile(file_path):
+                    value = []
+                    with open(file_path, 'r') as csvfile:
+                        lines = csv.reader(csvfile, delimiter=',')
+                        for n, row in enumerate(lines):
+                            if n != 0:
+                                value.append(row[idx+1])
+                    tmp_value_np = np.asarray(value).astype(float)
+                    if i == 0:
+                        value_np = tmp_value_np[np.newaxis, :]
+                    else:
+                        value_np = np.concatenate((value_np, tmp_value_np[np.newaxis, :]), axis=0)
+
+            value_mean = np.mean(value_np, axis=0)
+            value_std = np.std(value_np, axis=0)
+
+            x = np.arange(len(value_mean))
+
+            if experiment == 'SGD':
+                plt.plot(x, value_mean, label='SGD', c='g')
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='g', alpha=0.2)
+
+            elif experiment == 'IMT_Baseline':
+                plt.plot(x, value_mean, label='IMT', c='b')
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='b', alpha=0.2)
+
+            else:
+                plt.plot(x, value_mean, label='GMT', c='r')
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='r', alpha=0.2)
+
+        plt.ylabel('Perceptual Loss', fontsize=16)
+        plt.xlabel('Number of iterations', fontsize=16)
+        plt.legend(loc='upper left', fontsize=16)
+
+        plt.savefig(os.path.join(rootdir, 'paper_results_perceptual.jpg'), bbox_inches='tight')
 
 
     def make_gif(self):

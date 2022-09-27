@@ -3,6 +3,7 @@ teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300
 learning_rate: 1e-3
+netG_lr: 0.0002
 batch_size: 1 # 128
 batch_size_gan: 32 # 128
 nb_train: 1000 # 10000

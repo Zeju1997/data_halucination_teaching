@@ -336,8 +336,6 @@ from tqdm import tqdm
 import seaborn as sns
 
 
-
-
 def plot_graphs(rootdir, experiment_dict, experiment_lst):
     # mpl.rcParams['figure.dpi'] = 120
     # mpl.rcParams['savefig.dpi'] = 200
@@ -381,7 +379,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
             plt.plot(x, acc_mean, label='GMT', c='r')
             plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='r', alpha=0.2)
 
-    plt.ylabel('Difference between $w*$ and $w_t$', fontsize=16)
+    plt.ylabel('Accuracy', fontsize=16)
     plt.xlabel('Number of iterations', fontsize=16)
     plt.legend(loc='upper left', fontsize=16)
 

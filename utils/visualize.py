@@ -14,7 +14,7 @@ cm_bright = ListedColormap(['#FF0000', '#0000FF'])
 
 
 
-def make_results_video(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, proj_matrix=None):
+def make_results_video(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
         # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
@@ -87,7 +87,7 @@ def make_results_video(opt, X, Y, generated_samples, generated_labels, res_sgd, 
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
-    gif_path = os.path.join(video_dir, 'results_{}_{}.gif'.format(opt.data_mode, epoch))
+    gif_path = os.path.join(video_dir, 'results_{}_{}_{}.gif'.format(opt.data_mode, epoch, seed))
     imageio.mimsave(gif_path, images, fps=20)
     # optimize(gif_path)
 
@@ -248,60 +248,6 @@ def make_results_img_2d(opt, X, Y, generated_samples, generated_labels, res_sgd,
     plt.savefig(img_path)
     plt.close()
 
-
-def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
-    sns.set()
-
-    save_folder = os.path.join(opt.log_path, "generated_samples")
-    if not os.path.exists(save_folder):
-        os.makedirs(save_folder)
-
-    iterations = [1, 75, 150, 225, -1]
-    for i in iterations:
-
-        fig = plt.figure()
-        fig.set_size_inches(5.8, 5.8)
-        plt.plot(a_star, b_star, '-k', label='W star')
-        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
-        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
-        plt.legend(loc="upper right", fontsize=16)
-        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
-        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
-
-        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
-        plt.savefig(img_path)
-        plt.close()
-
-
-def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch, seed):
-
-    save_folder = os.path.join(opt.log_path, "generated_samples")
-    if not os.path.exists(save_folder):
-        os.makedirs(save_folder)
-
-    iterations = [1, 75, 150, 225, -1]
-    for i in iterations:
-
-        generated_sample = generated_samples[i, :].squeeze()
-        generated_label = generated_labels[i]
-
-        if generated_label == 0.0:
-            generated_label = opt.class_1
-        else:
-            generated_label = opt.class_2
-
-        fig = plt.figure()
-        fig.set_size_inches(5.8, 5.8)
-        plt.imshow(generated_sample, cmap='gray')
-        plt.legend(loc="upper right", fontsize=16)
-        plt.title("Data Generation - Label {}".format(generated_label), fontsize=16)
-        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
-        plt.savefig(img_path)
-        plt.close()
-
-
-
 def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed):
     # a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
     for i in range(len(res_student)):
@@ -371,6 +317,57 @@ def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sg
         os.remove(file_name)
     '''
 
+
+def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
+    sns.set()
+
+    save_folder = os.path.join(opt.log_path, "generated_samples")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    iterations = [1, 75, 150, 225, -1]
+    for i in iterations:
+
+        fig = plt.figure()
+        fig.set_size_inches(5.8, 5.8)
+        plt.plot(a_star, b_star, '-k', label='W star')
+        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
+        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
+        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
+        plt.legend(loc="upper right", fontsize=16)
+        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
+        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
+
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path)
+        plt.close()
+
+
+def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch, seed):
+
+    save_folder = os.path.join(opt.log_path, "generated_samples")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    iterations = [1, 75, 150, 225, -1]
+    for i in iterations:
+
+        generated_sample = generated_samples[i, :].squeeze()
+        generated_label = generated_labels[i]
+
+        if generated_label == 0.0:
+            generated_label = opt.class_1
+        else:
+            generated_label = opt.class_2
+
+        fig = plt.figure()
+        fig.set_size_inches(5.8, 5.8)
+        plt.imshow(generated_sample, cmap='gray')
+        plt.legend(loc="upper right", fontsize=16)
+        plt.title("Data Generation - Label {}".format(generated_label), fontsize=16)
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path)
+        plt.close()
 
 def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:

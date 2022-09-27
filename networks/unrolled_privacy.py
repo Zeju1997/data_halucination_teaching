@@ -300,6 +300,9 @@ class UnrolledOptimizer(nn.Module):
         self.proj_matrix = proj_matrix
         self.unproj_matrix = torch.linalg.pinv(proj_matrix)
 
+        pdist = torch.nn.PairwiseDistance(p=2)
+        self.distance = pdist
+
     def data_sampler(self, i):
         i_min = i * self.opt.batch_size
         i_max = (i + 1) * self.opt.batch_size
@@ -359,6 +362,11 @@ class UnrolledOptimizer(nn.Module):
             w = w.repeat(self.opt.batch_size, 1)
             x = torch.cat((w, gt_x), dim=1)
             generated_x = self.generator(x, gt_y_onehot)
+
+            feat = self.feature_extractor(generated_x)
+            feat = feat.repeat(100, 1)
+            perceptual_loss = self.distance(feat, self.feat_privacy_set).mean()
+
             generated_x = generated_x.view(self.opt.batch_size, -1)
             generated_x = generated_x @ self.proj_matrix.cuda()
 
@@ -384,7 +392,7 @@ class UnrolledOptimizer(nn.Module):
 
             # self.student.eval()
             out_stu = self.teacher(generated_x)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1))
+            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1)) + perceptual_loss
 
             # loss_stu = loss_stu - perceptual_loss
 
@@ -410,16 +418,6 @@ class UnrolledOptimizer(nn.Module):
         # perceptual_loss = tmp_score.mean()
 
         # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
-        feat = self.feature_extractor(generated_x)
-        feat = feat.repeat(100, 1)
-        # define an instance of the PairwiseDistance
-        pdist = torch.nn.PairwiseDistance(p=2)
-
-        # compute the pairwise distance
-        perceptual_loss = pdist(feat, self.feat_privacy_set).mean()
-        # perceptual_loss = torch.cdist(feat, self.feat_privacy_set, p=2.0) ** 2
-
-        print(perceptual_loss)
 
         alpha = 0.01
         loss_stu = w_loss + loss_stu - alpha * perceptual_loss

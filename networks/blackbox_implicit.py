@@ -415,7 +415,62 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return model
 
-    def forward(self, model, fc, model_star, inputs, targets):
+    def projected_gradient_descent(self, model, fc, inputs, targets):
+        # https://github.com/bethgelab/foolbox
+
+        """Run the style transfer."""
+        # print('Building the style transfer model..')
+
+        optim = torch.optim.SGD([{'params': model.parameters()}, {'params': fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+        optim_loss = []
+
+        eps = 1
+        eps_batch = torch.ones(self.opt.batch_size) * eps
+        eps_batch = eps_batch.cuda()
+
+        model_orig = copy.deepcopy(model)
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+        num_steps = 10
+        step_size = 0.001
+        epsilon = 0.1
+        norm = 0.0
+        p = 2
+
+        for _ in tqdm(range(1)):
+            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                inputs, targets = inputs.cuda(), targets.long().cuda()
+                z0 = model(inputs)
+                z = z0
+
+                optim.zero_grad()
+                for _ in range(num_steps):
+                    output = fc(z)
+                    loss = self.loss_fn(output, targets)
+                    gradients = torch.autograd.grad(outputs=loss,
+                                                    inputs=z,
+                                                    create_graph=True, retain_graph=True)
+
+                    gradients = self.normalize_lp_norms(gradients[0], p=p)
+                    z = z - step_size * gradients
+                    z = self.project(z, z0, epsilon, p)
+
+                diff = pdist(z, z0)
+
+                # diff = torch.norm(z - z_new, p='fro', dim=1) ** 2
+                print('diff', diff.max())
+                # mask = (diff < eps).float().unsqueeze(1)
+
+                output = fc(z)
+                loss = self.loss_fn(output, targets)
+                loss.backward()
+                optim.step()
+
+                optim_loss.append(loss.item())
+
+        return z
+
+    def forward1(self, model, fc, model_star, inputs, targets):
 
         # ---------------------
         #  Optimize Linear Classifier
