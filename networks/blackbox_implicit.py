@@ -300,6 +300,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # self.generator = generator
 
         self.loader = loader
+        self.data_iter = iter(loader)
         # self.Y = y
 
         # self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
@@ -469,6 +470,121 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                 optim_loss.append(loss.item())
 
         return z
+
+    def forward(self, model, fc):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
+
+        # with torch.no_grad():
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            # self.generator.load_state_dict(weight)
+            # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            # self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
+
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
+
+        optim = torch.optim.SGD(fc.parameters(), lr=0.001)
+        model.eval()
+        num_steps = 10
+
+        for _ in range(num_steps):
+            try:
+                (inputs, targets) = data_iter.next()
+            except:
+                data_iter = iter(self.loader)
+                (inputs, targets) = data_iter.next()
+
+            inputs, targets = inputs.cuda(), targets.long().cuda()
+
+            z = model(inputs)
+
+            optim.zero_grad()
+
+            outputs = fc(z)
+            loss = self.loss_fn(outputs, targets)
+            loss.backward()
+
+            optim.step()
+
+        weight = fc.state_dict()
+        '''
+        new_weight = self.student.lin.weight
+
+        w_init = self.student.lin.weight
+        w_init = w_init / torch.norm(w_init)
+
+        model_paramters = list(self.generator.parameters())
+        student_paramters = list(self.student.parameters())
+
+        train_loss = []
+
+        self.generator.train()
+
+        for i in range(self.opt.n_unroll_blocks):
+            w_t = self.student.lin.weight
+            w_t = w_t / torch.norm(w_t)
+
+            i = torch.randint(0, self.nb_batch, size=(1,)).item()
+            gt_x, gt_y = self.data_sampler(i)
+
+            # Sample noise and labels as generator input
+            # z = Variable(torch.randn(gt_x.shape)).cuda()
+            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+
+            # x = torch.cat((w_t, w_t-w_star, z), dim=1)
+            # w = torch.cat((w_t, w_t-w_init), dim=1)
+            w = w_t.repeat(self.opt.batch_size, 1)
+            x = torch.cat((w, gt_x), dim=1)
+            # generated_x = self.generator(x, gt_y_onehot)
+            generated_x = self.generator(x, gt_y)
+
+            # self.student.train()
+
+            if self.proj_matrix is not None:
+                generated_x = generated_x @ self.proj_matrix.cuda()
+
+            out = self.student(generated_x)
+
+            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
+
+            grad = torch.autograd.grad(loss,
+                                       self.student.lin.weight,
+                                       create_graph=True, retain_graph=True)
+
+            new_weight = new_weight - 0.001 * grad[0]
+            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
+            # self.student.lin.weight.data = self.student.lin.weight.data - 0.001 * grad[0]
+            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+
+            # with torch.no_grad():
+            # for p, g in zip(self.student.parameters(), grad):
+            #    p.grad = g
+
+            # student_optim.step()
+
+            # tau = np.exp(-i / 0.95)
+            if i != -1:
+                tau = 1
+            else:
+                tau = 0.95 * tau
+
+        act = torch.nn.Sigmoid()
+        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
+        out_stu = act(out_stu)
+        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
+
+        grad_stu = torch.autograd.grad(outputs=loss_stu,
+                                       inputs=model_paramters,
+                                       create_graph=False, retain_graph=False)
+        '''
+        return weight
 
     def forward1(self, model, fc, model_star, inputs, targets):
 
