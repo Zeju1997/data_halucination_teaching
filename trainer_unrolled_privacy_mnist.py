@@ -566,6 +566,7 @@ class Trainer:
                 plt.plot(x, value_mean, label='GMT', c='r')
                 plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='r', alpha=0.2)
 
+        plt.axhline(y=self.opt.epsilon, color='k', linestyle='dashed', label="$\epsilon$", linewidth=4)
         plt.ylabel('Perceptual Loss', fontsize=16)
         plt.xlabel('Number of iterations', fontsize=16)
         plt.legend(loc='upper left', fontsize=16)

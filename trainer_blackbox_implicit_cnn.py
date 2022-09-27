@@ -741,7 +741,7 @@ class Trainer:
                 if epoch != 0:
                     self.student.train()
                     self.student_fc.train()
-                    if epoch < 10:
+                    if epoch > 10:
                         for batch_idx, (inputs, targets) in enumerate(self.train_loader):
 
                             inputs, targets = inputs.cuda(), targets.long().cuda()
@@ -1045,6 +1045,8 @@ class Trainer:
         z0 = model(inputs)
         z = z0
 
+        optim_loss = []
+
         optim.zero_grad()
         for _ in range(num_steps):
             output = fc(z)
@@ -1057,9 +1059,10 @@ class Trainer:
             z = z - step_size * gradients
             z = self.project(z, z0, epsilon, p)
 
+            optim_loss.append(loss.item())
+
         # diff = pdist(z, z0)
         # print('diff', diff.max())
-
 
         # mask = (diff < eps).float().unsqueeze(1)
 
@@ -1068,7 +1071,6 @@ class Trainer:
         # loss.backward()
         # optim.step()
 
-        # optim_loss.append(loss.item())
         # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
 
         # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
@@ -1076,12 +1078,12 @@ class Trainer:
         # offset = project_onto_l1_ball(diff, 0.1)
         # z_proj = z + offset
 
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Mixup")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
+        fig = plt.figure()
+        plt.plot(optim_loss, c="b", label="Mixup")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.show()
 
         # diff = z_org - z_tmp
         # z = z - diff
