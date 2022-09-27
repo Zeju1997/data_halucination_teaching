@@ -152,9 +152,9 @@ class HingeLoss(nn.Module):
 
     def forward(self, prediction, target):
         perceptual_loss = self.distance(prediction, target).min()
-        print("diff", perceptual_loss)
+        # print("diff", perceptual_loss)
         loss_value = torch.maximum(torch.zeros(1).cuda(), self.epsilon - perceptual_loss)
-        print("percept loss", loss_value)
+        # print("percept loss", loss_value)
         return loss_value
 
 class UnrolledOptimizer(nn.Module):
@@ -263,7 +263,7 @@ class UnrolledOptimizer(nn.Module):
             feat = feat.repeat(100, 1)
             # perceptual_loss = self.distance(feat, self.feat_privacy_set).mean()
             perceptual_loss = self.perceptual_loss(feat, self.feat_privacy_set)
-            print("perceptual loss", perceptual_loss)
+            # print("perceptual loss", perceptual_loss)
             # loss_stu = w_loss + loss_stu - alpha * perceptual_loss
 
             generated_x = generated_x.view(self.opt.batch_size, -1)
