@@ -908,6 +908,225 @@ class Trainer:
 
         if self.opt.train_student == True:
             # student
+            self.opt.experiment = "Teacher_weight_latent"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            res_mixup = []
+            res_loss_mixup = []
+
+            # netG = cgan.Generator_CIFAR10().cuda()
+            # netG.apply(weights_init)
+            # weight_path = os.path.join(self.opt.pretrained_dir, 'netG_CIFAR10.pth')
+            # netG.load_state_dict(torch.load(weight_path))
+
+            netG = blackbox_implicit.Generator(self.opt, self.teacher, tmp_student).cuda()
+            netG.apply(weights_init)
+            optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
+
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.val_loader)
+
+            res_student = []
+            res_loss_student = []
+            cls_loss = []
+
+            w_init = self.student.state_dict()
+            # new_weight = w_init
+            train_loss = []
+
+            self.step = 0
+            self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            self.init_feat_sim = 0
+
+            loader_eval = iter(self.val_loader)
+            avg_train_loss = 0
+            tmp_train_loss = 0
+            feat_sim = 0
+
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+
+            student_parameters = list(self.student.parameters()) # + list(self.student_fc.parameters())
+            train_loss = []
+            train_loss2 = []
+            for epoch in tqdm(range(self.opt.n_epochs)):
+                if epoch != 0:
+                    self.student.train()
+                    self.student_fc.train()
+                    if epoch != 0:
+                        for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+
+                            inputs, targets = inputs.cuda(), targets.long().cuda()
+                            student_optim.zero_grad()
+                            model_mdl = copy.deepcopy(self.student)
+                            fc_mdl = copy.deepcopy(self.student_fc)
+                            # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
+
+                            # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
+
+                            # student_optim.zero_grad()
+
+                            # z = self.student(inputs)
+                            # output = self.student_fc(z)
+
+                            z = self.student(inputs)
+
+                            w_t = netG.state_dict()
+                            # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
+                            w_t = unrolled_optimizer(model_mdl, fc_mdl)
+
+                            # train_loss.append(generator_loss.item())
+
+                            with torch.no_grad():
+                                self.student_fc.load_state_dict(w_t)
+
+                            # G_loss.backward()
+                            outputs = self.student_fc(z)
+                            loss = self.loss_fn(outputs, targets)
+                            loss.backward()
+                            student_optim.step()
+
+                            # self.student.load_state_dict(w_t)
+
+                            # loss = self.loss_fn(outputs, targets)
+
+                            # train_loss.append(w_loss)
+
+                            # gradients = torch.autograd.grad(outputs=loss,
+                            #                                inputs=student_parameters,
+                            #                                create_graph=True, retain_graph=True)
+
+                            # with torch.no_grad():
+                            #     for p, g in zip(student_parameters, gradients):
+                            #         p.grad = g
+
+                            # student_model_optim.step()
+
+                            # z = self.student(inputs)
+
+                            self.step += 1
+
+                            if batch_idx % self.opt.log_interval == 0:
+                                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                    epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                    100. * batch_idx / len(self.train_loader), loss.item()), '\t',
+                                    'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                    epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
+                                    100. * batch_idx / len(self.val_loader), loss.item()))
+                                self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+                            '''
+                            if self.step % self.opt.n_unroll_blocks == 0:
+                                avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
+                                tmp_train_loss = 0
+        
+                                feat_sim = self.query_model() / self.init_feat_sim
+                                print(feat_sim.mean())
+                            '''
+                # fig = plt.figure()
+                # plt.plot(train_loss, c="b", label="Mixup")
+                # plt.xlabel("Epoch")
+                # plt.ylabel("Accuracy")
+                # plt.legend()
+                # plt.show()
+
+                # avg_train_loss = tmp_train_loss / len(self.train_loader)
+                # tmp_train_loss = 0
+                '''
+                # w_t = self.student.lin.weight
+
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_1, gt_y_1 = self.data_sampler(X_train, Y_train, i)
+
+                i = torch.randint(0, nb_batch, size=(1,)).item()
+                gt_x_2, gt_y_2 = self.data_sampler(X_train, Y_train, i)
+
+                alpha = np.random.beta(1.0, 1.0)
+                # alpha = torch.tensor(alpha, dtype=torch.float).cuda()
+                # alpha.requires_grad = True
+
+                mixed_x, targets_a, targets_b = mixup_data(gt_x_1, gt_x_2, gt_y_1, gt_y_2, alpha)
+                # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
+
+                # inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha, use_cuda)
+
+                mixup_baseline_optim.zero_grad()
+
+                out = mixup_baseline(mixed_x.cuda())
+                loss = mixup_criterion(self.loss_fn, out, targets_a.long(), targets_b.long(), alpha)
+
+                # grad = torch.autograd.grad(outputs=loss, inputs=alpha, retain_graph=True)[0]
+
+                loss.backward()
+                mixup_baseline_optim.step()
+
+                # mixed_y = gt_y_1 * alpha + gt_y_2 * (1 - alpha)
+
+                # mixup_baseline.update(mixed_x, mixed_y)
+                '''
+
+                # if epoch % 5 == 0:
+
+                # w_t = self.get_w_star(model_mdl, fc_mdl)
+                # tmp_student.load_state_dict(w_t)
+
+                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
+                res_student.append(acc)
+                res_loss_student.append(test_loss)
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+                '''
+                mixup_baseline.eval()
+                test = mixup_baseline(X_test.cuda()).cpu()
+    
+                a, b = plot_classifier(mixup_baseline, X.max(axis=0), X.min(axis=0))
+                a_mixup.append(a)
+                b_mixup.append(b)
+    
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                    _, predicted = torch.max(test, dim=1)
+                    nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_mixup.append(acc)
+                '''
+                # w_mixup = []
+                # for param in mixup_baseline.parameters():
+                #     w_mixup.append(param.data)
+                # diff = weight_diff(w_teacher, w_mixup)
+                # w_diff_mixup.append(diff)
+
+                # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
+                # w_diff_mixup.append(diff.detach().clone().cpu())
+
+            if self.visualize == False:
+                fig = plt.figure()
+                plt.plot(res_student, c="r", label="Student")
+                plt.plot(res_example, c="g", label="SGD")
+                plt.xlabel("Epoch")
+                plt.ylabel("Accuracy")
+                plt.legend()
+                plt.show()
+
+
+        if self.opt.train_student == False:
+            # student
             self.opt.experiment = "Teacher_latent"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')

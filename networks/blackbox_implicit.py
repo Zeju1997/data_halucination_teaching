@@ -471,7 +471,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return z
 
-    def forward(self, model, fc):
+    def forward1(self, model, fc):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -519,83 +519,119 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         weight = fc.state_dict()
 
-        fig = plt.figure()
-        plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
-        '''
-        new_weight = self.student.lin.weight
+        return weight
 
-        w_init = self.student.lin.weight
-        w_init = w_init / torch.norm(w_init)
+    def normalize_lp_norms(self, x, p):
+        # norms = torch.flatten(x).norms.lp(p=p, axis=-1)
+        norms = x.norm(p=p, dim=-1)
+        eps = torch.tensor(1e-12)
+        norms = torch.maximum(norms, eps)  # avoid divsion by zero
+        factor = 1 / norms
+        # factor = atleast_kd(factor, x.ndim)
+        factor = factor.unsqueeze(1)
+        return x * factor
 
-        model_paramters = list(self.generator.parameters())
-        student_paramters = list(self.student.parameters())
+    def clip_lp_norms(self, x, norm, p):
+        norm = torch.tensor(norm).unsqueeze(0).cuda()
 
-        train_loss = []
+        # norms = torch.flatten(x).norms.lp(p=p, axis=-1)
+        norms = x.norm(p=p, dim=-1)
+        eps = torch.tensor(1e-12)
+        norms = torch.maximum(norms, eps)  # avoid divsion by zero
 
-        self.generator.train()
+        factor = torch.minimum(torch.ones(1).cuda(), norm / norms)  # clipping -> decreasing but not increasing
+        # factor = atleast_kd(factor, x.ndim)
+        factor = factor.unsqueeze(1)
+        return x * factor
 
-        for i in range(self.opt.n_unroll_blocks):
-            w_t = self.student.lin.weight
-            w_t = w_t / torch.norm(w_t)
+    # def project(self, x, x0, epsilon):
+    #     return x0 + self.clip_lp_norms(x - x0, norm=epsilon, p=1)
 
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            gt_x, gt_y = self.data_sampler(i)
+    def project(self, x, x0, epsilon, p):
+        return x0 + self.clip_lp_norms(x - x0, norm=epsilon, p=p)
 
-            # Sample noise and labels as generator input
-            # z = Variable(torch.randn(gt_x.shape)).cuda()
-            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+    def forward(self, model, fc):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
 
-            # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            # w = torch.cat((w_t, w_t-w_init), dim=1)
-            w = w_t.repeat(self.opt.batch_size, 1)
-            x = torch.cat((w, gt_x), dim=1)
-            # generated_x = self.generator(x, gt_y_onehot)
-            generated_x = self.generator(x, gt_y)
+        # with torch.no_grad():
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            # self.generator.load_state_dict(weight)
+            # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            # self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
 
-            # self.student.train()
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
 
-            if self.proj_matrix is not None:
-                generated_x = generated_x @ self.proj_matrix.cuda()
+        optim = torch.optim.SGD(fc.parameters(), lr=0.001)
+        model.eval()
 
-            out = self.student(generated_x)
+        pdist = torch.nn.PairwiseDistance(p=2)
+        num_steps = 10
+        step_size = 0.001
+        epsilon = 0.1
+        norm = 0.0
+        p = 2
 
-            loss = self.loss_fn(out, gt_y.unsqueeze(1).float())
+        optim_loss = []
 
-            grad = torch.autograd.grad(loss,
-                                       self.student.lin.weight,
-                                       create_graph=True, retain_graph=True)
+        try:
+            (inputs, targets) = self.data_iter.next()
+        except:
+            data_iter = iter(self.loader)
+            (inputs, targets) = data_iter.next()
 
-            new_weight = new_weight - 0.001 * grad[0]
-            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight.data = self.student.lin.weight.data - 0.001 * grad[0]
-            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
+        inputs, targets = inputs.cuda(), targets.long().cuda()
 
-            # with torch.no_grad():
-            # for p, g in zip(self.student.parameters(), grad):
-            #    p.grad = g
+        z0 = model(inputs)
+        z = z0
 
-            # student_optim.step()
+        optim.zero_grad()
+        for _ in range(num_steps):
+            output = fc(z)
+            loss = self.loss_fn(output, targets)
+            gradients = torch.autograd.grad(outputs=loss,
+                                            inputs=z,
+                                            create_graph=True, retain_graph=True)
 
-            # tau = np.exp(-i / 0.95)
-            if i != -1:
-                tau = 1
-            else:
-                tau = 0.95 * tau
+            gradients = self.normalize_lp_norms(gradients[0], p=p)
+            z = z - step_size * gradients
+            z = self.project(z, z0, epsilon, p)
 
-        act = torch.nn.Sigmoid()
-        out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        out_stu = act(out_stu)
-        loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y.unsqueeze(1).float())
+            optim_loss.append(loss.item())
 
-        grad_stu = torch.autograd.grad(outputs=loss_stu,
-                                       inputs=model_paramters,
-                                       create_graph=False, retain_graph=False)
-        '''
+        optim.zero_grad()
+
+        outputs = fc(z)
+        loss = self.loss_fn(outputs, targets)
+        loss.backward()
+
+        optim_loss.append(loss.item())
+
+        optim.step()
+
+        weight = fc.state_dict()
+
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
+
         return weight
 
     def forward1(self, model, fc, model_star, inputs, targets):
