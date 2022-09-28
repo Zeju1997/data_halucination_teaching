@@ -34,6 +34,31 @@ class CNN1(nn.Module):
         return x
 
 
+class CNN_MIXUP(nn.Module):
+    def __init__(self, in_channels=3, num_classes=100):
+        """
+        Constructeur classifieur linéaire simple
+        Classification binaire (une seule sortie)
+        :param n_in: nombre de features
+        """
+        super(CNN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.lin1 = nn.Linear(16 * 5 * 5, 120)
+        self.lin2 = nn.Linear(120, 84)
+        self.lin3 = nn.Linear(84, num_classes)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.lin1(x))
+        x = F.relu(self.lin2(x))
+        x = self.lin3(x)
+        return x
+
+
 class CNN(nn.Module):
     def __init__(self, in_channels=3, num_classes=100):
         """

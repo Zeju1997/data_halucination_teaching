@@ -739,7 +739,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # mixup student
             self.opt.experiment = "Trained_Mixup_First_Order"
             print("Start training {} ...".format(self.opt.experiment))

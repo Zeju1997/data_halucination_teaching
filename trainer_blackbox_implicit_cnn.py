@@ -906,7 +906,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             # student
             self.opt.experiment = "Teacher_weight_latent"
             print("Start training {} ...".format(self.opt.experiment))
@@ -1125,7 +1125,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
             self.opt.experiment = "Teacher_latent"
             print("Start training {} ...".format(self.opt.experiment))
@@ -1183,67 +1183,12 @@ class Trainer:
                         for batch_idx, (inputs, targets) in enumerate(self.train_loader):
 
                             inputs, targets = inputs.cuda(), targets.long().cuda()
-
-                            student_optim.zero_grad()
-                            z = self.student(inputs)
-
-                            # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
-
-                            # student_optim.zero_grad()
-
-                            # z = self.student(inputs)
-                            # output = self.student_fc(z)
-                            # w_t, w_loss = unrolled_optimizer(self.student, self.student_fc, tmp_student, inputs, targets)
-                            # self.student.load_state_dict(w_t)
-
-                            # loss = self.loss_fn(outputs, targets)
-
-                            # train_loss.append(w_loss)
-
-                            # gradients = torch.autograd.grad(outputs=loss,
-                            #                                inputs=student_parameters,
-                            #                                create_graph=True, retain_graph=True)
-
-                            # with torch.no_grad():
-                            #     for p, g in zip(student_parameters, gradients):
-                            #         p.grad = g
-
-                            # student_model_optim.step()
-
-                            # z = self.student(inputs)
-
-                            outputs = self.student_fc(z)
-                            loss = self.loss_fn(outputs, targets)
-                            loss.backward()
-                            student_optim.step()
-
-                            self.step += 1
-
-                            if batch_idx % self.opt.log_interval == 0:
-                                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                                    100. * batch_idx / len(self.train_loader), loss.item()), '\t',
-                                    'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
-                                    100. * batch_idx / len(self.val_loader), loss.item()))
-                                self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-                            '''
-                            if self.step % self.opt.n_unroll_blocks == 0:
-                                avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
-                                tmp_train_loss = 0
-        
-                                feat_sim = self.query_model() / self.init_feat_sim
-                                print(feat_sim.mean())
-                            '''
-                    else:
-                        for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-
-                            inputs, targets = inputs.cuda(), targets.long().cuda()
                             student_optim.zero_grad()
                             model_mdl = copy.deepcopy(self.student)
                             fc_mdl = copy.deepcopy(self.student_fc)
-                            z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
+                            z, optim_loss = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
+
+                            train_loss = train_loss + optim_loss
 
                             # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
 
@@ -1516,17 +1461,17 @@ class Trainer:
         # offset = project_onto_l1_ball(diff, 0.1)
         # z_proj = z + offset
 
-        fig = plt.figure()
-        plt.plot(optim_loss, c="b", label="Mixup")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Mixup")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
         # diff = z_org - z_tmp
         # z = z - diff
 
-        return z
+        return z, optim_loss
 
     def teach_linear_classifier(self, model, fc, inputs, targets):
         # https://github.com/bethgelab/foolbox
