@@ -61,8 +61,7 @@ class EstimatorCV():
             )
         )
 
-        self.CoVariance = (self.CoVariance.mul(1 - weight_CV) + var_temp
-                      .mul(weight_CV)).detach() + additional_CV.detach()
+        self.CoVariance = (self.CoVariance.mul(1 - weight_CV) + var_temp.mul(weight_CV)).detach() + additional_CV.detach()
 
         self.Ave = (self.Ave.mul(1 - weight_AV) + ave_CxA.mul(weight_AV)).detach()
 

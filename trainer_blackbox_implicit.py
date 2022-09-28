@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -1712,7 +1712,7 @@ class Trainer:
 
         train_batches_num = len(train_loader)
 
-        lambda_0 = 7.5
+        lambda_0 = 0.5
         ratio = lambda_0 * (epoch / self.opt.n_epochs)
         # switch to train mode
         model.train()
