@@ -72,6 +72,8 @@ class CNN(nn.Module):
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.lin = nn.Identity()
 
+        self.feature_num = 400
+
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))

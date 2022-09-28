@@ -45,7 +45,7 @@ import networks.cgan_cifar100 as cgan
 import networks.unrolled_optimizer as unrolled
 import networks.blackbox_mixup_cnn as blackbox_mixup
 import networks.blackbox_implicit as blackbox_implicit
-# import networks
+from networks.ISDA import EstimatorCV, ISDALoss
 
 from utils import HSIC
 
@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -686,9 +686,9 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
-            self.opt.experiment = "Teacher_weight"
+            self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -730,6 +730,9 @@ class Trainer:
             tmp_train_loss = 0
             feat_sim = 0
 
+            isda_criterion = ISDALoss(int(self.student.feature_num), self.opt.n_classes).cuda()
+            ce_criterion = nn.CrossEntropyLoss().cuda()
+
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
             student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
@@ -739,6 +742,33 @@ class Trainer:
             student_parameters = list(self.student.parameters()) # + list(self.student_fc.parameters())
             train_loss = []
             train_loss2 = []
+
+            for epoch in tqdm(range(self.opt.n_epochs)):
+                if epoch != 0:
+
+                    # adjust_learning_rate(optimizer, epoch + 1)
+
+                    # train for one epoch
+                    self.train(self.train_loader, self.student, self.student_fc, isda_criterion, student_optim, epoch)
+
+                    # evaluate on validation set
+                    # prec1 = self.val(self.val_loader, self.student, self.student_fc, ce_criterion, epoch)
+                    # self.test(self.student, self.student_fc, self.test_loader, epoch, netG=None)
+
+                    # remember best prec@1 and save checkpoint
+                    # is_best = prec1 > best_prec1
+                    # best_prec1 = max(prec1, best_prec1)
+
+                acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
+                res_student.append(acc)
+                res_loss_student.append(test_loss)
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+
+            sys.exit()
+
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.student.train()
@@ -1674,7 +1704,99 @@ class Trainer:
         print(feat_sim)
         return feat_sim.cuda()
 
-    def train(self, model, fc, train_loader, loss_fn, optimizer, epoch):
+    def train(self, train_loader, model, fc, criterion, optimizer, epoch):
+        """Train for one epoch on the training set"""
+        # batch_time = AverageMeter()
+        # losses = AverageMeter()
+        # top1 = AverageMeter()
+
+        train_batches_num = len(train_loader)
+
+        lambda_0 = 7.5
+        ratio = lambda_0 * (epoch / self.opt.n_epochs)
+        # switch to train mode
+        model.train()
+        fc.train()
+
+        for i, (x, target) in enumerate(train_loader):
+            target = target.cuda()
+            x = x.cuda()
+            input_var = torch.autograd.Variable(x)
+            target_var = torch.autograd.Variable(target)
+
+            # compute output
+            loss, output = criterion(model, fc, input_var, target_var, ratio)
+
+            # compute gradient and do SGD step
+            optimizer.zero_grad()
+            loss.backward()
+
+            optimizer.step()
+
+
+    def val(self, val_loader, model, fc, criterion, epoch):
+        """Perform validation on the validation set"""
+        batch_time = AverageMeter()
+        losses = AverageMeter()
+        top1 = AverageMeter()
+
+        train_batches_num = len(val_loader)
+
+        # switch to evaluate mode
+        model.eval()
+        fc.eval()
+
+        end = time.time()
+        for i, (input, target) in enumerate(val_loader):
+            target = target.cuda()
+            input = input.cuda()
+            input_var = torch.autograd.Variable(input)
+            target_var = torch.autograd.Variable(target)
+
+            # compute output
+            with torch.no_grad():
+                features = model(input_var)
+                output = fc(features)
+
+            loss = criterion(output, target_var)
+
+            # measure accuracy and record loss
+            prec1 = accuracy(output.data, target, topk=(1,))[0]
+            losses.update(loss.data.item(), input.size(0))
+            top1.update(prec1.item(), input.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+
+            if (i+1) % args.print_freq == 0:
+                fd = open(record_file, 'a+')
+                string = ('Test: [{0}][{1}/{2}]\t'
+                          'Time {batch_time.value:.3f} ({batch_time.ave:.3f})\t'
+                          'Loss {loss.value:.4f} ({loss.ave:.4f})\t'
+                          'Prec@1 {top1.value:.3f} ({top1.ave:.3f})\t'.format(
+                           epoch, (i+1), train_batches_num, batch_time=batch_time,
+                           loss=losses, top1=top1))
+                print(string)
+                fd.write(string + '\n')
+                fd.close()
+
+        fd = open(record_file, 'a+')
+        string = ('Test: [{0}][{1}/{2}]\t'
+                  'Time {batch_time.value:.3f} ({batch_time.ave:.3f})\t'
+                  'Loss {loss.value:.4f} ({loss.ave:.4f})\t'
+                  'Prec@1 {top1.value:.3f} ({top1.ave:.3f})\t'.format(
+            epoch, (i + 1), train_batches_num, batch_time=batch_time,
+            loss=losses, top1=top1))
+        print(string)
+        fd.write(string + '\n')
+        fd.close()
+        val_acc.append(top1.ave)
+
+        return top1.ave
+
+    def train1(self, model, fc, train_loader, loss_fn, optimizer, epoch):
         model.train()
         fc.train()
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -1699,28 +1821,6 @@ class Trainer:
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
-    def val(self, model, train_loader, loss_fn, optimizer, epoch):
-        model.train()
-        for batch_idx, (data, target) in enumerate(train_loader):
-
-            # first_image = np.array(data.cpu(), dtype='float')
-            # pixels = first_image.reshape((28, 28))
-            # plt.imshow(pixels, cmap='gray')
-            # plt.title("Label {}".format(target.item()))
-            # plt.show()
-
-            data, target = data.cuda(), target.long().cuda()
-            optimizer.zero_grad()
-            output = model(data)
-            loss = loss_fn(output, target)
-            loss.backward()
-            optimizer.step()
-            if batch_idx % self.opt.log_interval == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    epoch, batch_idx * len(data), len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader), loss.item()))
-                self.log(mode="train", name="loss", value=loss.item())
 
     def test(self, model, fc, test_loader, epoch, netG=None):
         model.eval()
@@ -1904,24 +2004,6 @@ class Trainer:
 
         return outputs, losses
 
-    def val(self):
-        """Validate the model on a single minibatch
-        """
-        self.set_eval()
-        try:
-            inputs = self.val_iter.next()
-        except StopIteration:
-            self.val_iter = iter(self.val_loader)
-            inputs = self.val_iter.next()
-
-        with torch.no_grad():
-            outputs, losses = self.process_batch(inputs)
-            self.compute_accuracy(inputs, outputs, losses)
-            self.log("val", inputs, outputs, losses)
-
-            del inputs, outputs, losses
-
-        self.set_train()
 
     def compute_losses(self, inputs, outputs):
         losses = {}
