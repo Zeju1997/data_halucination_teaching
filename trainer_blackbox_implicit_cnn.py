@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -689,7 +689,7 @@ class Trainer:
 
         if self.opt.train_student == True:
             # student
-            self.opt.experiment = "Teacher"
+            self.opt.experiment = "Teacher_weight"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -896,7 +896,7 @@ class Trainer:
                 # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
                 # w_diff_mixup.append(diff.detach().clone().cpu())
 
-            if self.visualize == True:
+            if self.visualize == False:
                 fig = plt.figure()
                 plt.plot(res_student, c="r", label="Student")
                 plt.plot(res_example, c="g", label="SGD")
@@ -906,9 +906,9 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
-            self.opt.experiment = "Teacher"
+            self.opt.experiment = "Teacher_latent"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -960,7 +960,7 @@ class Trainer:
                 if epoch != 0:
                     self.student.train()
                     self.student_fc.train()
-                    if epoch > 10:
+                    if epoch != 0:
                         for batch_idx, (inputs, targets) in enumerate(self.train_loader):
 
                             inputs, targets = inputs.cuda(), targets.long().cuda()
@@ -1157,7 +1157,7 @@ class Trainer:
                 # diff = torch.linalg.norm(self.teacher.lin.weight - mixup_baseline.lin.weight, ord=2) ** 2
                 # w_diff_mixup.append(diff.detach().clone().cpu())
 
-            if self.visualize == True:
+            if self.visualize == False:
                 fig = plt.figure()
                 plt.plot(res_student, c="r", label="Student")
                 plt.plot(res_example, c="g", label="SGD")
