@@ -494,6 +494,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         model.eval()
         num_steps = 10
 
+        optim_loss = []
+
         for _ in range(num_steps):
             try:
                 (inputs, targets) = data_iter.next()
@@ -511,9 +513,19 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             loss = self.loss_fn(outputs, targets)
             loss.backward()
 
+            optim_loss.append(loss.item())
+
             optim.step()
 
         weight = fc.state_dict()
+
+        fig = plt.figure()
+        plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.show()
+
         '''
         new_weight = self.student.lin.weight
 

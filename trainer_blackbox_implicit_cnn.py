@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -687,7 +687,7 @@ class Trainer:
                 ax2.show()
 
 
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             # student
             self.opt.experiment = "Teacher_weight"
             print("Start training {} ...".format(self.opt.experiment))
