@@ -702,15 +702,6 @@ class Trainer:
             res_mixup = []
             res_loss_mixup = []
 
-            # netG = cgan.Generator_CIFAR10().cuda()
-            # netG.apply(weights_init)
-            # weight_path = os.path.join(self.opt.pretrained_dir, 'netG_CIFAR10.pth')
-            # netG.load_state_dict(torch.load(weight_path))
-
-            netG = blackbox_implicit.Generator(self.opt, self.teacher, tmp_student).cuda()
-            netG.apply(weights_init)
-            optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
-
             unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader)
 
             res_student = []

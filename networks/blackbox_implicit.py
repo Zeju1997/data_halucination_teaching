@@ -648,7 +648,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             gradients = torch.autograd.grad(outputs=loss,
                                             inputs=z,
-                                            retain_graph=False, create_graph=False)
+                                            retain_graph=True, create_graph=True)
 
             gradients = self.normalize_lp_norms(gradients[0], p=p)
             z = z - step_size * gradients
@@ -663,18 +663,20 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-            # print(n, "iter pass", torch.cuda.memory_allocated(0))
+        # print(n, "iter pass", torch.cuda.memory_allocated(0))
 
-            # print("Before backward pass", torch.cuda.memory_allocated(0))
-            # del example_difficulty
-            # del example_usefulness
-            # print("After backward pass", torch.cuda.memory_allocated(0))
+        # print("Before backward pass", torch.cuda.memory_allocated(0))
+        # del example_difficulty
+        # del example_usefulness
+        # print("After backward pass", torch.cuda.memory_allocated(0))
 
-            # z.zero_grad()
-            # diff = pdist(z, z0)
-            # print(diff.max())
+        # z.zero_grad()
+        # diff = pdist(z, z0)
+        # print(diff.max())
 
-        return z
+        delta_z = z - z0
+
+        return delta_z
 
     def forward(self, model, fc, inputs, targets):
         # self.generator.linear.weight = weight
@@ -700,7 +702,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         model.eval()
 
         pdist = torch.nn.PairwiseDistance(p=2)
-        num_steps = 10
+        num_steps = 2
         step_size = 0.001
         epsilon = 0.1
         norm = 0.0
@@ -779,7 +781,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        return z.detach().clone()
+        return z
 
     def forward1(self, model, fc, model_star, inputs, targets):
 

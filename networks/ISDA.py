@@ -109,6 +109,7 @@ class ISDALoss(nn.Module):
                             .expand(N, C, C)).sum(2).view(N, C)
 
         aug_result = y + 0.5 * sigma2
+        # aug_result = 0.5 * sigma2
 
         return aug_result
 

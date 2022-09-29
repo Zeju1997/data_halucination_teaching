@@ -739,8 +739,10 @@ class Trainer:
 
                             inputs, targets = inputs.cuda(), targets.long().cuda()
                             student_optim.zero_grad()
+
                             model_mdl = copy.deepcopy(self.student)
                             fc_mdl = copy.deepcopy(self.student_fc)
+
                             # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
 
                             # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
@@ -757,6 +759,8 @@ class Trainer:
                             # print("inputs", inputs.shape, "targets", targets.shape)
                             z = unrolled_optimizer(model_mdl, fc_mdl, inputs, targets)
 
+                            # z = self.student(inputs) + delta_z
+
                             # train_loss.append(generator_loss.item())
 
                             # with torch.no_grad():
@@ -766,6 +770,7 @@ class Trainer:
                             outputs = self.student_fc(z)
                             loss = self.loss_fn(outputs, targets)
                             loss.backward()
+
                             student_optim.step()
 
                             # self.student.load_state_dict(w_t)
