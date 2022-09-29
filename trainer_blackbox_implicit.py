@@ -406,8 +406,11 @@ class Trainer:
         # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
+        # self.teacher = networks.resnet20_cifar().cuda()
         self.teacher = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
+
+        # self.teacher_fc = networks.FullLayer(int(self.teacher.feature_num), n_classes=self.opt.n_classes).cuda()
         self.teacher_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
         torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
         self.teacher_fc.apply(initialize_weights)

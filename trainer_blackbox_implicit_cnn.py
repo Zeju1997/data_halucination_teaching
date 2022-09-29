@@ -328,11 +328,11 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False, drop_last=True)
 
-            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
 
         elif self.opt.data_mode == "cifar100":
             if self.opt.augment:
@@ -686,9 +686,9 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
-            self.opt.experiment = "Teacher_weight"
+            self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -698,15 +698,6 @@ class Trainer:
 
             res_mixup = []
             res_loss_mixup = []
-
-            # netG = cgan.Generator_CIFAR10().cuda()
-            # netG.apply(weights_init)
-            # weight_path = os.path.join(self.opt.pretrained_dir, 'netG_CIFAR10.pth')
-            # netG.load_state_dict(torch.load(weight_path))
-
-            netG = blackbox_implicit.Generator(self.opt, self.teacher, tmp_student).cuda()
-            netG.apply(weights_init)
-            optimG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
             unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader)
 
@@ -759,16 +750,17 @@ class Trainer:
                             # z = self.student(inputs)
                             # output = self.student_fc(z)
 
-                            z = self.student(inputs)
+                            # z = self.student(inputs)
 
-                            w_t = netG.state_dict()
+                            # w_t = netG.state_dict()
                             # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
-                            w_t = unrolled_optimizer(model_mdl, fc_mdl)
+                            # print("inputs", inputs.shape, "targets", targets.shape)
+                            z = unrolled_optimizer(model_mdl, fc_mdl, inputs, targets)
 
                             # train_loss.append(generator_loss.item())
 
-                            with torch.no_grad():
-                                self.student_fc.load_state_dict(w_t)
+                            # with torch.no_grad():
+                            #     self.student_fc.load_state_dict(w_t)
 
                             # G_loss.backward()
                             outputs = self.student_fc(z)

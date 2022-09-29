@@ -22,148 +22,215 @@ import os
 
 import copy
 
-def mixup_data(gt_x, generated_x, gt_y, generated_y, alpha=1.0, use_cuda=True):
-    '''Returns mixed inputs, pairs of targets, and lambda'''
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-        # lam = 1
-    else:
-        lam = 1
 
-    '''
-    batch_size = gt_x.size()[0]
-    if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
+def approx_fprime(xk, f, epsilon, args=(), f0=None):
+    """
+    See ``approx_fprime``.  An optional initial function value arg is added.
 
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    '''
-    y_a = gt_y
-    y_b = generated_y
-    mixed_x = lam * gt_x + (1 - lam) * generated_x
-
-    return mixed_x, y_a, y_b, lam
+    """
+    if f0 is None:
+        f0 = f(*((xk,) + args))
+    grad = np.zeros((xk.shape[1],), float)
+    # grad = torch.zeros(len(xk),).cuda()
+    ei = np.zeros((xk.shape[1],), float)
+    # ei = torch.zeros(len(xk),).cuda()
+    for k in range(xk.shape[1]):
+        ei[k] = 1.0
+        d = epsilon * ei
+        d = torch.Tensor(d).cuda()
+        grad[k] = (f(*((xk + d,) + args)) - f0) / d[k]
+        ei[k] = 0.0
+    return grad
 
 
-def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    loss = lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    return loss.to(torch.float32)
+def __get_weight_grad__(student, X, y):
+    student.train()
+
+    # Zeroing the accumulated gradient on the student's weights
+    student.optim.zero_grad()
+
+    # We want to retain the weight gradient of the linear layer lin
+    # student.lin.weight.retain_grad()
+    # X.requires_grad = True
+    out = student(X)
+    loss = student.loss_fn(out, y)
+    loss.backward()
+
+    res = student.lin.weight.grad
+    return res
 
 
-class Generator(nn.Module):
-    def __init__(self, opt, teacher, student):
-        super(Generator, self).__init__()
+class ExampleDifficulty(nn.Module):
+    def __init__(self, student, loss_fn, lr, label):
+        super(ExampleDifficulty, self).__init__()
+        self.lr = lr
+        self.student = student
+        self.label = label
+        self.loss_fn = loss_fn
 
-        self.opt = opt
-        self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
-        self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
+    def forward(self, input):
+        return (self.lr ** 2) * self.example_difficulty(self.student, input, self.label)
 
-        # in_channels = student.lin.weight.size(1) + self.opt.latent_dim + self.opt.label_dim
-        in_channels = 512 + self.opt.label_dim
+    def example_difficulty(self, student, X, y):
+        """
+        Retourne la difficulté de l'exemple (X, y) selon le student
+        :param student: Student ayant un attribut "lin" de class torch.nn.Linear
+        :param X: La donnée
+        :param y: Le label de la donnée
+        :return: Le score de difficulté de l'exemple (X, y)
+        """
+        '''
+        inp = Variable(torch.rand(3, 4), requires_grad=True)
+        W = Variable(torch.rand(4, 4), requires_grad=True)
+        yreal = Variable(torch.rand(3, 4), requires_grad=False)
+        gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
+    
+        print("1", inp.grad)
+        ypred = torch.matmul(inp, W)
+        ypred.backward(torch.ones(ypred.shape), retain_graph=True)
+        print("2", inp.grad)
+        gradspred, = grad(ypred, inp,
+                          grad_outputs=ypred.data.new(ypred.shape).fill_(1),
+                          create_graph=True,
+                          retain_graph=True)
+        print("3", inp.grad)
+        loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
+        loss.backward()
+        print("4", inp.grad)
+        '''
 
-        def block(in_feat, out_feat, normalize=False):
-            layers = [nn.Linear(in_feat, out_feat)]
-            if normalize:
-                layers.append(nn.BatchNorm1d(out_feat, 0.8))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            return layers
+        '''
+        inp = Variable(torch.rand(1, 2), requires_grad=True)
+        W = Variable(torch.rand(2, 1), requires_grad=True)
+        yreal = Variable(torch.rand(3, 4), requires_grad=False)
+        gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
+    
+        print("1", inp.grad)
+        ypred = torch.matmul(inp, W)
+    
+        gradspred_W, = grad(ypred, W,
+                      grad_outputs=ypred.data.new(ypred.shape).fill_(1),
+                      create_graph=True,
+                      retain_graph=True)
+    
+        gradspred_i, = grad(gradspred_W, inp,
+                  grad_outputs=ypred.data.new(ypred.shape).fill_(1),
+                  create_graph=True,
+                  retain_graph=True)
+    
+    
+        ypred.backward(torch.ones(ypred.shape), retain_graph=True)
+        print("2", inp.grad)
+        gradspred_inp, = grad(ypred, inp,
+                          grad_outputs=ypred.data.new(ypred.shape).fill_(1),
+                          create_graph=True,
+                          retain_graph=True)
+        print("3", inp.grad)
+        loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
+        loss.backward()
+        print("4", inp.grad)
+        '''
 
-        self.model = nn.Sequential(
-            # *block(self.opt.dim + self.opt.label_dim, 128, normalize=False),
-            *block(in_channels, 128, normalize=False),
-            *block(128, 256),
-            *block(256, 512),
-            *block(512, 512),
-            *block(512, 1024),
-            nn.Linear(1024, int(np.prod(self.img_shape))),
-            nn.Tanh()
-        )
+        # We want to be able to calculate the gradient -> train()
+        student.train()
 
-    def forward(self, noise, labels):
-        # Concatenate label embedding and image to produce input
-        gen_input = torch.cat((self.label_emb(labels.to(torch.int64)), noise), -1)
-        img = self.model(gen_input)
-        # img = img.view(img.size(0), *self.img_shape)
-        return img
+        # Zeroing the accumulated gradient on the student's weights
+        # student.optim.zero_grad()
+        student.zero_grad()
 
+        # We want to retain the weight gradient of the linear layer lin
+        # student.lin.weight.retain_grad()
+        # X.requires_grad = True
+        out = student(X)
 
-class Discriminator(nn.Module):
-    def __init__(self, opt):
-        super(Discriminator, self).__init__()
+        loss = self.loss_fn(out, y)
+        # loss.backward(create_graph=True, retain_graph=True)
 
-        self.opt = opt
-        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
-        self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
+        grad = torch.autograd.grad(outputs=loss,
+                                        inputs=student.lin.weight,
+                                        create_graph=True, retain_graph=True)
 
-        self.model = nn.Sequential(
-            nn.Linear(opt.label_dim + int(np.prod(self.img_shape)), 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
-            nn.Dropout(0.4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
-            nn.Dropout(0.4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
+        # res_difficulty = student.lin.weight.grad
+        res_difficulty = grad[0]
 
-    def forward(self, img, labels):
-        # Concatenate label embedding and image to produce input
-        # d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
-        d_in = torch.cat((img, self.label_embedding(labels)), -1)
-        validity = self.model(d_in)
-        return validity
+        # res_difficulty.requires_grad = True
 
+        example_difficulty_loss = torch.linalg.norm(res_difficulty, ord=2) ** 2
+        # test = grad(example_difficulty_loss, X)# , create_graph=True)
+        # example_difficulty_loss.backward()# create_graph=True, retain_graph=True)
 
-class Generator_moon(nn.Module):
-    def __init__(self, opt, teacher, student):
-        super(Generator_moon, self).__init__()
+        # returns the norm of the squared gradient
+        # return (torch.linalg.norm(res, ord=2) ** 2).item()
 
-        self.opt = opt
-        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
-
-        # in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
-        in_channels = teacher.lin.weight.size(1) + self.opt.dim + self.opt.label_dim
-
-        self.input_fc = nn.Linear(in_channels, self.opt.hidden_dim*4, bias=False)
-        self.hidden_fc = nn.Linear(self.opt.hidden_dim*4, self.opt.hidden_dim*2, bias=False)
-        self.output_fc = nn.Linear(self.opt.hidden_dim*2, self.opt.dim, bias=False)
-        # self.activation = nn.LeakyReLU(0.1)
-        self.activation = nn.ReLU()
-        self.out_activation = nn.Sigmoid()
-
-    def forward(self, z, label):
-        x = torch.cat((z, self.label_embedding(label.to(torch.int64))), dim=1)
-        x = self.activation(self.input_fc(x))
-        x = self.activation(self.hidden_fc(x))
-        x = self.output_fc(x)
-        # x = self.out_activation(x) * 4 - 2
-        return x
+        return example_difficulty_loss
 
 
-class Discriminator_moon(nn.Module):
-    def __init__(self, opt):
-        super(Discriminator_moon, self).__init__()
+class ExampleUsefulness(nn.Module):
+    def __init__(self, student, teacher, loss_fn, lr, label):
+        super(ExampleUsefulness, self).__init__()
+        self.lr = lr
+        self.student = student
+        self.label = label
+        self.teacher = teacher
+        self.loss_fn = loss_fn
 
-        self.opt = opt
-        self.label_embedding = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
+    def forward(self, input):
+        return self.lr * 2 * self.example_usefulness(self.student, self.teacher.lin.weight, input, self.label)
 
-        self.model = nn.Sequential(
-            nn.Linear(opt.label_dim + self.opt.dim, self.opt.hidden_dim, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(self.opt.hidden_dim, 1, bias=False),
-            nn.Sigmoid()
-        )
+    def example_usefulness(self, student, w_star, X, y):
+        """
+        Retourne l'utilité de l'exemple (X, y) selon le student et les poids du teacher
+        :param student: Student ayant un attribut "lin" de class torch.nn.Linear
+        :param w_star: Les poids du teacher (hypothèse  objectif)
+        :param X: La donnée
+        :param y: Le label de la donnée
+        :return: Le score d'utilité de l'exemple (X, y)
+        """
+        # différence des poids entre le student et le teacher
+        diff = student.lin.weight - w_star
 
-    def forward(self, img, labels):
-        # Concatenate label embedding and image to produce input
-        d_in = torch.cat((img.view(img.size(0), -1), self.label_embedding(labels)), -1)
-        validity = self.model(d_in)
-        return validity
+        # We want to be able to calculate the gradient -> train()
+        student.train()
+
+        # Zeroing the accumulated gradient on the student's weights
+        # student.optim.zero_grad()
+        student.zero_grad()
+
+        # We want to retain the weight gradient of the linear layer lin
+        # student.lin.weight.retain_grad()
+
+        out = student(X)
+
+        loss = self.loss_fn(out, y)
+
+        # loss.backward(create_graph=False, retain_graph=True)
+        grad = torch.autograd.grad(outputs=loss,
+                                    inputs=student.lin.weight,
+                                    create_graph=True, retain_graph=True)
+
+        # layer gradient recovery
+        # res = student.lin.weight.grad
+        res = grad[0]
+
+        example_usefulness_loss = torch.dot(diff.view(-1), res.view(-1))
+
+        # produit scalaire entre la différence des poids et le gradient du student
+        # return torch.dot(diff.view(-1), res.view(-1)).item()
+
+        return example_usefulness_loss
+
+
+class ScoreLoss(nn.Module):
+    def __init__(self, example_difficulty, example_usefulness):
+        super(ScoreLoss, self).__init__()
+        self.example_usefulness = example_usefulness
+        self.example_difficulty = example_difficulty
+
+    def forward(self, data):
+        # data = torch.Tensor(data).cuda()
+        score_loss = self.example_difficulty(data) - self.example_usefulness(data)
+        # return score_loss.cpu().detach().numpy()
+        return score_loss
 
 
 class CloseToMask(nn.Module):
@@ -557,7 +624,59 @@ class UnrolledBlackBoxOptimizer(nn.Module):
     def project(self, x, x0, epsilon, p):
         return x0 + self.clip_lp_norms(x - x0, norm=epsilon, p=p)
 
-    def forward(self, model, fc):
+    def update_z(self, fc_star, fc, z0, targets):
+
+        # z0 = model(inputs)
+        # z0 = z0.detach().clone()
+        # z0.requires_grad = True
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        z = z0
+        p = 2
+        step_size = 0.001
+        epsilon = 0.1
+        optim_loss = []
+        gd_n = 10
+
+        example_difficulty = ExampleDifficulty(fc, self.loss_fn, self.opt.lr, targets)
+        example_usefulness = ExampleUsefulness(fc, fc_star, self.loss_fn, self.opt.lr, targets)
+
+        for n in range(gd_n):
+
+            loss = example_difficulty(z) - example_usefulness(z)
+
+            gradients = torch.autograd.grad(outputs=loss,
+                                            inputs=z,
+                                            retain_graph=False, create_graph=False)
+
+            gradients = self.normalize_lp_norms(gradients[0], p=p)
+            z = z - step_size * gradients
+            z = self.project(z, z0, epsilon, p)
+
+            optim_loss.append(loss.item())
+
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
+
+            # print(n, "iter pass", torch.cuda.memory_allocated(0))
+
+            # print("Before backward pass", torch.cuda.memory_allocated(0))
+            # del example_difficulty
+            # del example_usefulness
+            # print("After backward pass", torch.cuda.memory_allocated(0))
+
+            # z.zero_grad()
+            # diff = pdist(z, z0)
+            # print(diff.max())
+
+        return z
+
+    def forward(self, model, fc, inputs, targets):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -576,7 +695,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w_loss = 0
         tau = 1
 
-        optim = torch.optim.SGD(fc.parameters(), lr=0.001)
+        fc_mdl = copy.deepcopy(fc)
+
         model.eval()
 
         pdist = torch.nn.PairwiseDistance(p=2)
@@ -586,20 +706,46 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         norm = 0.0
         p = 2
 
+        optim = torch.optim.SGD(fc.parameters(), lr=0.001)
+        model.eval()
+        num_steps = 5
+
         optim_loss = []
 
-        try:
-            (inputs, targets) = self.data_iter.next()
-        except:
-            data_iter = iter(self.loader)
-            (inputs, targets) = data_iter.next()
+        # w = fc.lin.weight
 
-        inputs, targets = inputs.cuda(), targets.long().cuda()
+        for n in range(num_steps):
+            try:
+                (gt_x, gt_y) = data_iter.next()
+            except:
+                data_iter = iter(self.loader)
+                (gt_x, gt_y) = data_iter.next()
+
+            inputs, targets = gt_x.cuda(), gt_y.long().cuda()
+
+            optim.zero_grad()
+
+            z = model(inputs)
+            outputs = fc(z)
+
+            loss = self.loss_fn(outputs, targets)
+            loss.backward()
+
+            optim_loss.append(loss.item())
+
+            optim.step()
+
+        # w_star = fc.lin.weight
+
+        # z = model(inputs)
 
         z0 = model(inputs)
-        z = z0
 
-        optim.zero_grad()
+        z = self.update_z(fc, fc_mdl, z0, targets)
+
+        '''
+        z0 = model(inputs)
+        z = z0
         for _ in range(num_steps):
             output = fc(z)
             loss = self.loss_fn(output, targets)
@@ -612,7 +758,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             z = self.project(z, z0, epsilon, p)
 
             optim_loss.append(loss.item())
-
+        '''
+        '''
         optim.zero_grad()
 
         outputs = fc(z)
@@ -624,7 +771,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         optim.step()
 
         weight = fc.state_dict()
-
+        '''
         # fig = plt.figure()
         # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
         # plt.xlabel("Epoch")
@@ -632,7 +779,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        return weight
+        return z.detach().clone()
 
     def forward1(self, model, fc, model_star, inputs, targets):
 
@@ -998,146 +1145,3 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                 fd.close()
             '''
         return fake_img_batch
-
-
-class UnrolledBlackBoxOptimizer2(nn.Module):
-    """
-    Args:
-        - nscale : number of scales
-        - alpha : scale factor in the softmax in the expansion (rho in the paper)
-        - nblock : number of stages (K in the paper)
-        - K : kernel size
-    """
-    def __init__(self, opt, teacher, student, generator, X, y, proj_matrix=None):
-        super(UnrolledBlackBoxOptimizer, self).__init__()
-
-        self.opt = opt
-        self.optim_blocks = nn.ModuleList()
-
-        self.loss_fn = nn.MSELoss()
-        self.adversarial_loss = nn.BCELoss()
-
-        self.teacher = teacher
-        self.student = student
-        self.generator = generator
-
-        self.X = X
-        self.Y = y
-
-        self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
-
-        self.proj_matrix = proj_matrix
-
-    def forward(self, weight, w_star, w_init, netD, valid):
-        # self.generator.linear.weight = weight
-        # self.student.lin.weight = w_init
-
-        with torch.no_grad():
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.generator.load_state_dict(weight)
-            for param1 in self.student.parameters():
-                param1 = w_init
-            for param2 in self.teacher.parameters():
-                param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        new_weight = w_init
-
-        model_paramters = list(self.generator.parameters())
-
-        for i in range(self.opt.n_unroll_blocks):
-            w_t = self.student.lin.weight
-
-            i = torch.randint(0, self.nb_batch, size=(1,)).item()
-            i_min = i * self.opt.batch_size
-            i_max = (i + 1) * self.opt.batch_size
-
-            gt_x = self.X[i_min:i_max].cuda()
-            gt_y = self.Y[i_min:i_max].cuda()
-
-            generated_y = torch.randint(0, 2, (self.opt.batch_size,), dtype=torch.float).cuda()
-
-            # Sample noise and labels as generator input
-            # z = Variable(torch.randn(gt_x.shape)).cuda()
-            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-
-            # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-            x = torch.cat((w_t, z), dim=1)
-            generated_x = self.generator(x, generated_y)
-
-            generated_x_proj = generated_x @ self.proj_matrix.cuda()
-
-            # mixup data
-            # mixed_x, targets_a, targets_b, lam = mixup_data(gt_x, generated_x, gt_y, generated_y)
-            # mixed_x, targets_a, targets_b = map(Variable, (mixed_x, targets_a, targets_b))
-
-            # self.student.train()
-            # out = self.student(mixed_x)
-            out = self.student(generated_x_proj)
-
-            # loss = mixup_criterion(self.loss_fn, out, targets_a.float(), targets_b.float(), lam)
-            loss = self.loss_fn(out, generated_y.float())
-
-            grad = torch.autograd.grad(loss, self.student.lin.weight, create_graph=True)
-            # new_weight = self.student.lin.weight - 0.001 * grad[0]
-            new_weight = new_weight - 0.001 * grad[0]
-            self.student.lin.weight = torch.nn.Parameter(new_weight.cuda())
-            # self.student.lin.weight = self.student.lin.weight - 0.001 * grad[0].cuda()
-
-            # tau = np.exp(-i / 0.95)
-            if i != -1:
-                tau = 1
-            else:
-                tau = 0.95 * tau
-
-            # self.student.eval()
-            # out_stu = self.teacher(generated_x)
-            # out_stu = self.student(generated_x)
-            # out_stu = self.student(mixed_x)
-            # out_stu = self.student(gt_x)
-
-            # loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
-            # loss_stu = loss_stu + tau * mixup_criterion(self.loss_fn, out_stu, targets_a.float(), targets_b.float(), lam)
-
-            out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-            loss_stu = loss_stu + tau * self.loss_fn(out_stu, gt_y)
-
-        # out_stu = new_weight @ torch.transpose(gt_x, 0, 1)
-        # loss_stu = self.loss_fn(out_stu, gt_y)
-
-        w_t = self.student.lin.weight
-
-        i = torch.randint(0, self.nb_batch, size=(1,)).item()
-        i_min = i * self.opt.batch_size
-        i_max = (i + 1) * self.opt.batch_size
-
-        gt_x = self.X[i_min:i_max].cuda()
-        gt_y = self.Y[i_min:i_max].cuda()
-
-        # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-        # z = Variable(torch.randn(gt_x.shape)).cuda()
-        z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-
-        # x = torch.cat((w_t, w_t-w_star, gt_x, generated_labels.unsqueeze(0)), dim=1)
-        # x = torch.cat((w_t, w_t-w_star, z), dim=1)
-        x = torch.cat((w_t, z), dim=1)
-        generated_x = self.generator(x, gt_y)
-
-        # generated_labels = generated_labels.float()
-        validity = netD(generated_x, Variable(gt_y.type(torch.cuda.LongTensor)))
-        g_loss = self.adversarial_loss(validity, valid)
-
-        alpha = 1
-        # loss_stu = loss_stu / (self.opt.n_unroll_blocks * alpha)
-        loss_stu = loss_stu * alpha
-        loss_final = loss_stu + g_loss
-
-        grad_stu = torch.autograd.grad(outputs=loss_final,
-                                       inputs=model_paramters,
-                                       create_graph=True, retain_graph=True)
-
-        return grad_stu, loss_stu, generated_x, gt_y, g_loss
