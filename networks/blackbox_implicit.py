@@ -570,11 +570,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         step_size = 0.001
         epsilon = 0.1
         optim_loss = []
-        gd_n = 10
+        gd_n = 20
+
+        example_difficulty = ExampleDifficulty(fc, self.loss_fn, self.opt.lr, targets)
+        example_usefulness = ExampleUsefulness(fc, fc_star, self.loss_fn, self.opt.lr, targets)
 
         for n in range(gd_n):
-            example_difficulty = ExampleDifficulty(fc, self.loss_fn, self.opt.lr, targets)
-            example_usefulness = ExampleUsefulness(fc, fc_star, self.loss_fn, self.opt.lr, targets)
+
             loss = example_difficulty(z) - example_usefulness(z)
 
             gradients = torch.autograd.grad(outputs=loss,
@@ -674,7 +676,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         z0 = model(inputs)
 
-        z = self.update_z(fc, fc_mdl, z0, targets)
+        delta_z = self.update_z(fc, fc_mdl, z0, targets)
 
         '''
         z0 = model(inputs)
@@ -712,7 +714,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        return z
+        return z0 + delta_z
 
     def forward1(self, model, fc, model_star, inputs, targets):
 

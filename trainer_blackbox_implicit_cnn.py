@@ -741,7 +741,7 @@ class Trainer:
 
                         print(batch_idx)
 
-                        # model_mdl = copy.deepcopy(self.student)
+                        model_mdl = copy.deepcopy(self.student)
                         fc_mdl = copy.deepcopy(self.student_fc)
 
                         # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
@@ -758,7 +758,7 @@ class Trainer:
                         # w_t = netG.state_dict()
                         # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
                         # print("inputs", inputs.shape, "targets", targets.shape)
-                        z = unrolled_optimizer(self.student, self.student_fc, inputs, targets)
+                        z = unrolled_optimizer(model_mdl, fc_mdl, inputs, targets)
 
                         # z = self.student(inputs) + delta_z
 
