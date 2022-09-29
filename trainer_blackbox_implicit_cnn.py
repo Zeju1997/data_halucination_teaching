@@ -730,12 +730,12 @@ class Trainer:
             student_parameters = list(self.student.parameters()) # + list(self.student_fc.parameters())
             train_loss = []
             train_loss2 = []
-            for epoch in tqdm(range(self.opt.n_epochs)):
+            for epoch in range(self.opt.n_epochs):
                 if epoch != 0:
                     self.student.train()
                     self.student_fc.train()
                     if epoch != 0:
-                        for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                        for batch_idx, (inputs, targets) in tqdm(enumerate(self.train_loader)):
 
                             inputs, targets = inputs.cuda(), targets.long().cuda()
                             student_optim.zero_grad()
