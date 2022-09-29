@@ -734,82 +734,83 @@ class Trainer:
                 if epoch != 0:
                     self.student.train()
                     self.student_fc.train()
-                    if epoch != 0:
-                        for batch_idx, (inputs, targets) in tqdm(enumerate(self.train_loader)):
+                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
 
-                            inputs, targets = inputs.cuda(), targets.long().cuda()
-                            student_optim.zero_grad()
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        student_optim.zero_grad()
 
-                            model_mdl = copy.deepcopy(self.student)
-                            fc_mdl = copy.deepcopy(self.student_fc)
+                        print(batch_idx)
 
-                            # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
+                        # model_mdl = copy.deepcopy(self.student)
+                        fc_mdl = copy.deepcopy(self.student_fc)
 
-                            # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
+                        # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
 
-                            # student_optim.zero_grad()
+                        # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
 
-                            # z = self.student(inputs)
-                            # output = self.student_fc(z)
+                        # student_optim.zero_grad()
 
-                            # z = self.student(inputs)
+                        # z = self.student(inputs)
+                        # output = self.student_fc(z)
 
-                            # w_t = netG.state_dict()
-                            # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
-                            # print("inputs", inputs.shape, "targets", targets.shape)
-                            z = unrolled_optimizer(model_mdl, fc_mdl, inputs, targets)
+                        # z = self.student(inputs)
 
-                            # z = self.student(inputs) + delta_z
+                        # w_t = netG.state_dict()
+                        # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
+                        # print("inputs", inputs.shape, "targets", targets.shape)
+                        z = unrolled_optimizer(self.student, self.student_fc, inputs, targets)
 
-                            # train_loss.append(generator_loss.item())
+                        # z = self.student(inputs) + delta_z
 
-                            # with torch.no_grad():
-                            #     self.student_fc.load_state_dict(w_t)
+                        # train_loss.append(generator_loss.item())
 
-                            # G_loss.backward()
-                            outputs = self.student_fc(z)
-                            loss = self.loss_fn(outputs, targets)
-                            loss.backward()
+                        # with torch.no_grad():
+                        #     self.student_fc.load_state_dict(w_t)
 
-                            student_optim.step()
+                        # G_loss.backward()
+                        outputs = self.student_fc(z)
+                        loss = self.loss_fn(outputs, targets)
+                        loss.backward()
 
-                            # self.student.load_state_dict(w_t)
+                        student_optim.step()
 
-                            # loss = self.loss_fn(outputs, targets)
+                        # self.student.load_state_dict(w_t)
 
-                            # train_loss.append(w_loss)
+                        # loss = self.loss_fn(outputs, targets)
 
-                            # gradients = torch.autograd.grad(outputs=loss,
-                            #                                inputs=student_parameters,
-                            #                                create_graph=True, retain_graph=True)
+                        # train_loss.append(w_loss)
 
-                            # with torch.no_grad():
-                            #     for p, g in zip(student_parameters, gradients):
-                            #         p.grad = g
+                        # gradients = torch.autograd.grad(outputs=loss,
+                        #                                inputs=student_parameters,
+                        #                                create_graph=True, retain_graph=True)
 
-                            # student_model_optim.step()
+                        # with torch.no_grad():
+                        #     for p, g in zip(student_parameters, gradients):
+                        #         p.grad = g
 
-                            # z = self.student(inputs)
+                        # student_model_optim.step()
 
-                            self.step += 1
+                        # z = self.student(inputs)
 
-                            if batch_idx % self.opt.log_interval == 0:
-                                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                                    100. * batch_idx / len(self.train_loader), loss.item()), '\t',
-                                    'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
-                                    100. * batch_idx / len(self.val_loader), loss.item()))
-                                self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+                        self.step += 1
 
-                            '''
-                            if self.step % self.opt.n_unroll_blocks == 0:
-                                avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
-                                tmp_train_loss = 0
-        
-                                feat_sim = self.query_model() / self.init_feat_sim
-                                print(feat_sim.mean())
-                            '''
+                        if batch_idx % self.opt.log_interval == 0:
+                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                100. * batch_idx / len(self.train_loader), loss.item()), '\t',
+                                'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
+                                100. * batch_idx / len(self.val_loader), loss.item()))
+                            self.log(mode="train", name="loss", value=loss.item(), step=self.step)
+
+                        '''
+                        if self.step % self.opt.n_unroll_blocks == 0:
+                            avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
+                            tmp_train_loss = 0
+    
+                            feat_sim = self.query_model() / self.init_feat_sim
+                            print(feat_sim.mean())
+                        '''
                 # fig = plt.figure()
                 # plt.plot(train_loss, c="b", label="Mixup")
                 # plt.xlabel("Epoch")
@@ -900,7 +901,6 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
-
 
         if self.opt.train_student == False:
             # student

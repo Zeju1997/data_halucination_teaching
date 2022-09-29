@@ -72,65 +72,6 @@ class ExampleDifficulty(nn.Module):
         return (self.lr ** 2) * self.example_difficulty(self.student, input, self.label)
 
     def example_difficulty(self, student, X, y):
-        """
-        Retourne la difficulté de l'exemple (X, y) selon le student
-        :param student: Student ayant un attribut "lin" de class torch.nn.Linear
-        :param X: La donnée
-        :param y: Le label de la donnée
-        :return: Le score de difficulté de l'exemple (X, y)
-        """
-        '''
-        inp = Variable(torch.rand(3, 4), requires_grad=True)
-        W = Variable(torch.rand(4, 4), requires_grad=True)
-        yreal = Variable(torch.rand(3, 4), requires_grad=False)
-        gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
-    
-        print("1", inp.grad)
-        ypred = torch.matmul(inp, W)
-        ypred.backward(torch.ones(ypred.shape), retain_graph=True)
-        print("2", inp.grad)
-        gradspred, = grad(ypred, inp,
-                          grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                          create_graph=True,
-                          retain_graph=True)
-        print("3", inp.grad)
-        loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
-        loss.backward()
-        print("4", inp.grad)
-        '''
-
-        '''
-        inp = Variable(torch.rand(1, 2), requires_grad=True)
-        W = Variable(torch.rand(2, 1), requires_grad=True)
-        yreal = Variable(torch.rand(3, 4), requires_grad=False)
-        gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
-    
-        print("1", inp.grad)
-        ypred = torch.matmul(inp, W)
-    
-        gradspred_W, = grad(ypred, W,
-                      grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                      create_graph=True,
-                      retain_graph=True)
-    
-        gradspred_i, = grad(gradspred_W, inp,
-                  grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                  create_graph=True,
-                  retain_graph=True)
-    
-    
-        ypred.backward(torch.ones(ypred.shape), retain_graph=True)
-        print("2", inp.grad)
-        gradspred_inp, = grad(ypred, inp,
-                          grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                          create_graph=True,
-                          retain_graph=True)
-        print("3", inp.grad)
-        loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
-        loss.backward()
-        print("4", inp.grad)
-        '''
-
         # We want to be able to calculate the gradient -> train()
         student.train()
 
@@ -178,14 +119,6 @@ class ExampleUsefulness(nn.Module):
         return self.lr * 2 * self.example_usefulness(self.student, self.teacher.lin.weight, input, self.label)
 
     def example_usefulness(self, student, w_star, X, y):
-        """
-        Retourne l'utilité de l'exemple (X, y) selon le student et les poids du teacher
-        :param student: Student ayant un attribut "lin" de class torch.nn.Linear
-        :param w_star: Les poids du teacher (hypothèse  objectif)
-        :param X: La donnée
-        :param y: Le label de la donnée
-        :return: Le score d'utilité de l'exemple (X, y)
-        """
         # différence des poids entre le student et le teacher
         diff = student.lin.weight - w_star
 
