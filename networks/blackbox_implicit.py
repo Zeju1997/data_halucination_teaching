@@ -596,7 +596,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-            print(n, "iter pass", torch.cuda.memory_allocated(0))
+            # print(n, "iter pass", torch.cuda.memory_allocated(0))
 
         # print("Before backward pass", torch.cuda.memory_allocated(0))
         # del example_difficulty
@@ -607,9 +607,10 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # diff = pdist(z, z0)
         # print(diff.max())
 
-        delta_z = z - z0
+        # delta_z = z - z0
 
-        return delta_z
+        # return delta_z
+        return z
 
     def forward(self, model, fc, inputs, targets):
         # self.generator.linear.weight = weight
@@ -630,7 +631,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w_loss = 0
         tau = 1
 
-        fc_mdl = copy.deepcopy(fc)
+        fc_orig = copy.deepcopy(fc)
 
         model.eval()
 
@@ -649,7 +650,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         # w = fc.lin.weight
 
-        for n in range(num_steps):
+        for n in range(self.opt.n_weight_update):
             try:
                 (gt_x, gt_y) = data_iter.next()
             except:
@@ -670,13 +671,34 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             optim.step()
 
-        # w_star = fc.lin.weight
-
-        # z = model(inputs)
-
         z0 = model(inputs)
 
-        delta_z = self.update_z(fc, fc_mdl, z0, targets)
+        # z = self.update_z(fc, fc_mdl, z0, targets)
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        z = z0
+        p = 2
+        step_size = 0.001
+        epsilon = 0.1
+        optim_loss = []
+        gd_n = 20
+
+        example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
+        example_usefulness = ExampleUsefulness(fc_orig, fc, self.loss_fn, self.opt.lr, targets)
+
+        for n in range(self.opt.n_z_update):
+            loss = example_difficulty(z) - example_usefulness(z)
+
+            gradients = torch.autograd.grad(outputs=loss,
+                                            inputs=z,
+                                            retain_graph=False, create_graph=False)
+
+            gradients = self.normalize_lp_norms(gradients[0], p=p)
+            z = z - step_size * gradients
+            z = self.project(z, z0, epsilon, p)
+
+            optim_loss.append(loss.item())
 
         '''
         z0 = model(inputs)
@@ -714,7 +736,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        return z0 + delta_z
+        return z
 
     def forward1(self, model, fc, model_star, inputs, targets):
 

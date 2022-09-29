@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -727,21 +727,20 @@ class Trainer:
             # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
             # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
-            student_parameters = list(self.student.parameters()) # + list(self.student_fc.parameters())
+            student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             train_loss = []
             train_loss2 = []
             for epoch in range(self.opt.n_epochs):
                 if epoch != 0:
                     self.student.train()
                     self.student_fc.train()
-                    for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                    batch_idx = 0
+                    for (inputs, targets) in tqdm(self.train_loader):
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         student_optim.zero_grad()
 
-                        print(batch_idx)
-
-                        model_mdl = copy.deepcopy(self.student)
+                        # model_mdl = copy.deepcopy(self.student)
                         fc_mdl = copy.deepcopy(self.student_fc)
 
                         # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
@@ -758,7 +757,7 @@ class Trainer:
                         # w_t = netG.state_dict()
                         # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
                         # print("inputs", inputs.shape, "targets", targets.shape)
-                        z = unrolled_optimizer(model_mdl, fc_mdl, inputs, targets)
+                        z = unrolled_optimizer(self.student, fc_mdl, inputs, targets)
 
                         # z = self.student(inputs) + delta_z
 
@@ -770,6 +769,7 @@ class Trainer:
                         # G_loss.backward()
                         outputs = self.student_fc(z)
                         loss = self.loss_fn(outputs, targets)
+
                         loss.backward()
 
                         student_optim.step()
@@ -803,6 +803,7 @@ class Trainer:
                                 100. * batch_idx / len(self.val_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
+                        batch_idx = batch_idx + 1
                         '''
                         if self.step % self.opt.n_unroll_blocks == 0:
                             avg_train_loss = tmp_train_loss / self.opt.n_unroll_blocks
