@@ -88,8 +88,8 @@ class ExampleDifficulty(nn.Module):
         # loss.backward(create_graph=True, retain_graph=True)
 
         grad = torch.autograd.grad(outputs=loss,
-                                        inputs=student.lin.weight,
-                                        create_graph=True, retain_graph=True)
+                                    inputs=student.lin.weight,
+                                    create_graph=True, retain_graph=True)
 
         # res_difficulty = student.lin.weight.grad
         res_difficulty = grad[0]
@@ -596,7 +596,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.legend()
         # plt.show()
 
-        # print(n, "iter pass", torch.cuda.memory_allocated(0))
+            print(n, "iter pass", torch.cuda.memory_allocated(0))
 
         # print("Before backward pass", torch.cuda.memory_allocated(0))
         # del example_difficulty
