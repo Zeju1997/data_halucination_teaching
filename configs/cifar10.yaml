@@ -38,5 +38,5 @@ num_workers: 0 # 10
 action_space: 2
 n_pg_epochs: 3
 n_tries: 30
-n_weight_update: 1
-n_z_update: 1
+n_weight_update: 5
+n_z_update: 20

@@ -605,7 +605,7 @@ class Trainer:
         baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -624,6 +624,8 @@ class Trainer:
             self.best_acc = 0
             # example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
+            pdist = torch.nn.PairwiseDistance(p=2)
+
             example.load_state_dict(torch.load('teacher_w0.pth'))
             example_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
             example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
@@ -636,10 +638,14 @@ class Trainer:
                         data, target = data.cuda(), target.long().cuda()
                         example_optim.zero_grad()
                         z = example(data)
+                        # z1 = z
                         output = example_fc(z)
                         loss = self.loss_fn(output, target)
                         loss.backward()
                         example_optim.step()
+                        # z2 = example(data)
+                        # dist = pdist(z1, z2).max()
+                        # print("dist", dist)
 
                 acc, test_loss = self.test(example, example_fc, test_loader=self.test_loader, epoch=epoch)
                 res_loss_example.append(test_loss)
@@ -743,32 +749,14 @@ class Trainer:
                         # model_mdl = copy.deepcopy(self.student)
                         fc_mdl = copy.deepcopy(self.student_fc)
 
-                        # z = self.projected_gradient_descent(model_mdl, fc_mdl, inputs, targets)
+                        z = self.student(inputs)
 
-                        # cov = np.array(self.estimator.CoVariance.cpu(), dtype=np.float)
+                        z_updated = unrolled_optimizer(z, fc_mdl, inputs, targets)
 
-                        # student_optim.zero_grad()
-
-                        # z = self.student(inputs)
-                        # output = self.student_fc(z)
-
-                        # z = self.student(inputs)
-
-                        # w_t = netG.state_dict()
-                        # gradients, generator_loss = self.teach_linear_classifier(model_mdl, fc_mdl)
-                        # print("inputs", inputs.shape, "targets", targets.shape)
-                        z = unrolled_optimizer(self.student, fc_mdl, inputs, targets)
-
-                        # z = self.student(inputs) + delta_z
-
-                        # train_loss.append(generator_loss.item())
-
-                        # with torch.no_grad():
-                        #     self.student_fc.load_state_dict(w_t)
-
-                        # G_loss.backward()
-                        outputs = self.student_fc(z)
+                        outputs = self.student_fc(z_updated)
                         loss = self.loss_fn(outputs, targets)
+
+                        # grad = torch.autograd.grad(loss, student_parameters)
 
                         loss.backward()
 
@@ -1121,7 +1109,6 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
         if self.opt.train_student == True:
             # student
             self.opt.experiment = "Teacher_latent"
@@ -1178,8 +1165,8 @@ class Trainer:
                     self.student_fc.train()
                     if epoch != 0:
                         for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-
                             inputs, targets = inputs.cuda(), targets.long().cuda()
+
                             student_optim.zero_grad()
                             model_mdl = copy.deepcopy(self.student)
                             fc_mdl = copy.deepcopy(self.student_fc)

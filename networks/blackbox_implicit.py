@@ -612,7 +612,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # return delta_z
         return z
 
-    def forward(self, model, fc, inputs, targets):
+    def forward(self, z0, fc, inputs, targets):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
@@ -633,8 +633,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         fc_orig = copy.deepcopy(fc)
 
-        model.eval()
-
         pdist = torch.nn.PairwiseDistance(p=2)
         num_steps = 2
         step_size = 0.001
@@ -643,13 +641,24 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         p = 2
 
         optim = torch.optim.SGD(fc.parameters(), lr=0.001)
-        model.eval()
         num_steps = 5
 
         optim_loss = []
 
         # w = fc.lin.weight
+        for n in range(self.opt.n_weight_update):
 
+            optim.zero_grad()
+            outputs = fc(z0)
+
+            loss = self.loss_fn(outputs, targets)
+            loss.backward(retain_graph=True, create_graph=True)
+
+            optim_loss.append(loss.item())
+
+            optim.step()
+
+        '''
         for n in range(self.opt.n_weight_update):
             try:
                 (gt_x, gt_y) = data_iter.next()
@@ -659,9 +668,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             inputs, targets = gt_x.cuda(), gt_y.long().cuda()
 
-            optim.zero_grad()
-
             z = model(inputs)
+
+            optim.zero_grad()
             outputs = fc(z)
 
             loss = self.loss_fn(outputs, targets)
@@ -670,8 +679,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             optim_loss.append(loss.item())
 
             optim.step()
-
-        z0 = model(inputs)
+        '''
 
         # z = self.update_z(fc, fc_mdl, z0, targets)
 
@@ -682,7 +690,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         step_size = 0.001
         epsilon = 0.1
         optim_loss = []
-        gd_n = 20
 
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
         example_usefulness = ExampleUsefulness(fc_orig, fc, self.loss_fn, self.opt.lr, targets)
