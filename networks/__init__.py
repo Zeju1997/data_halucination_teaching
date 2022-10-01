@@ -9,3 +9,4 @@ from .vgg import *
 from .policy_gradient import *
 from .controller import *
 from .resnet_implicit import *
+from .wideresnet import *

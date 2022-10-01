@@ -406,9 +406,9 @@ class Trainer:
         # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
         self.teacher.apply(initialize_weights)
-        self.teacher_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
+        self.teacher_fc = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
         torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
         self.teacher_fc.apply(initialize_weights)
         torch.save(self.teacher_fc.state_dict(), 'teacher_fc_w0.pth')
@@ -416,12 +416,12 @@ class Trainer:
         # self.teacher.load_state_dict(torch.load('teacher.pth'))
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        self.student_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
+        self.student = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        self.student_fc = networks.FullLayer(feature_dim=self.student.feature_num, n_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        self.baseline = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        self.baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
+        self.baseline = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        self.baseline_fc = networks.FullLayer(feature_dim=self.baseline.feature_num, n_classes=self.opt.n_classes).cuda()
 
         # load teacher weights
         self.baseline.load_state_dict(self.teacher.state_dict())
@@ -598,12 +598,8 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        example = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        example_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
-        tmp_student = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        tmp_student_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
-        baseline = networks.ResNet18(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        baseline_fc = networks.FullLayer(feature_dim=400, n_classes=self.opt.n_classes).cuda()
+        example = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
         if self.opt.train_sgd == False:
             # train example
@@ -628,7 +624,15 @@ class Trainer:
 
             example.load_state_dict(torch.load('teacher_w0.pth'))
             example_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
+
+            # cosine learning rate
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
+
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     # self.train(example, example_fc, self.loader, self.loss_fn, example_optim, epoch)
@@ -643,6 +647,7 @@ class Trainer:
                         loss = self.loss_fn(output, target)
                         loss.backward()
                         example_optim.step()
+                        scheduler.step()
                         # z2 = example(data)
                         # dist = pdist(z1, z2).max()
                         # print("dist", dist)
@@ -729,9 +734,13 @@ class Trainer:
 
             self.student.load_state_dict(torch.load('teacher_w0.pth'))
             self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
-            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
-            # student_optim = torch.optim.SGD(list(self.student.parameters()) + list(self.student_fc.parameters()), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
-            # student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
+            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
+            student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
+
 
             student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             train_loss = []
@@ -761,6 +770,7 @@ class Trainer:
                         loss.backward()
 
                         student_optim.step()
+                        student_scheduler.step()
 
                         # self.student.load_state_dict(w_t)
 
@@ -890,6 +900,8 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+        sys.exit()
 
         if self.opt.train_student == False:
             # student
