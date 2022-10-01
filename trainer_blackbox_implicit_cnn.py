@@ -601,7 +601,7 @@ class Trainer:
         example = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -754,7 +754,7 @@ class Trainer:
                                             lr=self.opt.lr,
                                             momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                             weight_decay=self.opt.weight_decay)
-            student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
+            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
 
             student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             train_loss = []
@@ -764,6 +764,11 @@ class Trainer:
                     self.student.train()
                     self.student_fc.train()
                     batch_idx = 0
+
+                    train_loss = 0
+                    correct = 0
+                    total = 0
+
                     for (inputs, targets) in tqdm(self.train_loader):
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
@@ -784,28 +789,20 @@ class Trainer:
                         loss.backward()
 
                         student_optim.step()
-                        student_scheduler.step()
+                        # student_scheduler.step()
 
-                        # self.student.load_state_dict(w_t)
+                        train_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += targets.size(0)
+                        correct += predicted.eq(targets.data).cpu().sum()
 
-                        # loss = self.loss_fn(outputs, targets)
+                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-                        # train_loss.append(w_loss)
+                        self.step = self.step + 1
+                        self.adjust_learning_rate(student_optim, self.step)
 
-                        # gradients = torch.autograd.grad(outputs=loss,
-                        #                                inputs=student_parameters,
-                        #                                create_graph=True, retain_graph=True)
-
-                        # with torch.no_grad():
-                        #     for p, g in zip(student_parameters, gradients):
-                        #         p.grad = g
-
-                        # student_model_optim.step()
-
-                        # z = self.student(inputs)
-
-                        self.step += 1
-
+                        '''
                         if batch_idx % self.opt.log_interval == 0:
                             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                                 epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
@@ -814,7 +811,7 @@ class Trainer:
                                 epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
                                 100. * batch_idx / len(self.val_loader), loss.item()))
                             self.log(mode="train", name="loss", value=loss.item(), step=self.step)
-
+                        '''
                         batch_idx = batch_idx + 1
                         '''
                         if self.step % self.opt.n_unroll_blocks == 0:
