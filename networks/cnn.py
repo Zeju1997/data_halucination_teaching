@@ -4,11 +4,6 @@ import torch.nn.functional as F
 
 class CNN1(nn.Module):
     def __init__(self, in_channels=3, num_classes=100):
-        """
-        Constructeur classifieur linéaire simple
-        Classification binaire (une seule sortie)
-        :param n_in: nombre de features
-        """
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, bias=False)
         self.conv2 = nn.Conv2d(64, 96, kernel_size=3, stride=1, bias=False)
@@ -20,11 +15,6 @@ class CNN1(nn.Module):
         self.output_act = nn.Softmax()
 
     def forward(self, x):
-        """
-        Méthode forward du modèle
-        :param x: la donnée de size = (batch_size, nb_features) ou (nb_features)
-        :return: la sortie du réseau à simple couche
-        """
         x = self.max_pool(self.act(self.conv1(x)))
         x = self.max_pool(self.act(self.conv2(x)))
         x = self.max_pool(self.act(self.conv3(x)))
@@ -36,11 +26,6 @@ class CNN1(nn.Module):
 
 class CNN_MIXUP(nn.Module):
     def __init__(self, in_channels=3, num_classes=100):
-        """
-        Constructeur classifieur linéaire simple
-        Classification binaire (une seule sortie)
-        :param n_in: nombre de features
-        """
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
@@ -59,24 +44,70 @@ class CNN_MIXUP(nn.Module):
         return x
 
 
-class CNN(nn.Module):
-    def __init__(self, in_channels=3, num_classes=100):
-        """
-        Constructeur classifieur linéaire simple
-        Classification binaire (une seule sortie)
-        :param n_in: nombre de features
-        """
+class CNN2(nn.Module):
+    def __init__(self, name, in_channels=3, num_classes=100):
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 6, 5)
+        self.bn1 = nn.BatchNorm2d(6)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
+        self.bn2 = nn.BatchNorm2d(16)
         self.lin = nn.Identity()
 
         self.feature_num = 400
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))
         x = torch.flatten(x, 1) # flatten all dimensions except batch
         x = self.lin(x)
         return x
+
+
+cfg = {
+    'CNN6': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M'],
+    'CNN9': [64, 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256, 'M'],
+    'CNN15': [64, 64, 64, 64, 64, 'M', 128, 128, 128, 128, 128, 'M', 256, 256, 256, 256, 256, 'M'],
+}
+
+class CNN(nn.Module):
+    def __init__(self, cnn_name, in_channels=3, num_classes=10):
+        super(CNN, self).__init__()
+        self.feature_num = 256
+        self.features = self._make_layers(cfg[cnn_name])
+        # self.classifier = nn.Linear(self.feature_num, num_classes)
+        self.classifier = nn.Identity()
+        self.in_channels = in_channels
+
+    def forward(self, x):
+        out = self.features(x)
+        # out = out.view(out.size(0), -1)
+        out = torch.flatten(out, 1) # flatten all dimensions except batch
+        out = self.classifier(out)
+        return out
+
+    def _make_layers(self, cfg):
+        layers = []
+        in_channels = 3
+        for x in cfg:
+            if x == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           nn.BatchNorm2d(x),
+                           nn.ReLU()]
+                           # nn.ReLU(inplace=True)]
+                in_channels = x
+        layers += [nn.Conv2d(256, 256, kernel_size=4, padding=0),
+                   nn.BatchNorm2d(256),
+                   nn.ReLU()]
+        # layers += [nn.AvgPool2d(kernel_size=2, stride=2)]
+        return nn.Sequential(*layers)
+
+
+from torch.autograd import Variable
+
+# net = CNN('CNN6')
+# x = torch.randn(2, 3, 32, 32)
+# print(net(Variable(x)).size())
+# print(net)

@@ -55,6 +55,8 @@ from sklearn.model_selection import train_test_split
 import subprocess
 import glob
 
+from utils.utils import progress_bar
+
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
@@ -406,7 +408,8 @@ class Trainer:
         # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        # self.teacher = networks.CNN(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        self.teacher = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         self.teacher_fc = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
         torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
@@ -416,11 +419,11 @@ class Trainer:
         # self.teacher.load_state_dict(torch.load('teacher.pth'))
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.student_fc = networks.FullLayer(feature_dim=self.student.feature_num, n_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        self.baseline = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        self.baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.baseline_fc = networks.FullLayer(feature_dim=self.baseline.feature_num, n_classes=self.opt.n_classes).cuda()
 
         # load teacher weights
@@ -481,15 +484,12 @@ class Trainer:
 
         return x, y
 
-    def adjust_learning_rate(self, optimizer, epoch):
+    def adjust_learning_rate(self, optimizer, iter):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
-        if epoch >= 50: # 100
-            # lr /= 10
-            lr = 0.01
-        if epoch >= 75: # 150
-            # lr /= 100
-            lr = 0.001
+        if iter == 20000 or iter == 30000 or iter == 37500: # 100
+            lr /= 10
+            self.opt.lr = lr
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
@@ -598,10 +598,10 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        example = networks.WideResNet(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
+        example = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -631,15 +631,20 @@ class Trainer:
                                             weight_decay=self.opt.weight_decay)
 
             # cosine learning rate
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
+            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
 
+            step = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     # self.train(example, example_fc, self.loader, self.loss_fn, example_optim, epoch)
+                    train_loss = 0
+                    correct = 0
+                    total = 0
                     example.train()
                     example_fc.train()
                     for batch_idx, (data, target) in enumerate(self.train_loader):
                         data, target = data.cuda(), target.long().cuda()
+
                         example_optim.zero_grad()
                         z = example(data)
                         # z1 = z
@@ -647,10 +652,20 @@ class Trainer:
                         loss = self.loss_fn(output, target)
                         loss.backward()
                         example_optim.step()
-                        scheduler.step()
                         # z2 = example(data)
                         # dist = pdist(z1, z2).max()
                         # print("dist", dist)
+
+                        step = step + 1
+                        self.adjust_learning_rate(example_optim, step)
+
+                        train_loss += loss.item()
+                        _, predicted = torch.max(output.data, 1)
+                        total += target.size(0)
+                        correct += predicted.eq(target.data).cpu().sum()
+
+                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                 acc, test_loss = self.test(example, example_fc, test_loader=self.test_loader, epoch=epoch)
                 res_loss_example.append(test_loss)
@@ -740,7 +755,6 @@ class Trainer:
                                             momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                             weight_decay=self.opt.weight_decay)
             student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
-
 
             student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             train_loss = []
