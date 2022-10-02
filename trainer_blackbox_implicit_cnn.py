@@ -769,7 +769,7 @@ class Trainer:
                     correct = 0
                     total = 0
 
-                    for (inputs, targets) in tqdm(self.train_loader):
+                    for (inputs, targets) in self.train_loader:
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         student_optim.zero_grad()
@@ -1751,8 +1751,8 @@ class Trainer:
         acc = correct / len(test_loader.dataset)
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(test_loader.dataset),
+        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            epoch, test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
