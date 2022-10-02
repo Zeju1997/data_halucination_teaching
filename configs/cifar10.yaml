@@ -46,3 +46,4 @@ n_z_update: 20
 layers: 40
 widen_factor: 4
 droprate: 0.3
+model: CNN6
