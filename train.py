@@ -34,7 +34,7 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("cifar10.yaml")
+    config = load_config("cifar100.yaml")
     opts.set_defaults(**config)
 
     args = opts.parse_args()

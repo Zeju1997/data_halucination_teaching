@@ -27,7 +27,6 @@ n_classes: 100
 model_name: Blackbox_CIFAR100
 lr: 0.1
 decay: 0.0001
-seed: 1
 channels: 3
 img_size: 32
 augment: True
@@ -36,3 +35,10 @@ train_sgd: True
 train_baseline: True
 num_workers: 0
 n_query_classes: 100
+n_weight_update: 5
+n_z_update: 20
+droprate: 0.3
+model: CNN6
+momentum: 0.9
+nesterov: True
+weight_decay: 0.0005
