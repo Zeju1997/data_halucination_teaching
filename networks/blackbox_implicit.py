@@ -703,12 +703,15 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                                             retain_graph=False, create_graph=False)
 
             gradients = self.normalize_lp_norms(gradients[0], p=p)
+            norm_1 = torch.norm(z.detach().clone(), p=p)
             z = z - step_size * gradients
             z = self.project(z, z0, epsilon, p)
-
+            norm_2 = torch.norm(z.detach().clone(), p=p)
+            z = z * (norm_1 / norm_2)
             optim_loss.append(loss.item())
 
-
+        # diff = pdist(z, z0)
+        # print('diff', diff.max())
 
         '''
         z0 = model(inputs)
