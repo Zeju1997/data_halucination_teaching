@@ -17,7 +17,7 @@ hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000
 n_unroll_blocks: 40
-n_epochs: 100
+n_epochs: 137
 start_saving: 1
 save_frequency: 1
 label_dim: 100
@@ -36,7 +36,7 @@ train_baseline: True
 num_workers: 0
 n_query_classes: 100
 n_weight_update: 5
-n_z_update: 20
+n_z_update: 30
 droprate: 0.3
 model: CNN6
 momentum: 0.9
