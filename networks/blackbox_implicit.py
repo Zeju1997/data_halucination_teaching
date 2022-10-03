@@ -658,6 +658,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             optim.step()
 
+
         '''
         for n in range(self.opt.n_weight_update):
             try:
@@ -706,6 +707,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             z = self.project(z, z0, epsilon, p)
 
             optim_loss.append(loss.item())
+
+
 
         '''
         z0 = model(inputs)
