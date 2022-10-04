@@ -96,6 +96,7 @@ class Trainer:
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline_label = omniscient.OmniscientLinearStudent(self.opt.dim)
+            self.label = omniscient.OmniscientLinearStudent(self.opt.dim)
             torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
@@ -356,26 +357,26 @@ class Trainer:
         res_student_label, w_diff_student_label = load_experiment_result(self.opt)
 
         # ---------------------
-        #  Train Student with Label
+        #  Train Label
         # ---------------------
-        self.opt.experiment = "Student_with_Label"
-        if self.opt.train_baseline == False:
+        self.opt.experiment = "Label"
+        if self.opt.train_baseline == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['iter', 'test acc', 'w diff'])
-            res_student_label = []
-            a_student_label = []
-            b_student_label = []
+            res_label = []
+            a_label = []
+            b_label = []
             generated_samples = np.zeros(2)
-            w_diff_student_label = []
+            w_diff_label = []
             self.baseline_label.load_state_dict(torch.load('teacher_w0.pth'))
             for t in tqdm(range(self.opt.n_iter)):
                 if t != 0:
                     # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
-                    new_data, new_labels = self.teacher.generate_example(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=True)
+                    new_data, new_labels = self.teacher.generate_label(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=True)
 
                     generated_data = new_data.detach().clone().cpu().numpy()
                     generated_label = new_labels.detach().clone().cpu().numpy()
@@ -391,8 +392,8 @@ class Trainer:
                 test = self.baseline_label(X_test.cuda()).cpu()
 
                 a, b = plot_classifier(self.baseline_label, X.max(axis=0), X.min(axis=0))
-                a_student_label.append(a)
-                b_student_label.append(b)
+                a_label.append(a)
+                b_label.append(b)
 
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
                     tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))

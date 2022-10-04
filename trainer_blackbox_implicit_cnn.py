@@ -725,7 +725,9 @@ class Trainer:
             res_mixup = []
             res_loss_mixup = []
 
-            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader)
+            tmp_student = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
+
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader, fc=tmp_student)
 
             res_student = []
             res_loss_student = []
@@ -775,11 +777,11 @@ class Trainer:
                         student_optim.zero_grad()
 
                         # model_mdl = copy.deepcopy(self.student)
-                        fc_mdl = copy.deepcopy(self.student_fc)
-
                         z = self.student(inputs)
 
-                        z_updated = unrolled_optimizer(z, fc_mdl, inputs, targets)
+                        torch.save(self.student_fc.state_dict(), 'tmp_fc.pth')
+
+                        z_updated = unrolled_optimizer(z, inputs, targets)
 
                         outputs = self.student_fc(z_updated)
                         loss = self.loss_fn(outputs, targets)
@@ -798,6 +800,7 @@ class Trainer:
 
                         progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
 
                         self.step = self.step + 1
                         self.adjust_learning_rate(student_optim, self.step)

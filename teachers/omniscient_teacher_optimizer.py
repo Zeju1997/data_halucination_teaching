@@ -906,6 +906,247 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
     return generated_sample, generated_label
 
 
+def __generate_label__(teacher, opt, student, X, Y):
+    """
+    Selectionne un exemple selon le teacher et le student
+    :param teacher: Le teacher de classe mère BaseLinear
+    :param student: Le student devant implémenter les deux méthodes example_difficulty et example_usefulness
+    :param X: Les données
+    :param y: les labels des données
+    :param batch_size: La taille d'un batch de données
+    :return: L'indice de l'exemple à enseigner au student
+    """
+
+    nb_example = X.size(0)
+    nb_batch = int(nb_example / opt.batch_size)
+
+    s = 1000
+
+    best_score = 1000
+    count = 0
+
+    alpha = 0.02
+    beta1 = 0.8
+    beta2 = 0.999
+    # eps = 1e-8
+
+    i = torch.randint(0, nb_batch, size=(1,)).item()
+    i_min = i * opt.batch_size
+    i_max = (i + 1) * opt.batch_size
+
+    x = X[i_min:i_max].cuda()
+    y = Y[i_min:i_max].cuda()
+
+    bounds = [[X.min().cpu(), X.max().cpu()]] * X.shape[1]
+    bounds = np.asarray(bounds)
+    # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
+    constraints = [False] * bounds.shape[0]
+
+    # generate an initial point
+    # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
+    label_new = torch.randint(0, 2, (opt.batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
+    # run the gradient descent updates
+
+    s1 = []
+    s_min = 1000
+    count = 0
+    zz = []
+    xx = []
+    yy = []
+    data_trajectory = []
+    generated_sample = torch.zeros(opt.batch_size, X.shape[1]).cuda()
+    generated_sample.requires_grad = True
+
+    # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
+    # init_point = X.mean(dim=0).unsqueeze(0)
+
+    diff = X.max(dim=0).values - X.min(dim=0).values
+
+    # init_point = (X.max() - X.min()) * torch.rand(batch_size, X.size(1)).cuda() + X.min()
+    # init_point = (X.max(dim=0).values - X.min(dim=0).values) * torch.rand(batch_size, X.size(1)).cuda() + X.min(dim=0).values
+
+    # initialize first and second moments
+    m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+
+    lr = student.optim.param_groups[0]["lr"]
+    example_difficulty = ExampleDifficulty(student, lr)
+    example_usefulness = ExampleUsefulness(student, teacher, lr)
+    s1 = []
+
+    for t in range(opt.gd_n):
+        generated_sample.requires_grad = True
+
+        loss = example_difficulty(generated_sample, label_new) + example_usefulness(generated_sample, label_new)
+        # print("score loss", score_loss)
+
+        grad = torch.autograd.grad(outputs=loss,
+                                   inputs=generated_sample,
+                                   create_graph=False, retain_graph=False)
+
+        grad = - grad[0].detach().squeeze(0)
+
+        generated_sample.requires_grad = False
+        score = ScoreLoss(example_difficulty, example_usefulness)
+
+        eps = np.sqrt(np.finfo(float).eps)
+        # eps_list = [np.sqrt(200) * eps] * X.shape[1]
+        # grad = approx_fprime(init_point, score_loss, eps_list)
+        # grad = torch.Tensor(grad).cuda()
+
+        # build a solution one variable at a time
+        for i in range(bounds.shape[0]):
+            if not constraints[i]:
+                if opt.optim == "adam":
+                    # adam: convergence problem!
+                    # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                    m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
+                    # mhat(t) = m(t) / (1 - beta1(t))
+                    mhat = m[i] / (1.0 - beta1**(t+1))
+                    # vhat(t) = v(t) / (1 - beta2(t))
+                    vhat = v[i] / (1.0 - beta2**(t+1))
+                    # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                    update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
+
+                else:
+                    # AMSGrad
+                    # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
+                    m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
+                    # vhat(t) = max(vhat(t-1), v(t))
+                    vhat[i] = max(vhat[i], v[i])
+                    # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
+                    update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
+                # escape local minima?
+                #if torch.norm(grad) == 0:
+                #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
+                #    update = update + noise
+
+                if constraints[i]:
+                    update[0] = 0
+
+                generated_sample[0, i] = generated_sample[0, i] - update
+                # print("update", update)
+
+                if generated_sample[0, i] > X.max() or generated_sample[0, i] < X.min():
+                    constraints[i] = True
+
+        s = score(generated_sample, label_new)
+
+        if len(s1) != 0:
+            if s == s1[-1]:
+                count = count + 1
+            else:
+                count = 0
+
+        if count > 10:
+            break
+
+        s1.append(s)
+
+        zz.append(s)
+        xx.append(generated_sample[0, 0].cpu())
+        yy.append(generated_sample[0, 1].cpu())
+
+        data_trajectory.append(generated_sample)
+
+    s1_np = np.array(s1)
+    idx = np.argmin(s1_np)
+    generated_sample = data_trajectory[idx]
+
+    if optimize_label:
+        generated_label = torch.zeros(opt.batch_size, 1).cuda()
+        generated_label.requires_grad = True
+
+        bounds = [[0, 1]]
+        bounds = np.asarray(bounds)
+        # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
+        constraints = [False] * bounds.shape[0]
+
+        for t in range(opt.gd_n):
+            generated_label.requires_grad = True
+
+            loss = example_difficulty(generated_sample, generated_label) + example_usefulness(generated_sample, generated_label)
+            # print("score loss", score_loss)
+
+            grad = torch.autograd.grad(outputs=loss,
+                                       inputs=generated_label,
+                                       create_graph=False, retain_graph=False)
+
+            grad = - grad[0].detach().squeeze(0)
+
+            generated_label.requires_grad = False
+            score = ScoreLoss(example_difficulty, example_usefulness)
+
+            eps = np.sqrt(np.finfo(float).eps)
+            # eps_list = [np.sqrt(200) * eps] * X.shape[1]
+            # grad = approx_fprime(init_point, score_loss, eps_list)
+            # grad = torch.Tensor(grad).cuda()
+
+            # build a solution one variable at a time
+            for i in range(bounds.shape[0]):
+                if not constraints[i]:
+                    if opt.optim == "adam":
+                        # adam: convergence problem!
+                        # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                        m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
+                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                        v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
+                        # mhat(t) = m(t) / (1 - beta1(t))
+                        mhat = m[i] / (1.0 - beta1**(t+1))
+                        # vhat(t) = v(t) / (1 - beta2(t))
+                        vhat = v[i] / (1.0 - beta2**(t+1))
+                        # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                        update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
+
+                    else:
+                        # AMSGrad
+                        # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
+                        m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
+                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                        v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
+                        # vhat(t) = max(vhat(t-1), v(t))
+                        vhat[i] = max(vhat[i], v[i])
+                        # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
+                        update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
+                    # escape local minima?
+                    #if torch.norm(grad) == 0:
+                    #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
+                    #    update = update + noise
+
+                    if constraints[i]:
+                        update[0] = 0
+
+                    generated_label[0, i] = generated_label[0, i] - update
+                    # print("update", update)
+
+                    if generated_label[0, i] > X.max() or generated_label[0, i] < X.min():
+                        constraints[i] = True
+
+            s = score(generated_sample, generated_label)
+
+            if len(s1) != 0:
+                if s == s1[-1]:
+                    count = count + 1
+                else:
+                    count = 0
+
+            if count > 10:
+                break
+
+    else:
+        generated_label = label_new
+
+    return generated_sample, generated_label
+
+
 def __generate_example_both__(teacher, student, X, y, batch_size, lr_factor, gd_n, t):
     """
     Selectionne un exemple selon le teacher et le student
@@ -1157,6 +1398,9 @@ class OmniscientLinearTeacher(BaseLinear):
     """
     def generate_example(self, opt, student, X, y, optimize_label):
         return __generate_example__(self, opt, student, X, y, optimize_label)
+
+    def generate_sample(self, opt, student, X, y):
+        return __generate_sample__(self, opt, student, X, y)
 
     def select_example(self, student, X, y, batch_size):
         return __select_example__(self, student, X, y, batch_size)

@@ -282,7 +282,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         - nblock : number of stages (K in the paper)
         - K : kernel size
     """
-    def __init__(self, opt, loader):
+    def __init__(self, opt, loader, fc):
         super(UnrolledBlackBoxOptimizer, self).__init__()
 
         self.opt = opt
@@ -301,6 +301,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         self.loader = loader
         self.data_iter = iter(loader)
+
+        self.fc = fc
         # self.Y = y
 
         # self.nb_batch = int(self.X.shape[0] / self.opt.batch_size)
@@ -612,14 +614,14 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # return delta_z
         return z
 
-    def forward(self, z0, fc, inputs, targets):
+    def forward(self, z0, inputs, targets):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
-        # with torch.no_grad():
+        with torch.no_grad():
             # for param1 in self.generator.parameters():
             #    param1 = weight
-            # self.generator.load_state_dict(weight)
+            self.fc.load_state_dict(torch.load('tmp_fc.pth'))
             # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             # self.student.load_state_dict(torch.load('teacher_w0.pth'))
             # for param1 in self.student.parameters():
@@ -631,7 +633,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         w_loss = 0
         tau = 1
 
-        fc_orig = copy.deepcopy(fc)
+        fc_orig = copy.deepcopy(self.fc)
 
         pdist = torch.nn.PairwiseDistance(p=2)
         num_steps = 2
@@ -640,7 +642,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         norm = 0.0
         p = 2
 
-        optim = torch.optim.SGD(fc.parameters(), lr=0.001)
+        optim = torch.optim.SGD(self.fc.parameters(), lr=0.001)
         num_steps = 5
 
         # optim_loss = []
@@ -649,7 +651,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         for n in range(self.opt.n_weight_update):
 
             optim.zero_grad()
-            outputs = fc(z0)
+            outputs = self.fc(z0)
 
             loss = self.loss_fn(outputs, targets)
             loss.backward(retain_graph=True, create_graph=True)
@@ -692,7 +694,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # optim_loss = []
 
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
-        example_usefulness = ExampleUsefulness(fc_orig, fc, self.loss_fn, self.opt.lr, targets)
+        example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
 
         for n in range(self.opt.n_z_update):
             loss = example_difficulty(z) - example_usefulness(z)
@@ -708,6 +710,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             norm_2 = torch.norm(z.detach().clone(), p=p)
             z = z * (norm_1 / norm_2)
             # optim_loss.append(loss.item())
+
+            # print(n, "iter pass", torch.cuda.memory_allocated(0))
 
         # diff = pdist(z, z0)
         # print('diff', diff.max())
@@ -747,6 +751,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # plt.ylabel("Accuracy")
         # plt.legend()
         # plt.show()
+
+        del fc_orig
 
         return z
 
