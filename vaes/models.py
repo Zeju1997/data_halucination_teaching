@@ -299,6 +299,103 @@ class VAE_HalfMoon(nn.Module):
     return -elbo.mean(), elbo
 
 
+
+class cVAE_HalfMoon(nn.Module):
+  def __init__(self, device):
+    super(cVAE_HalfMoon, self).__init__()
+
+    self.device = device
+    self.x_dims = 2
+    self.z_dims = 20
+    self.y_dims = 2
+    self.px_sigma = 0.08
+
+    # Layers for q(z|x,y):
+    self.qz_fc = nn.Sequential(
+                    nn.Linear(in_features=self.x_dims+self.y_dims, out_features=128),
+                    nn.ReLU(),
+                    nn.Linear(128, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 128),
+                    nn.ReLU()
+                )
+
+    self.qz_mu = nn.Linear(in_features=128, out_features=self.z_dims)
+    self.qz_pre_sp = nn.Linear(in_features=128, out_features=self.z_dims)
+
+    # Layers for p(x|z,y):
+    self.px_fc = nn.Sequential(
+                    nn.Linear(in_features=self.z_dims+self.y_dims, out_features=128),
+                    nn.ReLU(),
+                    nn.Linear(128, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 128),
+                    nn.ReLU()
+                )
+    self.px_mu = nn.Linear(in_features=128, out_features=self.x_dims)
+    # self.px_pre_sp = nn.Linear(in_features=128, out_features=self.x_dims)
+
+  def q_z(self, x, y):
+    # y is one_hot
+    h = torch.cat((x.view(x.size(0), -1), y), dim=-1)
+    h = self.qz_fc(h)
+    z_mu = self.qz_mu(h)
+    z_pre_sp = self.qz_pre_sp(h)
+    z_std = F.softplus(z_pre_sp)
+    return self.reparameterize(z_mu, z_std), z_mu, z_std
+
+  def p_x(self, z, y):
+    h = torch.cat([z, y], dim=1)
+    h = self.px_fc(h)
+    x_mu = self.px_mu(h)
+    # x_pre_sp = self.px_pre_sp(h)
+    # x_std = F.softplus(x_pre_sp)
+    x_std = torch.ones_like(x_mu) * self.px_sigma
+    return self.reparameterize(x_mu, x_std), x_mu, x_std
+
+  def reparameterize(self, mu, std):
+    eps = torch.randn(mu.size())
+    eps = eps.to(self.device)
+
+    return mu + eps * std
+
+  def sample(self, y, num=10):
+    # sample latent vectors from the normal distribution
+    z = torch.randn(num, self.z_dims)
+    z = z.to(self.device)
+
+    x, x_mu, x_std = self.p_x(z, y)
+
+    return x
+
+  def reconstruction(self, x, y):
+    z, _, _ = self.q_z(x, y)
+    x_hat, x_mu, x_std = self.p_x(z, y)
+
+    return x_hat
+
+  def forward(self, x, y):
+    elbo = 0
+    z, qz_mu, qz_std = self.q_z(x, y)
+
+    x_hat, px_mu, px_std = self.p_x(z, y)
+
+    # For likelihood : <log p(x|z, y)>_q :
+    px = D.normal.Normal(px_mu, px_std)
+    px = D.independent.Independent(px, 1)
+    elbo += px.log_prob(x)
+
+    qz = D.normal.Normal(qz_mu, qz_std)
+    qz = D.independent.Independent(qz, 1)
+    pz = D.normal.Normal(torch.zeros_like(z), torch.ones_like(z))
+    pz = D.independent.Independent(pz, 1)
+
+    # For: - KL[qz || pz]
+    elbo -= D.kl.kl_divergence(qz, pz)
+
+    return -elbo.mean(), elbo
+
+
 class VAE_MNIST(nn.Module):
   def __init__(self, device):
     super(VAE_MNIST, self).__init__()
@@ -602,7 +699,7 @@ class cVAE_bMNIST(nn.Module):
 
     x_bern = self.p_x(z, y)
 
-    # # For likelihood : <log p(x|z)>_q :
+    # # For likelihood : <log p(x|z, y)>_q :
     elbo += torch.sum(torch.flatten(x * torch.log(x_bern + 1e-8)
                                 + (1 - x) * torch.log(1 - x_bern + 1e-8),
                                 start_dim=1),
