@@ -35,7 +35,7 @@ train_sgd: True
 train_baseline: True
 num_workers: 0
 n_query_classes: 100
-n_weight_update: 3
+n_weight_update: 5
 n_z_update: 10
 droprate: 0.3
 model: CNN6

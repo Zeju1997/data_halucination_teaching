@@ -18,4 +18,5 @@ pretrained/
 # output folder
 log/
 outputs/
+results/
 
