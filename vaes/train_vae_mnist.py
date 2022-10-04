@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision.utils
 
 from dataloader import load_data
-from models import VAE_MNIST, VAE_bMNIST
+from models import VAE_MNIST, VAE_bMNIST, cVAE_bMNIST
 
 import numpy as np
 
@@ -23,7 +23,8 @@ use_gpu = True
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 print(device)
 # vae = VAE_MNIST(device)
-vae = VAE_bMNIST(device)
+# vae = VAE_bMNIST(device)
+vae = cVAE_bMNIST(device)
 vae = vae.to(device)
 
 
@@ -86,17 +87,19 @@ def show_image(img, title):
     plt.title(title)
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
-def visualise_output(images, labels, model, title):
+def visualise_output(images, l, model, title):
 
     with torch.no_grad():
-        labels = F.one_hot(labels, num_classes=2).type(torch.FloatTensor)
+        labels = F.one_hot(l, num_classes=2).type(torch.FloatTensor)
         labels = labels.to(device)
         images = images.to(device)
-        images, y_logits = vae.reconstruction(images, labels)
+        # images, y_logits = vae.reconstruction(images, labels) # For VAE
+        images = vae.reconstruction(images, labels)     # For conditional VAE
         images = images.cpu()
-        y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+        # y = torch.argmax(y_logits, dim=1).data.cpu().numpy() # For VAE
         print("Recons:")
-        print(y[0:10])
+        # print(y[0:10])    # For conditional VAE
+        print(l[0:10])
         images = to_img(images)
         np_imagegrid = torchvision.utils.make_grid(images[0:10], 10, 5).numpy()
         plt.title(title)
@@ -117,8 +120,15 @@ visualise_output(images, labels, vae, "Reconstruction")
 with torch.no_grad():
 
     # sample images
-    img_samples, y_logits = vae.sample()
-    y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
+    # VAE:
+    # img_samples, y_logits = vae.sample()
+
+    # cVAE:
+    y = torch.tensor([0,0,0,0,0, 1,1,1,1,1], dtype=torch.int64).to(device)
+    y_oh = F.one_hot(y)
+    img_samples = vae.sample(y_oh)
+
+    # y = torch.argmax(y_logits, dim=1).data.cpu().numpy()
     print("Samples:")
     print(y)
     img_samples = img_samples.cpu()

@@ -526,4 +526,96 @@ class VAE_bMNIST(nn.Module):
     # elbo -= qz.log_prob(z)
 
     return -elbo.mean(), elbo
+
+
+class cVAE_bMNIST(nn.Module):
+  def __init__(self, device):
+    super(cVAE_bMNIST, self).__init__()
+
+    self.device = device
+    self.c = 16
+    self.z_dims = 16
+    self.y_dim = 2
+    self.x_h = 28
+    self.x_w = 28
+
+    # Layers for q(z|x,y):
+    self.qz_conv = nn.Sequential(
+                        nn.Conv2d(in_channels=1+self.y_dim, out_channels=self.c, kernel_size=4, stride=2, padding=1), # out: c x 14 x 14
+                        nn.ReLU(),
+                        nn.Conv2d(in_channels=self.c, out_channels=self.c*2, kernel_size=4, stride=2, padding=1), # out: c x 7 x 7
+                        nn.ReLU()
+                    )
+    self.qz_mu = nn.Linear(in_features=self.c*2*7*7, out_features=self.z_dims)
+    self.qz_pre_sp = nn.Linear(in_features=self.c*2*7*7, out_features=self.z_dims)
+
+    # Layers for p(x|z, y):
+    self.px_l1 = nn.Linear(in_features=self.z_dims+self.y_dim, out_features=self.c*2*7*7)
+    self.px_conv1 = nn.ConvTranspose2d(in_channels=self.c*2, out_channels=self.c, kernel_size=4, stride=2, padding=1)
+    self.px_bern = nn.ConvTranspose2d(in_channels=self.c, out_channels=1, kernel_size=4, stride=2, padding=1)
+
+  def q_z(self, x, y):
+    # y is binary, add y as a channel
+    y = y.view(-1, self.y_dim, 1, 1).repeat(1, 1, self.x_h, self.x_w)
+    h = torch.cat([x, y], dim=1)
+    h = self.qz_conv(h)
+    h = h.view(h.size(0), -1) # flatten batch of multi-channel feature maps to a batch of feature vectors
+    z_mu = self.qz_mu(h)
+    z_pre_sp = self.qz_pre_sp(h)
+    z_std = F.softplus(z_pre_sp)
+    return self.reparameterize(z_mu, z_std), z_mu, z_std
+
+  def p_x(self, z, y):
+    h = torch.cat([z, y], dim=1)
+    h = self.px_l1(h)
+    h = h.view(h.size(0), self.c*2, 7, 7) # unflatten batch of feature vectors to a batch of multi-channel feature maps
+    h = F.relu(self.px_conv1(h))
+    x_bern = torch.sigmoid(self.px_bern(h))
+    return x_bern
+
+  def reparameterize(self, mu, std):
+    eps = torch.randn(mu.size())
+    eps = eps.to(self.device)
+
+    return mu + eps * std
+
+  def sample(self, y, num=10):
+    # sample latent vectors from the normal distribution
+    z = torch.randn(num, self.z_dims)
+    z = z.to(self.device)
+
+    x_bern = self.p_x(z, y)
+
+    return x_bern
+
+  def reconstruction(self, x, y):
+    z, _, _ = self.q_z(x, y)
+    # x_hat, x_mu, x_std, y_logit = self.p_xy(z)
+    x_bern = self.p_x(z, y)
+
+    return x_bern
+
+  def forward(self, x, y):
+
+    elbo = 0
+    z, qz_mu, qz_std = self.q_z(x, y)
+
+    x_bern = self.p_x(z, y)
+
+    # # For likelihood : <log p(x|z)>_q :
+    elbo += torch.sum(torch.flatten(x * torch.log(x_bern + 1e-8)
+                                + (1 - x) * torch.log(1 - x_bern + 1e-8),
+                                start_dim=1),
+                        dim=-1)
+
+    qz = D.normal.Normal(qz_mu, qz_std)
+    qz = D.independent.Independent(qz, 1)
+    pz = D.normal.Normal(torch.zeros_like(z), torch.ones_like(z))
+    pz = D.independent.Independent(pz, 1)
+
+    # For: - KL[qz || pz]
+    elbo -= D.kl.kl_divergence(qz, pz)
+
+
+    return -elbo.mean(), elbo
     
