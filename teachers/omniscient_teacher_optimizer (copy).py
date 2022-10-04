@@ -1,6 +1,5 @@
 from teachers.utils import BaseLinear, BaseConv
 import torch
-import sys
 import torch.nn as nn
 
 import numpy as np
@@ -94,7 +93,7 @@ def __example_difficulty__(student, X, y):
     out = student(X)
 
     loss = student.loss_fn(out, y)
-    loss.backward(retain_graph=True)
+    loss.backward(retain_graph=True, create_graph=True)
 
     # test = grad(loss, X)
 
@@ -141,7 +140,7 @@ def __example_usefulness__(student, w_star, X, y):
 
     loss = student.loss_fn(out, y)
 
-    loss.backward(retain_graph=True)
+    loss.backward(retain_graph=True, create_graph=True)
 
     # layer gradient recovery
     res = student.lin.weight.grad
@@ -303,15 +302,16 @@ def __select_example__(teacher, student, X, y, batch_size):
             min_score = s2
             arg_min = i
             best_data = data
-            best_label = label
+            best_label = label # .squeeze(0)
             # print("arg min", arg_min, "s", min_score)
 
     # print("arg min", arg_min, "s", s)
 
-    return best_data, best_label
+    # return best_data, best_label
+    return arg_min
 
 
-def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t, optim):
+def __generate_example__working__(teacher, student, X, y, batch_size, lr_factor, gd_n, t, optim):
     """
     Selectionne un exemple selon le teacher et le student
     :param teacher: Le teacher de classe mère BaseLinear
@@ -343,6 +343,7 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     # generate an initial point
     # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
     label_new = torch.randint(0, 2, (batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
     # run the gradient descent updates
 
     s1 = []
@@ -353,6 +354,8 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     yy = []
     data_trajectory = []
     init_point = torch.zeros(batch_size, X.shape[1]).cuda()
+    # init_point.requires_grad = True
+    # optim = torch.optim.Adam([init_point], lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
     # init_point = X.mean(dim=0).unsqueeze(0)
 
@@ -366,26 +369,33 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
     vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
 
+    s1 = []
     for t in range(gd_n):
         lr = student.optim.param_groups[0]["lr"]
         example_difficulty = ExampleDifficulty(student, lr, label_new)
         example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
 
-        score_loss = ScoreLoss(example_difficulty, example_usefulness)
+        # TODO: Try use autograd
+        '''
+        optim.zero_grad()
+        score_loss = example_difficulty(init_point) + example_usefulness(init_point)
+        score_loss.backward()
+        s1.append(score_loss.item())
+        optim.step()
 
-        # score = score_loss(data_new)
+        point = init_point.detach().clone().cpu().numpy()
+        data_trajectory.append(point)
+        xx.append(point[0, 0])
+        yy.append(point[0, 1])
+        zz.append(score_loss.item())
+        '''
+
+        score_loss = ScoreLoss(example_difficulty, example_usefulness)
 
         eps = np.sqrt(np.finfo(float).eps)
         eps_list = [np.sqrt(200) * eps] * X.shape[1]
         grad = approx_fprime(init_point, score_loss, eps_list)
         grad = torch.Tensor(grad).cuda()
-
-        #print("grad", grad)
-
-        # grad = nd.Gradient(score_loss)(data_new.cpu().detach().numpy())
-        # grad = torch.Tensor(grad).cuda()
-
-        # print(t, grad)
 
         # build a solution one variable at a time
         for i in range(bounds.shape[0]):
@@ -413,7 +423,6 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
                     vhat[i] = max(vhat[i], v[i])
                     # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
                     update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
-
 
                 # escape local minima?
                 #if torch.norm(grad) == 0:
@@ -496,6 +505,473 @@ def __generate_example__(teacher, student, X, y, batch_size, lr_factor, gd_n, t,
     return data_new, label_new
 
 
+def __generate_example_manual__(teacher, opt, student, X, y):
+    """
+    Selectionne un exemple selon le teacher et le student
+    :param teacher: Le teacher de classe mère BaseLinear
+    :param student: Le student devant implémenter les deux méthodes example_difficulty et example_usefulness
+    :param X: Les données
+    :param y: les labels des données
+    :param batch_size: La taille d'un batch de données
+    :return: L'indice de l'exemple à enseigner au student
+    """
+
+    nb_example = X.size(0)
+    nb_batch = int(nb_example / opt.batch_size)
+
+    s = 1000
+
+    best_score = 1000
+    count = 0
+
+    alpha = 0.02
+    beta1 = 0.8
+    beta2 = 0.999
+    # eps = 1e-8
+
+    bounds = [[X.min().cpu(), X.max().cpu()]] * X.shape[1]
+    bounds = np.asarray(bounds)
+    # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
+    constraints = [False] * bounds.shape[0]
+
+    # generate an initial point
+    # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
+    label_new = torch.randint(0, 2, (opt.batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
+    # run the gradient descent updates
+
+    s1 = []
+    s_min = 1000
+    count = 0
+    zz = []
+    xx = []
+    yy = []
+    data_trajectory = []
+    init_point = torch.zeros(opt.batch_size, X.shape[1]).cuda()
+    init_point.requires_grad = True
+
+    optimizer = torch.optim.Adam([init_point], lr=0.001, momentum=0.9)
+
+    # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
+    # init_point = X.mean(dim=0).unsqueeze(0)
+
+    diff = X.max(dim=0).values - X.min(dim=0).values
+
+    # init_point = (X.max() - X.min()) * torch.rand(batch_size, X.size(1)).cuda() + X.min()
+    # init_point = (X.max(dim=0).values - X.min(dim=0).values) * torch.rand(batch_size, X.size(1)).cuda() + X.min(dim=0).values
+
+    # initialize first and second moments
+    m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+
+
+    s1 = []
+    for t in range(opt.gd_n):
+        init_point.requires_grad = True
+        lr = student.optim.param_groups[0]["lr"]
+        example_difficulty = ExampleDifficulty(student, lr, label_new)
+        example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
+
+        score_loss = example_difficulty(init_point) + example_usefulness(init_point)
+        # print("score loss", score_loss)
+
+        grad = torch.autograd.grad(outputs=score_loss,
+                                   inputs=init_point,
+                                   create_graph=False, retain_graph=False)
+
+        grad = - grad[0].detach().squeeze(0)
+
+        # init_point.requires_grad = False
+        # score_loss = ScoreLoss(example_difficulty, example_usefulness)
+
+        eps = np.sqrt(np.finfo(float).eps)
+        # eps_list = [np.sqrt(200) * eps] * X.shape[1]
+        # grad = approx_fprime(init_point, score_loss, eps_list)
+        # grad = torch.Tensor(grad).cuda()
+
+        # build a solution one variable at a time
+        for i in range(bounds.shape[0]):
+            if not constraints[i]:
+                if opt.optim == "adam":
+                    # adam: convergence problem!
+                    # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                    m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
+                    # mhat(t) = m(t) / (1 - beta1(t))
+                    mhat = m[i] / (1.0 - beta1**(t+1))
+                    # vhat(t) = v(t) / (1 - beta2(t))
+                    vhat = v[i] / (1.0 - beta2**(t+1))
+                    # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                    update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
+
+                else:
+                    # AMSGrad
+                    # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
+                    m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
+                    # vhat(t) = max(vhat(t-1), v(t))
+                    vhat[i] = max(vhat[i], v[i])
+                    # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
+                    update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
+                # escape local minima?
+                #if torch.norm(grad) == 0:
+                #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
+                #    update = update + noise
+
+                if constraints[i]:
+                    update[0] = 0
+
+                init_point[0, i] = init_point[0, i] - update
+                # print("update", update)
+
+                if init_point[0, i] > X.max() or init_point[0, i] < X.min():
+                    constraints[i] = True
+
+        s = score_loss(init_point)
+
+        if len(s1) != 0:
+            if s == s1[-1]:
+                count = count + 1
+            else:
+                count = 0
+
+        if count > 10:
+            break
+
+        s1.append(s)
+
+        zz.append(s)
+        xx.append(init_point[0, 0].cpu())
+        yy.append(init_point[0, 1].cpu())
+
+        data_trajectory.append(init_point)
+
+    s1_np = np.array(s1)
+    idx = np.argmin(s1_np)
+    data_new = data_trajectory[idx]
+
+    visualize = False
+    if visualize:
+        z = []
+        x = np.linspace(X.min().cpu(), X.max().cpu(), 200)
+        y = np.linspace(X.min().cpu(), X.max().cpu(), 200)
+        for i in tqdm(range(200)):
+            for j in range(200):
+                grid_point = torch.tensor([x[j], y[i]], dtype=torch.float).cuda()
+                example_difficulty = ExampleDifficulty(student, lr, label_new)
+                example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
+
+                score_loss = ScoreLoss(example_difficulty, example_usefulness)
+
+                s = score_loss(grid_point)
+                z.append(s)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        x_grid, y_grid = np.meshgrid(x, y)
+        zs = np.array(z)
+        z_grid = zs.reshape(x_grid.shape)
+
+        ax.plot_surface(x_grid, y_grid, z_grid)
+        ax.scatter(np.array(xx), np.array(yy), np.array(zz), color='r', alpha=1)
+        # ax.scatter(np.array(xxx), np.array(yyy), np.array(zzz), color='k', alpha=1)
+        # ax.scatter(best_data[0, 0].cpu().numpy(), best_data[0, 1].cpu().numpy(), min_score, color='g', alpha=1)
+
+        ax.set_xlabel('X Label')
+        ax.set_ylabel('Y Label')
+        ax.set_zlabel('Z Label')
+
+        plt.show()
+
+    visualize = False
+    if visualize:
+        fig = plt.figure(figsize=(8, 5))
+        plt.plot(s1, color="b")
+        plt.title('Optimizer Score')
+        plt.show()
+
+    return data_new, label_new
+
+
+def __generate_example__(teacher, opt, student, X, y):
+    """
+    Selectionne un exemple selon le teacher et le student
+    :param teacher: Le teacher de classe mère BaseLinear
+    :param student: Le student devant implémenter les deux méthodes example_difficulty et example_usefulness
+    :param X: Les données
+    :param y: les labels des données
+    :param batch_size: La taille d'un batch de données
+    :return: L'indice de l'exemple à enseigner au student
+    """
+
+    nb_example = X.size(0)
+    nb_batch = int(nb_example / opt.batch_size)
+
+    s = 1000
+
+    best_score = 1000
+    count = 0
+
+    alpha = 0.02
+    beta1 = 0.8
+    beta2 = 0.999
+    # eps = 1e-8
+
+    bounds = [[X.min().cpu(), X.max().cpu()]] * X.shape[1]
+    bounds = np.asarray(bounds)
+    # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
+    constraints = [False] * bounds.shape[0]
+
+    # generate an initial point
+    # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
+    label_new = torch.randint(0, 2, (opt.batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
+    # run the gradient descent updates
+
+    s1 = []
+    s_min = 1000
+    count = 0
+    zz = []
+    xx = []
+    yy = []
+    data_trajectory = []
+    init_point = torch.zeros(opt.batch_size, X.shape[1]).cuda()
+    init_point.requires_grad = True
+
+    # init_point = torch.ones(batch_size, X.shape[1]).cuda() * X.min()
+    # init_point = X.mean(dim=0).unsqueeze(0)
+
+    diff = X.max(dim=0).values - X.min(dim=0).values
+
+    # init_point = (X.max() - X.min()) * torch.rand(batch_size, X.size(1)).cuda() + X.min()
+    # init_point = (X.max(dim=0).values - X.min(dim=0).values) * torch.rand(batch_size, X.size(1)).cuda() + X.min(dim=0).values
+
+    # initialize first and second moments
+    m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+
+    lr = student.optim.param_groups[0]["lr"]
+    example_difficulty = ExampleDifficulty(student, lr, label_new)
+    example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
+    s1 = []
+
+    for t in range(opt.gd_n):
+        init_point.requires_grad = True
+
+        loss = example_difficulty(init_point) + example_usefulness(init_point)
+        # print("score loss", score_loss)
+
+        grad = torch.autograd.grad(outputs=loss,
+                                   inputs=init_point,
+                                   create_graph=False, retain_graph=False)
+
+        grad = - grad[0].detach().squeeze(0)
+
+        init_point.requires_grad = False
+        score = ScoreLoss(example_difficulty, example_usefulness)
+
+        eps = np.sqrt(np.finfo(float).eps)
+        # eps_list = [np.sqrt(200) * eps] * X.shape[1]
+        # grad = approx_fprime(init_point, score_loss, eps_list)
+        # grad = torch.Tensor(grad).cuda()
+
+        # build a solution one variable at a time
+        for i in range(bounds.shape[0]):
+            if not constraints[i]:
+                if opt.optim == "adam":
+                    # adam: convergence problem!
+                    # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                    m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
+                    # mhat(t) = m(t) / (1 - beta1(t))
+                    mhat = m[i] / (1.0 - beta1**(t+1))
+                    # vhat(t) = v(t) / (1 - beta2(t))
+                    vhat = v[i] / (1.0 - beta2**(t+1))
+                    # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                    update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
+
+                else:
+                    # AMSGrad
+                    # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
+                    m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
+                    # vhat(t) = max(vhat(t-1), v(t))
+                    vhat[i] = max(vhat[i], v[i])
+                    # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
+                    update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
+                # escape local minima?
+                #if torch.norm(grad) == 0:
+                #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
+                #    update = update + noise
+
+                if constraints[i]:
+                    update[0] = 0
+
+                init_point[0, i] = init_point[0, i] - update
+                # print("update", update)
+
+                if init_point[0, i] > X.max() or init_point[0, i] < X.min():
+                    constraints[i] = True
+
+        s = score(init_point)
+
+        if len(s1) != 0:
+            if s == s1[-1]:
+                count = count + 1
+            else:
+                count = 0
+
+        if count > 10:
+            break
+
+        s1.append(s)
+
+        zz.append(s)
+        xx.append(init_point[0, 0].cpu())
+        yy.append(init_point[0, 1].cpu())
+
+        data_trajectory.append(init_point)
+
+    s1_np = np.array(s1)
+    idx = np.argmin(s1_np)
+    data_new = data_trajectory[idx]
+
+
+    for t in range(opt.gd_n):
+        init_point.requires_grad = True
+
+        loss = example_difficulty(init_point) + example_usefulness(init_point)
+        # print("score loss", score_loss)
+
+        grad = torch.autograd.grad(outputs=loss,
+                                   inputs=init_point,
+                                   create_graph=False, retain_graph=False)
+
+        grad = - grad[0].detach().squeeze(0)
+
+        init_point.requires_grad = False
+        score = ScoreLoss(example_difficulty, example_usefulness)
+
+        eps = np.sqrt(np.finfo(float).eps)
+        # eps_list = [np.sqrt(200) * eps] * X.shape[1]
+        # grad = approx_fprime(init_point, score_loss, eps_list)
+        # grad = torch.Tensor(grad).cuda()
+
+        # build a solution one variable at a time
+        for i in range(bounds.shape[0]):
+            if not constraints[i]:
+                if opt.optim == "adam":
+                    # adam: convergence problem!
+                    # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+                    m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
+                    # mhat(t) = m(t) / (1 - beta1(t))
+                    mhat = m[i] / (1.0 - beta1**(t+1))
+                    # vhat(t) = v(t) / (1 - beta2(t))
+                    vhat = v[i] / (1.0 - beta2**(t+1))
+                    # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
+                    update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
+
+                else:
+                    # AMSGrad
+                    # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
+                    m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
+                    # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+                    v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
+                    # vhat(t) = max(vhat(t-1), v(t))
+                    vhat[i] = max(vhat[i], v[i])
+                    # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
+                    update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
+
+                # escape local minima?
+                #if torch.norm(grad) == 0:
+                #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
+                #    update = update + noise
+
+                if constraints[i]:
+                    update[0] = 0
+
+                init_point[0, i] = init_point[0, i] - update
+                # print("update", update)
+
+                if init_point[0, i] > X.max() or init_point[0, i] < X.min():
+                    constraints[i] = True
+
+        s = score(init_point)
+
+        if len(s1) != 0:
+            if s == s1[-1]:
+                count = count + 1
+            else:
+                count = 0
+
+        if count > 10:
+            break
+
+        s1.append(s)
+
+        zz.append(s)
+        xx.append(init_point[0, 0].cpu())
+        yy.append(init_point[0, 1].cpu())
+
+        data_trajectory.append(init_point)
+
+    visualize = False
+    if visualize:
+        z = []
+        x = np.linspace(X.min().cpu(), X.max().cpu(), 200)
+        y = np.linspace(X.min().cpu(), X.max().cpu(), 200)
+        for i in tqdm(range(200)):
+            for j in range(200):
+                grid_point = torch.tensor([x[j], y[i]], dtype=torch.float).cuda()
+                example_difficulty = ExampleDifficulty(student, lr, label_new)
+                example_usefulness = ExampleUsefulness(student, teacher, lr, label_new)
+
+                score_loss = ScoreLoss(example_difficulty, example_usefulness)
+
+                s = score_loss(grid_point)
+                z.append(s)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        x_grid, y_grid = np.meshgrid(x, y)
+        zs = np.array(z)
+        z_grid = zs.reshape(x_grid.shape)
+
+        ax.plot_surface(x_grid, y_grid, z_grid)
+        ax.scatter(np.array(xx), np.array(yy), np.array(zz), color='r', alpha=1)
+        # ax.scatter(np.array(xxx), np.array(yyy), np.array(zzz), color='k', alpha=1)
+        # ax.scatter(best_data[0, 0].cpu().numpy(), best_data[0, 1].cpu().numpy(), min_score, color='g', alpha=1)
+
+        ax.set_xlabel('X Label')
+        ax.set_ylabel('Y Label')
+        ax.set_zlabel('Z Label')
+
+        plt.show()
+
+
+
+    visualize = False
+    if visualize:
+        fig = plt.figure(figsize=(8, 5))
+        plt.plot(s1, color="b")
+        plt.title('Optimizer Score')
+        plt.show()
+
+    return data_new, label_new
+
+
 def __generate_example_both__(teacher, student, X, y, batch_size, lr_factor, gd_n, t):
     """
     Selectionne un exemple selon le teacher et le student
@@ -521,6 +997,8 @@ def __generate_example_both__(teacher, student, X, y, batch_size, lr_factor, gd_
     xxx = []
     yyy = []
     zzz = []
+
+    # student_optim =
 
     # nb_batch = 1
     for i in range(nb_batch):
@@ -743,8 +1221,8 @@ class OmniscientLinearTeacher(BaseLinear):
     Omniscient teacher.
     Pour un classifieur linéaire de classe OmniscientLinearStudent
     """
-    def generate_example(self, student, X, y, batch_size, lr_factor, gd_n, t, optim):
-        return __generate_example__(self, student, X, y, batch_size, lr_factor, gd_n, t, optim)
+    def generate_example(self, opt, student, X, y):
+        return __generate_example__(self, opt, student, X, y)
 
     def select_example(self, student, X, y, batch_size):
         return __select_example__(self, student, X, y, batch_size)

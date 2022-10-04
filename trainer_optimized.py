@@ -319,7 +319,7 @@ class Trainer:
                         generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
                         generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
 
-                    self.student.update(torch.cuda.FloatTensor(new_data), new_labels.unsqueeze(1))
+                    self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
                 self.student.eval()
                 test = self.student(X_test.cuda()).cpu()
 

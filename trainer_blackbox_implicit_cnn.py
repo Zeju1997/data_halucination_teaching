@@ -712,7 +712,6 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-
         if self.opt.train_student == True:
             # student
             self.opt.experiment = "Student"
@@ -812,7 +811,6 @@ class Trainer:
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
-
 
             if self.visualize == False:
                 fig = plt.figure()
