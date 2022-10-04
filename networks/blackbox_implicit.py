@@ -643,7 +643,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         optim = torch.optim.SGD(fc.parameters(), lr=0.001)
         num_steps = 5
 
-        optim_loss = []
+        # optim_loss = []
 
         # w = fc.lin.weight
         for n in range(self.opt.n_weight_update):
@@ -654,10 +654,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             loss = self.loss_fn(outputs, targets)
             loss.backward(retain_graph=True, create_graph=True)
 
-            optim_loss.append(loss.item())
+            # optim_loss.append(loss.item())
 
             optim.step()
-
 
         '''
         for n in range(self.opt.n_weight_update):
@@ -690,7 +689,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         p = 2
         step_size = 0.001
         epsilon = 0.1
-        optim_loss = []
+        # optim_loss = []
 
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
         example_usefulness = ExampleUsefulness(fc_orig, fc, self.loss_fn, self.opt.lr, targets)
@@ -708,7 +707,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             z = self.project(z, z0, epsilon, p)
             norm_2 = torch.norm(z.detach().clone(), p=p)
             z = z * (norm_1 / norm_2)
-            optim_loss.append(loss.item())
+            # optim_loss.append(loss.item())
 
         # diff = pdist(z, z0)
         # print('diff', diff.max())
