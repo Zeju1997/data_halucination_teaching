@@ -205,7 +205,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
@@ -220,7 +220,7 @@ class Trainer:
 
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -232,7 +232,7 @@ class Trainer:
         #  Train Student
         # ---------------------
         self.opt.experiment = "Student"
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
