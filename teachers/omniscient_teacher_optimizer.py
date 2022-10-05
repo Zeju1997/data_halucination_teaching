@@ -515,8 +515,8 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
                     if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                         constraints[i] = True
                     '''
-            if torch.norm(generated_label, p=2) > 1:
-                generated_label = generated_label / torch.norm(generated_label) * 1
+            if torch.norm(generated_label, p=2) > 2:
+                generated_label = generated_label / torch.norm(generated_label) * 2
 
             s = score(generated_sample, generated_label)
 
@@ -756,8 +756,8 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
                     if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                         constraints[i] = True
                     '''
-            if torch.norm(generated_label, p=2) > 1:
-                generated_label = generated_label / torch.norm(generated_label)
+            if torch.norm(generated_label, p=2) > 2:
+                generated_label = generated_label / torch.norm(generated_label) * 2
 
             s = score(generated_sample, generated_label)
 
@@ -887,8 +887,8 @@ def __generate_label__(teacher, opt, student, X, Y):
                 if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                     constraints[i] = True
                 '''
-        if torch.norm(generated_label, p=2) > 1:
-            generated_label = generated_label / torch.norm(generated_label)
+        if torch.norm(generated_label, p=2) > 2:
+            generated_label = generated_label / torch.norm(generated_label) * 2
 
         s = score(generated_sample, generated_label)
 
