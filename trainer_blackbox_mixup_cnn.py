@@ -284,6 +284,7 @@ class Trainer:
                 transforms.Normalize((0.5071, 0.4865, 0.4409),
                                      (0.2673, 0.2564, 0.2762)),
             ])
+            print(CONF.PATH.DATA)
             dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=True, download=True, transform=transform_train)
             self.test_dataset = torchvision.datasets.CIFAR100(root=CONF.PATH.DATA, train=False, download=True, transform=transform_test)
 

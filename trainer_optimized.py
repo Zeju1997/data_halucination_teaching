@@ -181,8 +181,8 @@ class Trainer:
 
             proj_matrix = torch.empty(self.opt.img_size**2, self.opt.dim).normal_(mean=0, std=0.1)
             # proj_matrix = torch.load('proj_matrix.pt')
-            X_train = X_train @ proj_matrix
-            X_test = X_test @ proj_matrix
+            X_train = torch.matmul(X_train, proj_matrix)
+            X_test = torch.matmul(X_test, proj_matrix)
 
         else:
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
