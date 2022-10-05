@@ -801,7 +801,6 @@ class Trainer:
                         progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-
                         self.step = self.step + 1
                         self.adjust_learning_rate(student_optim, self.step)
 

@@ -49,7 +49,7 @@ class IMTTrainer(nn.Module):
         for t in tqdm(range(self.opt.n_iter)):
             if t != 0:
                 if self.opt.experiment == "IMT_Baseline":
-                    i = teacher.select_example(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)
+                    i = teacher.select_example(model, self.opt, self.X_train.cuda(), self.Y_train.cuda())
                     # i = torch.randint(0, 1000, size=(1,)).item()
                 else:
                     i = teacher.select_example_random_label(model, self.X_train.cuda(), self.Y_train.cuda(), self.opt.batch_size)

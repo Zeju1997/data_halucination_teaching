@@ -211,26 +211,28 @@ def make_results_img(opt, X, Y, generated_samples, generated_labels, res_sgd, re
     plt.close()
     '''
 
-def make_results(opt, res_sgd, res_baseline, res_student, res_student_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, epoch, seed):
+def make_results(opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, epoch, seed):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     fig.set_size_inches(13, 5.8)
 
     ax1.plot(res_sgd, c='g', label="SGD %s" % opt.data_mode)
     ax1.plot(res_baseline, c='b', label="IMT %s" % opt.data_mode)
     ax1.plot(res_student, c='r', label="Student %s" % opt.data_mode)
-    if res_student_label is not None:
-        ax1.plot(res_student_label, c='k', label="Student + Label %s" % opt.data_mode)
+    ax1.plot(res_label, c='c', label="SGD + Label %s" % opt.data_mode)
+    ax1.plot(res_imt_label, c='m', label="IMT + Label %s" % opt.data_mode)
+    ax1.plot(res_student_label, c='k', label="Student + Label %s" % opt.data_mode)
     # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
     ax1.set_title("Test accuracy " + str(opt.data_mode) + " (class : " + str(opt.class_1) + ", " + str(opt.class_2) + ")")
     ax1.set_xlabel("Iteration")
     ax1.set_ylabel("Accuracy")
-    ax1.legend(loc="lower right")
+    ax1.legend(loc="upper left")
 
     ax2.plot(w_diff_sgd, 'g', label="SGD %s" % opt.data_mode)
     ax2.plot(w_diff_baseline, 'b', label="IMT %s" % opt.data_mode)
     ax2.plot(w_diff_student, 'r', label="Student %s" % opt.data_mode)
-    if w_diff_student_label is not None:
-        ax2.plot(w_diff_student_label, c='k', label="Student + Label %s" % opt.data_mode)
+    ax2.plot(w_diff_label, c='c', label="SGD + Label %s" % opt.data_mode)
+    ax2.plot(w_diff_imt_label, c='m', label="IMT + Label %s" % opt.data_mode)
+    ax2.plot(w_diff_student_label, c='k', label="Student + Label %s" % opt.data_mode)
     ax2.legend(loc="lower left")
     ax2.set_title("w diff " + str(opt.data_mode) + " (class : " + str(opt.class_1) + ", " + str(opt.class_2) + ")")
     ax2.set_xlabel("Iteration")

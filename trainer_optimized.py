@@ -97,6 +97,7 @@ class Trainer:
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline_label = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.label = omniscient.OmniscientLinearStudent(self.opt.dim)
+            self.imt_label = omniscient.OmniscientLinearStudent(self.opt.dim)
             torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
@@ -201,7 +202,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
@@ -216,7 +217,7 @@ class Trainer:
 
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
@@ -228,7 +229,7 @@ class Trainer:
         #  Train Student
         # ---------------------
         self.opt.experiment = "Student"
-        if self.opt.train_baseline == False:
+        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -294,7 +295,7 @@ class Trainer:
         #  Train Student with Label
         # ---------------------
         self.opt.experiment = "Student_with_Label"
-        if self.opt.train_baseline == False:
+        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -360,7 +361,7 @@ class Trainer:
         #  Train Label
         # ---------------------
         self.opt.experiment = "Label"
-        if self.opt.train_baseline == True:
+        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -376,7 +377,7 @@ class Trainer:
             for t in tqdm(range(self.opt.n_iter)):
                 if t != 0:
                     # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
-                    new_data, new_labels = self.teacher.generate_label(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=True)
+                    new_data, new_labels = self.teacher.generate_label(self.opt, self.student, X_train.cuda(), Y_train.cuda())
 
                     generated_data = new_data.detach().clone().cpu().numpy()
                     generated_label = new_labels.detach().clone().cpu().numpy()
@@ -404,12 +405,12 @@ class Trainer:
                 else:
                     sys.exit()
                 acc = nb_correct / X_test.size(0)
-                res_student_label.append(acc)
+                res_label.append(acc)
 
                 w = self.baseline_label.lin.weight
                 w = w / torch.norm(w)
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-                w_diff_student_label.append(diff.detach().clone().cpu())
+                w_diff_label.append(diff.detach().clone().cpu())
 
                 print("iter", t, "acc student", acc)
 
@@ -420,10 +421,76 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([t, acc, diff.item()])
 
-        res_student_label, w_diff_student_label = load_experiment_result(self.opt)
+        res_label, w_diff_label = load_experiment_result(self.opt)
+
+        # ---------------------
+        #  Train SGD + Label
+        # ---------------------
+        self.opt.experiment = "IMT_Label"
+        if self.opt.train_baseline == True:
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
+            res_imt_label = []
+            a_imt_label = []
+            b_imt_label = []
+            generated_samples = np.zeros(2)
+            w_diff_imt_label = []
+            self.imt_label.load_state_dict(torch.load('teacher_w0.pth'))
+            for t in tqdm(range(self.opt.n_iter)):
+                if t != 0:
+                    # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
+                    new_data, new_labels = self.teacher.select_example(self.student, self.opt, X_train.cuda(), Y_train.cuda(), optimize_label=True)
+
+                    generated_data = new_data.detach().clone().cpu().numpy()
+                    generated_label = new_labels.detach().clone().cpu().numpy()
+                    if t == 1:
+                        generated_samples = generated_data # [np.newaxis, :]
+                        generated_labels = generated_label # [np.newaxis, :]
+                    else:
+                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
+                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
+
+                    self.imt_label.update(torch.cuda.FloatTensor(new_data), new_labels)
+                self.imt_label.eval()
+                test = self.imt_label(X_test.cuda()).cpu()
+
+                a, b = plot_classifier(self.imt_label, X.max(axis=0), X.min(axis=0))
+                a_imt_label.append(a)
+                b_imt_label.append(b)
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_imt_label.append(acc)
+
+                w = self.imt_label.lin.weight
+                w = w / torch.norm(w)
+                diff = torch.linalg.norm(w_star - w, ord=2) ** 2
+                w_diff_imt_label.append(diff.detach().clone().cpu())
+
+                print("iter", t, "acc student", acc)
+
+                # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
+                # sys.stdout.flush()
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([t, acc, diff.item()])
+
+        res_imt_label, w_diff_imt_label = load_experiment_result(self.opt)
 
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, 0, self.opt.seed)
+            make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, 0, self.opt.seed)
             # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, res_student_label, w_diff_student_label)
             # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed res_student_label, w_diff_student_label)
         else:
@@ -455,6 +522,15 @@ class Trainer:
             plt.savefig(img_path)
             plt.close()
             # plt.show()
+
+    def data_sampler(self, X, Y, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = X[i_min:i_max].cuda()
+        y = Y[i_min:i_max].cuda()
+
+        return x, y
 
 
     def plot_results(self):
