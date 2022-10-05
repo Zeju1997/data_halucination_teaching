@@ -11,8 +11,8 @@ class BaseLinear(linear.LinearClassifier):
     """
     def __init__(self, n_in):
         super(BaseLinear, self).__init__(n_in)
-        # self.loss_fn = nn.MSELoss()
-        self.loss_fn = nn.BCELoss()
+        # self.loss_fn = nn.BCELoss()
+        self.loss_fn = nn.CrossEntropyLoss() # TODO: CrossEntropy only used for whitebox optimized
         self.cuda()
         self.eta = 1e-3
         self.optim = torch.optim.SGD(self.parameters(), lr=self.eta)
@@ -28,7 +28,6 @@ class BaseLinear(linear.LinearClassifier):
         self.optim.zero_grad()
         out = self(X)
         loss = self.loss_fn(out, y)
-        # loss = self.loss_fn(out, y)
         loss.backward()
         self.optim.step()
 

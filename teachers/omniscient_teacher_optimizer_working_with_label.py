@@ -1,7 +1,6 @@
 from teachers.utils import BaseLinear, BaseConv
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -280,7 +279,7 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
         best_score = 1000
         count = 0
 
-        alpha = 0.001 # alpha = 0.02
+        alpha = 0.02
         beta1 = 0.8
         beta2 = 0.999
         # eps = 1e-8
@@ -400,8 +399,7 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
         i_max = (i + 1) * opt.batch_size
 
         data = X[i_min:i_max]
-        label = y[i_min:i_max]
-        label = F.one_hot(label.long(), num_classes=2).type(torch.cuda.FloatTensor)
+        label = y[i_min:i_max].unsqueeze(0)
 
         lr = student.optim.param_groups[0]["lr"]
 
@@ -415,7 +413,7 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
 
     if optimize_label:
 
-        alpha = 0.02
+        alpha = 0.001
         beta1 = 0.8
         beta2 = 0.999
         # eps = 1e-8
@@ -444,8 +442,7 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
         example_usefulness = ExampleUsefulness(student, teacher, lr)
         s1 = []
 
-        generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
-        generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+        generated_label = torch.ones(opt.batch_size, 1).cuda() * 0.5
         generated_label.requires_grad = True
 
         bounds = [[0, 1]]
@@ -505,18 +502,14 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
                     #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                     #    update = update + noise
 
-                    '''
                     if constraints[i]:
                         update[0] = 0
-                    '''
+
                     generated_label[0, i] = generated_label[0, i] - update
                     # print("update", update)
-                    '''
+
                     if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                         constraints[i] = True
-                    '''
-            if torch.norm(generated_label, p=2) > 2:
-                generated_label = generated_label / torch.norm(generated_label) * 2
 
             s = score(generated_sample, generated_label)
 
@@ -554,7 +547,7 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
     best_score = 1000
     count = 0
 
-    alpha = 0.02 # alpha = 0.02
+    alpha = 0.02
     beta1 = 0.8
     beta2 = 0.999
     # eps = 1e-8
@@ -566,8 +559,8 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
 
     # generate an initial point
     # data_new1 = torch.rand(batch_size, X.size(1)).cuda() * 4 - 2
-    label_new = torch.randint(0, 2, (opt.batch_size,)).cuda()
-    label_new = F.one_hot(label_new, num_classes=2).type(torch.FloatTensor).cuda()
+    label_new = torch.randint(0, 2, (opt.batch_size,), dtype=torch.float).cuda()
+    label_new = label_new.unsqueeze(0)
     # run the gradient descent updates
 
     s1 = []
@@ -683,10 +676,9 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
     generated_sample = data_trajectory[idx]
 
     if optimize_label:
-        alpha = 0.02
+        alpha = 0.001
 
-        generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
-        generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+        generated_label = torch.ones(opt.batch_size, 1).cuda() * 0.5
         generated_label.requires_grad = True
 
         bounds = [[0, 1]]
@@ -746,18 +738,14 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
                     #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                     #    update = update + noise
 
-                    '''
                     if constraints[i]:
                         update[0] = 0
-                    '''
+
                     generated_label[0, i] = generated_label[0, i] - update
                     # print("update", update)
-                    '''
+
                     if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                         constraints[i] = True
-                    '''
-            if torch.norm(generated_label, p=2) > 2:
-                generated_label = generated_label / torch.norm(generated_label) * 2
 
             s = score(generated_sample, generated_label)
 
@@ -795,7 +783,7 @@ def __generate_label__(teacher, opt, student, X, Y):
     best_score = 1000
     count = 0
 
-    alpha = 0.02
+    alpha = 0.001
     beta1 = 0.8
     beta2 = 0.999
     # eps = 1e-8
@@ -807,9 +795,7 @@ def __generate_label__(teacher, opt, student, X, Y):
     gt_x = X[i_min:i_max].cuda()
     generated_sample = gt_x
 
-    # generated_label = torch.ones(opt.batch_size, 1).cuda() * 0.5
-    generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
-    generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+    generated_label = torch.ones(opt.batch_size, 1).cuda() * 0.5
     generated_label.requires_grad = True
 
     bounds = [[0, 1]]
@@ -877,18 +863,15 @@ def __generate_label__(teacher, opt, student, X, Y):
                 #if torch.norm(grad) == 0:
                 #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                 #    update = update + noise
-                '''
+
                 if constraints[i]:
                     update[0] = 0
-                '''
+
                 generated_label[0, i] = generated_label[0, i] - update
                 # print("update", update)
-                '''
+
                 if generated_label[0, i] > 1 or generated_label[0, i] < 0:
                     constraints[i] = True
-                '''
-        if torch.norm(generated_label, p=2) > 2:
-            generated_label = generated_label / torch.norm(generated_label) * 2
 
         s = score(generated_sample, generated_label)
 

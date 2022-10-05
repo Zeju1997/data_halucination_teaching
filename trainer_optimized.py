@@ -28,6 +28,8 @@ from utils.network import initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
+import torch.nn.functional as F
+
 import glob
 
 sys.path.append('..') #Hack add ROOT DIR
@@ -194,9 +196,58 @@ class Trainer:
         #  Train Teacher
         # ---------------------
 
+        self.opt.experiment = "WSTAR"
         if self.opt.train_wstar == True:
-            wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            wstar_trainer.train(self.teacher)
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if os.path.exists(logname):
+                os.remove(logname)
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            nb_batch = int(self.opt.nb_train / self.opt.batch_size)
+
+            accuracies = []
+            self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.teacher.optim, milestones=[25], gamma=0.1)
+            for n in tqdm(range(self.opt.n_teacher_runs)):
+                if n != 0:
+                    for i in range(nb_batch):
+                        i_min = i * self.opt.batch_size
+                        i_max = (i + 1) * self.opt.batch_size
+                        x = X_train[i_min:i_max].cuda()
+                        y = Y_train[i_min:i_max].cuda()
+
+                        y = F.one_hot(y.long(), num_classes=2).type(torch.cuda.FloatTensor)
+
+                        self.teacher.update(x, y)
+
+                self.teacher.eval()
+                test = self.teacher(X_test.cuda()).cpu()
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable" or self.opt.data_mode == "covid":
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                accuracies.append(acc)
+                print("Accuracy:", acc)
+                self.scheduler.step()
+
+                if acc > 0.6 and n == 0:
+                    sys.exit()
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([n, acc])
+
+            torch.save(self.teacher.state_dict(), 'teacher_wstar.pth')
 
         self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
         w_star = self.teacher.lin.weight
@@ -211,8 +262,57 @@ class Trainer:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
-            sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            _, _ = sgd_trainer.train(sgd_example, w_star)
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
+
+            res_sgd = []
+            a_example = []
+            b_example = []
+            w_diff_sgd = []
+
+            nb_batch = int(self.opt.nb_train / self.opt.batch_size)
+
+            for idx in tqdm(range(self.opt.n_iter)):
+                if idx != 0:
+                    i = torch.randint(0, nb_batch, size=(1,)).item()
+                    sample, label = self.data_sampler(X_train, Y_train, i)
+
+                    label = F.one_hot(label.long(), num_classes=2).type(torch.cuda.FloatTensor)
+
+                    sgd_example.update(sample, label)
+
+                sgd_example.eval()
+                test = sgd_example(X_test.cuda()).cpu()
+
+                # a, b = plot_classifier(model, X_train.max(axis=0), X_train.min(axis=0))
+                # a_example.append(a)
+                # b_example.append(b)
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "covid":
+                    tmp = torch.max(test, dim=1).indices
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+
+                acc = nb_correct / X_test.size(0)
+                res_sgd.append(acc)
+
+                w = sgd_example.lin.weight
+                w = w / torch.norm(w)
+                diff = torch.linalg.norm(w_star - w, ord=2) ** 2
+                w_diff_sgd.append(diff.detach().clone().cpu())
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([idx, acc, diff.item()])
 
         res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
@@ -225,76 +325,67 @@ class Trainer:
         if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
-            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
-
-        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
-
-        # ---------------------
-        #  Train Student
-        # ---------------------
-        self.opt.experiment = "Student"
-        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['iter', 'test acc', 'w diff'])
-            res_student = []
-            a_student = []
-            b_student = []
-            generated_samples = np.zeros(2)
-            w_diff_student = []
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+
+            res_baseline = []
+            a_baseline = []
+            b_baseline = []
+            w_diff_baseline = []
+
             for t in tqdm(range(self.opt.n_iter)):
                 if t != 0:
-                    # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
-                    new_data, new_labels = self.teacher.generate_example(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=False)
-
-                    generated_data = new_data.detach().clone().cpu().numpy()
-                    generated_label = new_labels.detach().clone().cpu().numpy()
-                    if t == 1:
-                        generated_samples = generated_data # [np.newaxis, :]
-                        generated_labels = generated_label # [np.newaxis, :]
+                    if self.opt.experiment == "IMT_Baseline":
+                        i = self.teacher.select_example(self.baseline, self.opt, X_train.cuda(), Y_train.cuda())
+                        # i = torch.randint(0, 1000, size=(1,)).item()
                     else:
-                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
-                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
+                        i = self.teacher.select_example_random_label(self.baseline, X_train.cuda(), Y_train.cuda(), self.opt.batch_size)
 
-                    self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
-                self.student.eval()
-                test = self.student(X_test.cuda()).cpu()
+                    best_sample, best_label = self.data_sampler(X_train, Y_train, i)
+                    best_label = F.one_hot(best_label.long(), num_classes=2).type(torch.cuda.FloatTensor)
 
-                a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-                a_student.append(a)
-                b_student.append(b)
+                    self.baseline.update(best_sample, best_label)
 
-                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                self.baseline.eval()
+                test = self.baseline(X_test.cuda()).cpu()
+
+                # a, b = plot_classifier(model, X.max(axis=0), X.min(axis=0))
+                # a_baseline.append(a)
+                # b_baseline.append(b)
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable" or self.opt.data_mode == "covid":
+                    tmp = torch.max(test, dim=1).indices
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                     nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
                     nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 else:
                     sys.exit()
-                acc = nb_correct / X_test.size(0)
-                res_student.append(acc)
+                acc_base = nb_correct / X_test.size(0)
+                res_baseline.append(acc_base)
 
-                w = self.student.lin.weight
+                w = self.baseline.lin.weight
                 w = w / torch.norm(w)
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-                w_diff_student.append(diff.detach().clone().cpu())
+                w_diff_baseline.append(diff.detach().clone().cpu())
 
-                print("iter", t, "acc student", acc)
+                print("acc", acc_base)
 
                 # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
                 # sys.stdout.flush()
 
+                print("Base line trained\n")
+
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
-                    logwriter.writerow([t, acc, diff.item()])
+                    logwriter.writerow([t, acc_base, diff.item()])
 
-        res_student, w_diff_student = load_experiment_result(self.opt)
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student with Label
@@ -318,15 +409,6 @@ class Trainer:
                     # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
                     new_data, new_labels = self.teacher.generate_example(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=True)
 
-                    generated_data = new_data.detach().clone().cpu().numpy()
-                    generated_label = new_labels.detach().clone().cpu().numpy()
-                    if t == 1:
-                        generated_samples = generated_data # [np.newaxis, :]
-                        generated_labels = generated_label # [np.newaxis, :]
-                    else:
-                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
-                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
-
                     self.baseline_label.update(torch.cuda.FloatTensor(new_data), new_labels)
                 self.baseline_label.eval()
                 test = self.baseline_label(X_test.cuda()).cpu()
@@ -336,7 +418,8 @@ class Trainer:
                 b_student_label.append(b)
 
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    tmp = torch.max(test, dim=1).indices
                     nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
@@ -378,31 +461,23 @@ class Trainer:
             b_label = []
             generated_samples = np.zeros(2)
             w_diff_label = []
-            self.baseline_label.load_state_dict(torch.load('teacher_w0.pth'))
+            self.label.load_state_dict(torch.load('teacher_w0.pth'))
             for t in tqdm(range(self.opt.n_iter)):
                 if t != 0:
                     # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
                     new_data, new_labels = self.teacher.generate_label(self.opt, self.student, X_train.cuda(), Y_train.cuda())
 
-                    generated_data = new_data.detach().clone().cpu().numpy()
-                    generated_label = new_labels.detach().clone().cpu().numpy()
-                    if t == 1:
-                        generated_samples = generated_data # [np.newaxis, :]
-                        generated_labels = generated_label # [np.newaxis, :]
-                    else:
-                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
-                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
+                    self.label.update(torch.cuda.FloatTensor(new_data), new_labels)
+                self.label.eval()
+                test = self.label(X_test.cuda()).cpu()
 
-                    self.baseline_label.update(torch.cuda.FloatTensor(new_data), new_labels)
-                self.baseline_label.eval()
-                test = self.baseline_label(X_test.cuda()).cpu()
-
-                a, b = plot_classifier(self.baseline_label, X.max(axis=0), X.min(axis=0))
+                a, b = plot_classifier(self.label, X.max(axis=0), X.min(axis=0))
                 a_label.append(a)
                 b_label.append(b)
 
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    tmp = torch.max(test, dim=1).indices
                     nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
@@ -412,7 +487,7 @@ class Trainer:
                 acc = nb_correct / X_test.size(0)
                 res_label.append(acc)
 
-                w = self.baseline_label.lin.weight
+                w = self.label.lin.weight
                 w = w / torch.norm(w)
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                 w_diff_label.append(diff.detach().clone().cpu())
@@ -450,15 +525,6 @@ class Trainer:
                     # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
                     new_data, new_labels = self.teacher.select_example(self.student, self.opt, X_train.cuda(), Y_train.cuda(), optimize_label=True)
 
-                    generated_data = new_data.detach().clone().cpu().numpy()
-                    generated_label = new_labels.detach().clone().cpu().numpy()
-                    if t == 1:
-                        generated_samples = generated_data # [np.newaxis, :]
-                        generated_labels = generated_label # [np.newaxis, :]
-                    else:
-                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
-                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
-
                     self.imt_label.update(torch.cuda.FloatTensor(new_data), new_labels)
                 self.imt_label.eval()
                 test = self.imt_label(X_test.cuda()).cpu()
@@ -468,7 +534,8 @@ class Trainer:
                 b_imt_label.append(b)
 
                 if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
-                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    tmp = torch.max(test, dim=1).indices
                     nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
                 elif self.opt.data_mode == "cifar10":
                     tmp = torch.max(test, dim=1).indices
@@ -494,13 +561,82 @@ class Trainer:
 
         res_imt_label, w_diff_imt_label = load_experiment_result(self.opt)
 
+        # ---------------------
+        #  Train Student
+        # ---------------------
+
+        self.opt.experiment = "Student"
+        if self.opt.train_student == True:
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['iter', 'test acc', 'w diff'])
+            res_student = []
+            a_student = []
+            b_student = []
+            generated_samples = np.zeros(2)
+            w_diff_student = []
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            for t in tqdm(range(self.opt.n_iter)):
+                if t != 0:
+                    # labels = torch.randint(0, 1, (self.opt.batch_size,), dtype=torch.float).cuda()
+                    new_data, new_labels = self.teacher.generate_example(self.opt, self.student, X_train.cuda(), Y_train.cuda(), optimize_label=False)
+
+                    generated_data = new_data.detach().clone().cpu().numpy()
+                    generated_label = new_labels.detach().clone().cpu().numpy()
+                    if t == 1:
+                        generated_samples = generated_data # [np.newaxis, :]
+                        generated_labels = generated_label # [np.newaxis, :]
+                    else:
+                        generated_samples = np.concatenate((generated_samples, generated_data), axis=0)
+                        generated_labels = np.concatenate((generated_labels, generated_label), axis=0)
+
+                    self.student.update(torch.cuda.FloatTensor(new_data), new_labels)
+                self.student.eval()
+                test = self.student(X_test.cuda()).cpu()
+
+                a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+                a_student.append(a)
+                b_student.append(b)
+
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "linearly_seperable":
+                    # tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_student.append(acc)
+
+                w = self.student.lin.weight
+                w = w / torch.norm(w)
+                diff = torch.linalg.norm(w_star - w, ord=2) ** 2
+                w_diff_student.append(diff.detach().clone().cpu())
+
+                print("iter", t, "acc student", acc)
+
+                # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
+                # sys.stdout.flush()
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([t, acc, diff.item()])
+
+        res_student, w_diff_student = load_experiment_result(self.opt)
+
+
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
             make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, 0, self.opt.seed)
-            # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, res_student_label, w_diff_student_label)
+            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
             # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed res_student_label, w_diff_student_label)
         else:
             make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, 0, self.opt.seed)
-            # make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
             # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
         if self.visualize == False:
