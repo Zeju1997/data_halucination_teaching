@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
@@ -539,14 +541,16 @@ class Trainer:
 
     def plot_results(self):
 
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student', 'Student_with_Baseline']
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student', 'Student_with_Label', 'IMT_Label', 'Label']
         rootdir = self.opt.log_path
 
         experiment_dict = {
             'SGD': [],
             'IMT_Baseline': [],
             'Student': [],
-            'Student_with_Baseline': []
+            'Student_with_Label': [],
+            'IMT_Label': [],
+            'Label': []
         }
 
         for experiment in experiments_lst:
