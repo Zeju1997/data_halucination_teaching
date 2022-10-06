@@ -2,7 +2,7 @@
 __pycache__/
 _cache/
 checkpoints/
-# *.pth
+*.pth
 *.jpg
 *.png
 *ipynb
