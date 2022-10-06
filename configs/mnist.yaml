@@ -11,6 +11,7 @@ n_teacher_runs: 30
 class_1: 3
 class_2: 5
 gd_n: 300 # 1000
+gd_n_label: 300 # 1000
 lr_factor: 2
 optim: AMSGrad
 hidden_dim: 32
@@ -33,3 +34,5 @@ train_sgd: True
 train_baseline: True
 train_wstar: True
 generator_type: cgan
+label_norm: 2
+label_alpha: 0.002
