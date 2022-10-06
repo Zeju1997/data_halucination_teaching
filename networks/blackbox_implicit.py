@@ -621,7 +621,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         with torch.no_grad():
             # for param1 in self.generator.parameters():
             #    param1 = weight
-            self.fc.load_state_dict(torch.load('tmp_fc.pth'))
+            self.fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'tmp_fc.pth')))
             # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
             # self.student.load_state_dict(torch.load('teacher_w0.pth'))
             # for param1 in self.student.parameters():

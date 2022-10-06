@@ -412,9 +412,9 @@ class Trainer:
         self.teacher = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         self.teacher_fc = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
-        torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+        torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
         self.teacher_fc.apply(initialize_weights)
-        torch.save(self.teacher_fc.state_dict(), 'teacher_fc_w0.pth')
+        torch.save(self.teacher_fc.state_dict(), os.path.join(self.opt.log_path, 'teacher_fc_w0.pth'))
 
         # self.teacher.load_state_dict(torch.load('teacher.pth'))
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
@@ -622,8 +622,8 @@ class Trainer:
 
             pdist = torch.nn.PairwiseDistance(p=2)
 
-            example.load_state_dict(torch.load('teacher_w0.pth'))
-            example_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
+            example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
+            example_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
                                             lr=self.opt.lr,
@@ -712,7 +712,6 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        sys.exit()
 
         if self.opt.train_student == True:
             # student
@@ -751,8 +750,8 @@ class Trainer:
             tmp_train_loss = 0
             feat_sim = 0
 
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            self.student_fc.load_state_dict(torch.load('teacher_fc_w0.pth'))
+            self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
+            self.student_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
                                             lr=self.opt.lr,
@@ -781,7 +780,7 @@ class Trainer:
                         # model_mdl = copy.deepcopy(self.student)
                         z = self.student(inputs)
 
-                        torch.save(self.student_fc.state_dict(), 'tmp_fc.pth')
+                        torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
 
                         z_updated = unrolled_optimizer(z, inputs, targets)
 
