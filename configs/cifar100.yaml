@@ -36,7 +36,7 @@ train_baseline: True
 num_workers: 0
 n_query_classes: 100
 n_weight_update: 15
-n_z_update: 30
+n_z_update: 25
 droprate: 0.3
 model: CNN6
 momentum: 0.9
