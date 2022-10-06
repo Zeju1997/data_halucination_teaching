@@ -53,4 +53,3 @@ if __name__ == "__main__":
     # trainer.make_gif()
     # trainer.plot_results()
     # trainer.plot_perceptual_loss()
-
