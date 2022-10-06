@@ -413,19 +413,15 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
             min_score = s
             arg_min = i
 
+    print("jaksldjf", arg_min)
+
     if optimize_label:
 
-        alpha = 0.02
+        alpha = opt.label_alpha
         beta1 = 0.8
         beta2 = 0.999
         # eps = 1e-8
 
-        bounds = [[X.min().cpu(), X.max().cpu()]] * X.shape[1]
-        bounds = np.asarray(bounds)
-        # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
-        constraints = [False] * bounds.shape[0]
-
-        s1 = []
         s_min = 1000
         count = 0
 
@@ -433,27 +429,28 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
         i_max = (arg_min + 1) * opt.batch_size
 
         generated_sample = X[i_min:i_max]
+        generated_label = y[i_min:i_max]
 
         # initialize first and second moments
-        m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-        v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-        vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+        m = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+        v = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+        vhat = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
 
         lr = student.optim.param_groups[0]["lr"]
         example_difficulty = ExampleDifficulty(student, lr)
         example_usefulness = ExampleUsefulness(student, teacher, lr)
         s1 = []
+        x = []
 
-        generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
-        generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+        # generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
+        generated_label = F.one_hot(generated_label.long(), num_classes=2).type(torch.FloatTensor).cuda()
         generated_label.requires_grad = True
+        print(arg_min)
+        print(generated_label)
 
-        bounds = [[0, 1]]
-        bounds = np.asarray(bounds)
-        # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
-        constraints = [False] * bounds.shape[0]
+        constraints = [False] * opt.n_classes
 
-        for t in range(opt.gd_n):
+        for t in range(opt.gd_n_label):
             generated_label.requires_grad = True
 
             loss = example_difficulty(generated_sample, generated_label) + example_usefulness(generated_sample, generated_label)
@@ -474,7 +471,7 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
             # grad = torch.Tensor(grad).cuda()
 
             # build a solution one variable at a time
-            for i in range(bounds.shape[0]):
+            for i in range(opt.n_classes):
                 if not constraints[i]:
                     if opt.optim == "adam":
                         # adam: convergence problem!
@@ -505,20 +502,21 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
                     #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                     #    update = update + noise
 
-                    '''
                     if constraints[i]:
                         update[0] = 0
-                    '''
-                    generated_label[0, i] = generated_label[0, i] - update
-                    # print("update", update)
-                    '''
-                    if generated_label[0, i] > 1 or generated_label[0, i] < 0:
-                        constraints[i] = True
-                    '''
-            if torch.norm(generated_label, p=2) > 2:
-                generated_label = generated_label / torch.norm(generated_label) * 2
 
+                    generated_label[0, i] = generated_label[0, i] - update
+
+                    if generated_label[0, i] < 0:
+                        constraints[i] = True
+                        generated_label[0, i] = 0
+
+            if torch.norm(generated_label, p=2) > opt.label_norm:
+                generated_label = generated_label / torch.norm(generated_label) * opt.label_norm
+            # print(generated_label)
             s = score(generated_sample, generated_label)
+
+            x.append(s)
 
             if len(s1) != 0:
                 if s == s1[-1]:
@@ -528,6 +526,15 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
 
             if count > 10:
                 break
+
+            s1.append(s)
+
+        # fig = plt.figure()
+        # plt.plot(x, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
     else:
         return arg_min
@@ -570,7 +577,6 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
     label_new = F.one_hot(label_new, num_classes=2).type(torch.FloatTensor).cuda()
     # run the gradient descent updates
 
-    s1 = []
     s_min = 1000
     count = 0
     zz = []
@@ -597,6 +603,8 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
     example_difficulty = ExampleDifficulty(student, lr)
     example_usefulness = ExampleUsefulness(student, teacher, lr)
     s1 = []
+
+    x = []
 
     for t in range(opt.gd_n):
         generated_sample.requires_grad = True
@@ -654,12 +662,13 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
                     update[0] = 0
 
                 generated_sample[0, i] = generated_sample[0, i] - update
-                # print("update", update)
 
                 if generated_sample[0, i] > X.max() or generated_sample[0, i] < X.min():
                     constraints[i] = True
 
         s = score(generated_sample, label_new)
+
+        x.append(s)
 
         if len(s1) != 0:
             if s == s1[-1]:
@@ -678,23 +687,30 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
 
         data_trajectory.append(generated_sample)
 
-    s1_np = np.array(s1)
-    idx = np.argmin(s1_np)
-    generated_sample = data_trajectory[idx]
+    # s1_np = np.array(s1)
+    # idx = np.argmin(s1_np)
+    # generated_sample = data_trajectory[idx]
+
+    # x = []
 
     if optimize_label:
-        alpha = 0.02
+        alpha = opt.label_alpha
 
-        generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
-        generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+        # generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
+        # generated_label = F.one_hot(generated_label, num_classes=2).type(torch.FloatTensor).cuda()
+        generated_label = label_new
         generated_label.requires_grad = True
 
-        bounds = [[0, 1]]
-        bounds = np.asarray(bounds)
-        # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
-        constraints = [False] * bounds.shape[0]
+        constraints = [False] * opt.n_classes
 
-        for t in range(opt.gd_n):
+        m = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+        v = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+        vhat = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+
+        s1 = []
+        count = 0
+
+        for t in range(opt.gd_n_label):
             generated_label.requires_grad = True
 
             loss = example_difficulty(generated_sample, generated_label) + example_usefulness(generated_sample, generated_label)
@@ -715,7 +731,7 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
             # grad = torch.Tensor(grad).cuda()
 
             # build a solution one variable at a time
-            for i in range(bounds.shape[0]):
+            for i in range(opt.n_classes):
                 if not constraints[i]:
                     if opt.optim == "adam":
                         # adam: convergence problem!
@@ -746,29 +762,37 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
                     #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                     #    update = update + noise
 
-                    '''
                     if constraints[i]:
                         update[0] = 0
-                    '''
-                    generated_label[0, i] = generated_label[0, i] - update
-                    # print("update", update)
-                    '''
-                    if generated_label[0, i] > 1 or generated_label[0, i] < 0:
-                        constraints[i] = True
-                    '''
-            if torch.norm(generated_label, p=2) > 2:
-                generated_label = generated_label / torch.norm(generated_label) * 2
 
+                    generated_label[0, i] = generated_label[0, i] - update
+
+                    if generated_label[0, i] < 0:
+                        constraints[i] = True
+
+            if torch.norm(generated_label, p=2) > opt.label_norm:
+                generated_label = generated_label / torch.norm(generated_label) * opt.label_norm
             s = score(generated_sample, generated_label)
 
+            x.append(s)
+
             if len(s1) != 0:
-                if s == s1[-1]:
+                if s - s1[-1] == 0:
                     count = count + 1
                 else:
                     count = 0
 
             if count > 10:
                 break
+
+            s1.append(s)
+
+        fig = plt.figure()
+        plt.plot(x, c="b", label="Teacher (CNN)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.show()
 
     else:
         generated_label = label_new
@@ -795,7 +819,7 @@ def __generate_label__(teacher, opt, student, X, Y):
     best_score = 1000
     count = 0
 
-    alpha = 0.02
+    alpha = opt.label_alpha
     beta1 = 0.8
     beta2 = 0.999
     # eps = 1e-8
@@ -815,18 +839,20 @@ def __generate_label__(teacher, opt, student, X, Y):
     bounds = [[0, 1]]
     bounds = np.asarray(bounds)
     # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
-    constraints = [False] * bounds.shape[0]
+    constraints = [False] * opt.n_classes
 
-    m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-    v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-    vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
+    m = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+    v = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
+    vhat = [torch.zeros(1).cuda() for _ in range(opt.n_classes)]
 
     lr = student.optim.param_groups[0]["lr"]
     example_difficulty = ExampleDifficulty(student, lr)
     example_usefulness = ExampleUsefulness(student, teacher, lr)
     s1 = []
 
-    for t in range(opt.gd_n):
+    x = []
+
+    for t in range(opt.gd_n_label):
         generated_label.requires_grad = True
 
         loss = example_difficulty(generated_sample, generated_label) + example_usefulness(generated_sample, generated_label)
@@ -847,7 +873,7 @@ def __generate_label__(teacher, opt, student, X, Y):
         # grad = torch.Tensor(grad).cuda()
 
         # build a solution one variable at a time
-        for i in range(bounds.shape[0]):
+        for i in range(opt.n_classes):
             if not constraints[i]:
                 if opt.optim == "adam":
                     # adam: convergence problem!
@@ -877,26 +903,29 @@ def __generate_label__(teacher, opt, student, X, Y):
                 #if torch.norm(grad) == 0:
                 #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
                 #    update = update + noise
-                '''
+
                 if constraints[i]:
                     update[0] = 0
-                '''
-                generated_label[0, i] = generated_label[0, i] - update
-                # print("update", update)
-                '''
-                if generated_label[0, i] > 1 or generated_label[0, i] < 0:
-                    constraints[i] = True
-                '''
-        if torch.norm(generated_label, p=2) > 2:
-            generated_label = generated_label / torch.norm(generated_label) * 2
 
+                generated_label[0, i] = generated_label[0, i] - update
+
+                if generated_label[0, i] < 0:
+                    constraints[i] = True
+
+        if torch.norm(generated_label, p=2) > opt.label_norm:
+            generated_label = generated_label / torch.norm(generated_label) * opt.label_norm
+        # print("generated_label", generated_label)
         s = score(generated_sample, generated_label)
+
+        x.append(s)
 
         if len(s1) != 0:
             if s == s1[-1]:
                 count = count + 1
             else:
                 count = 0
+
+        s1.append(s)
 
         if count > 10:
             break

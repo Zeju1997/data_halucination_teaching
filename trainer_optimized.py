@@ -23,7 +23,7 @@ import teachers.utils as utils
 import matplotlib.pyplot as plt
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, make_results
-from utils.data import init_data, load_experiment_result, plot_graphs
+from utils.data import init_data, load_experiment_result, plot_graphs_optimized
 from utils.network import initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
@@ -258,7 +258,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
@@ -322,7 +322,7 @@ class Trainer:
 
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             print("Start training {} ...".format(self.opt.experiment))
@@ -374,7 +374,7 @@ class Trainer:
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                 w_diff_baseline.append(diff.detach().clone().cpu())
 
-                print("acc", acc_base)
+                print("iter", t, "acc IMT", acc_base)
 
                 # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
                 # sys.stdout.flush()
@@ -391,7 +391,7 @@ class Trainer:
         #  Train Student with Label
         # ---------------------
         self.opt.experiment = "Student_with_Label"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -434,7 +434,7 @@ class Trainer:
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                 w_diff_student_label.append(diff.detach().clone().cpu())
 
-                print("iter", t, "acc student", acc)
+                print("iter", t, "acc student with label", acc)
 
                 # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
                 # sys.stdout.flush()
@@ -449,7 +449,7 @@ class Trainer:
         #  Train Label
         # ---------------------
         self.opt.experiment = "Label"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -492,7 +492,7 @@ class Trainer:
                 diff = torch.linalg.norm(w_star - w, ord=2) ** 2
                 w_diff_label.append(diff.detach().clone().cpu())
 
-                print("iter", t, "acc student", acc)
+                print("iter", t, "acc label", acc)
 
                 # sys.stdout.write("\r" + str(t) + "/" + str(self.opt.n_iter) + ", idx=" + str(i) + " " * 100)
                 # sys.stdout.flush()
@@ -504,7 +504,7 @@ class Trainer:
         res_label, w_diff_label = load_experiment_result(self.opt)
 
         # ---------------------
-        #  Train SGD + Label
+        #  Train IMT + Label
         # ---------------------
         self.opt.experiment = "IMT_Label"
         if self.opt.train_baseline == True:
@@ -566,7 +566,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "Student"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -694,7 +694,8 @@ class Trainer:
                     if experiment in file:
                         experiment_dict[experiment].append(file)
 
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
+        plot_graphs_optimized(rootdir, experiment_dict, experiments_lst)
+
 
     def process_batch(self, inputs):
         #for key, ipt in inputs.items():

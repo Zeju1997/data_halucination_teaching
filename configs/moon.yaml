@@ -11,7 +11,8 @@ n_teacher_runs: 30
 class_1: 0
 class_2: 1
 lr_factor: 100000
-gd_n: 300
+gd_n: 300 # 1000
+gd_n_label: 200 # 1000
 optim: Adam
 hidden_dim: 8
 latent_dim: 2
@@ -26,3 +27,5 @@ train_student: True
 train_sgd: True
 train_baseline: True
 train_wstar: True
+label_norm: 2
+label_alpha: 0.02
