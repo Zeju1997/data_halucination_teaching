@@ -359,7 +359,7 @@ class Trainer:
     def get_teacher_student(self):
         self.teacher = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
-        # torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
+        torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
@@ -593,7 +593,7 @@ class Trainer:
             self.step = 0
             self.best_acc = 0
 
-            example.load_state_dict(torch.load('teacher_w0.pth'))
+            example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
@@ -659,7 +659,7 @@ class Trainer:
             train_loss = 0
             correct = 0
             total = 0
-            mixup_baseline.load_state_dict(torch.load('teacher_w0.pth'))
+            mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             self.step = 0
             self.best_acc = 0
@@ -749,7 +749,7 @@ class Trainer:
             res_loss_mixup = []
 
             policy = Policy().cuda()
-            policy.load_state_dict(torch.load('policy_w.pth'))
+            policy.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'policy_w.pth')))
 
             res_student = []
             res_loss_student = []
@@ -759,7 +759,7 @@ class Trainer:
             # new_weight = w_init
             train_loss = 0.0
 
-            self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
 
             self.step = 0
