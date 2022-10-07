@@ -233,6 +233,8 @@ class Trainer:
         self.opt.model_name = "blackbox_mixup_rl_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        if not os.path.exists(self.opt.log_path):
+            os.makedirs(self.opt.log_path)
 
         self.visualize = True
 
