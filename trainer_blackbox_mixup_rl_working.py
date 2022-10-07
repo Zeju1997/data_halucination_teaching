@@ -62,8 +62,6 @@ import glob
 
 import random
 
-from utils.utils import progress_bar
-
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
@@ -359,19 +357,19 @@ class Trainer:
         # features, labels = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        # self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        # self.baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.baseline = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
-        # self.student.load_state_dict(self.teacher.state_dict())
-        # self.baseline.load_state_dict(self.teacher.state_dict())
+        self.student.load_state_dict(self.teacher.state_dict())
+        self.baseline.load_state_dict(self.teacher.state_dict())
 
     def set_train(self):
         """Convert all models to training mode
@@ -573,9 +571,9 @@ class Trainer:
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
-        example = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        tmp_student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        mixup_baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        example = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        tmp_student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        mixup_baseline = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         if self.opt.train_sgd == True:
             # train example
@@ -596,43 +594,10 @@ class Trainer:
             self.best_acc = 0
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            example_optim = torch.optim.SGD(example.parameters(),
-                                            lr=self.opt.lr,
-                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-                                            weight_decay=self.opt.weight_decay)
+            example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
-                    # self.train(example, self.loader, self.loss_fn, example_optim, epoch)
-                    train_loss = 0
-                    correct = 0
-                    total = 0
-                    example.train()
-                    for batch_idx, (data, target) in enumerate(self.loader):
-
-                        # first_image = np.array(data.cpu(), dtype='float')
-                        # pixels = first_image.reshape((28, 28))
-                        # plt.imshow(pixels, cmap='gray')
-                        # plt.title("Label {}".format(target.item()))
-                        # plt.show()
-
-                        data, target = data.cuda(), target.long().cuda()
-                        example_optim.zero_grad()
-                        output = example(data)
-                        loss = self.loss_fn(output, target)
-                        loss.backward()
-                        example_optim.step()
-
-                        self.step += 1
-
-                        self.adjust_learning_rate(example_optim, self.step)
-
-                        train_loss += loss.item()
-                        _, predicted = torch.max(output.data, 1)
-                        total += target.size(0)
-                        correct += predicted.eq(target.data).cpu().sum()
-
-                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                    self.train(example, self.loader, self.loss_fn, example_optim, epoch)
 
                 acc, test_loss = self.test(example, test_loader=self.test_loader, epoch=epoch)
                 res_loss_example.append(test_loss)
@@ -675,7 +640,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -705,15 +670,13 @@ class Trainer:
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     mixup_baseline.train()
-                    train_loss = 0
-                    correct = 0
-                    total = 0
+
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        lam = np.random.beta(1.0, 1.0)
-                        # prob = [1.0, 0.5]
-                        # lam = random.choice(prob)
+                        # lam = np.random.beta(1.0, 1.0)
+                        prob = [1.0, 0.5]
+                        lam = random.choice(prob)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
@@ -735,15 +698,11 @@ class Trainer:
 
                         self.step += 1
 
-                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
-
-                        train_loss += loss.item()
-                        _, predicted = torch.max(outputs.data, 1)
-                        total += targets.size(0)
-                        correct += predicted.eq(targets.data).cpu().sum()
-
-                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                        if batch_idx % self.opt.log_interval == 0:
+                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
+                                100. * batch_idx / len(self.train_loader), loss.item()))
+                            self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
                 acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
                 res_mixup.append(acc)
@@ -773,7 +732,7 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
             policy_gradient.solve_environment()
 
