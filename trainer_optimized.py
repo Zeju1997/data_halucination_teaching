@@ -197,7 +197,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "WSTAR"
-        if self.opt.train_wstar == True:
+        if self.opt.train_wstar == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if os.path.exists(logname):
@@ -258,7 +258,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
@@ -322,7 +322,7 @@ class Trainer:
 
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             print("Start training {} ...".format(self.opt.experiment))
@@ -392,7 +392,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "Student"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -459,7 +459,7 @@ class Trainer:
         #  Train Student with Label
         # ---------------------
         self.opt.experiment = "Student_with_Label"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -517,7 +517,7 @@ class Trainer:
         #  Train Label
         # ---------------------
         self.opt.experiment = "Label"
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -575,7 +575,7 @@ class Trainer:
         #  Train IMT + Label
         # ---------------------
         self.opt.experiment = "IMT_Label"
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):

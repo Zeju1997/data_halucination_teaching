@@ -693,6 +693,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         epsilon = self.opt.epsilon
         # optim_loss = []
 
+        norm_0 = torch.norm(z0.detach().clone(), p=p)
+
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
         example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
 
@@ -704,11 +706,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
                                             retain_graph=False, create_graph=False)
 
             gradients = self.normalize_lp_norms(gradients[0], p=p)
-            norm_1 = torch.norm(z.detach().clone(), p=p)
             z = z - step_size * gradients
             z = self.project(z, z0, epsilon, p)
-            norm_2 = torch.norm(z.detach().clone(), p=p)
-            z = z * (norm_1 / norm_2)
+            # diff1 = pdist(z, z0)
+            norm_1 = torch.norm(z.detach().clone(), p=p)
+            z = z * (norm_0 / norm_1)
+            # diff2 = pdist(z, z0)
+            # print('diff1', diff1.max(), 'diff2', diff2.max())
             # optim_loss.append(loss.item())
 
             # print(n, "iter pass", torch.cuda.memory_allocated(0))
