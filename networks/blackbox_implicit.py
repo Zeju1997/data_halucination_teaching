@@ -690,7 +690,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         z = z0
         p = 2
         step_size = 0.001
-        epsilon = 0.1
+        epsilon = self.opt.epsilon
         # optim_loss = []
 
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
