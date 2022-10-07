@@ -367,7 +367,7 @@ class Trainer:
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        # self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
         # self.baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
@@ -674,7 +674,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -775,9 +775,9 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.train_student == False:
-            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-            policy_gradient.solve_environment()
+        if self.opt.train_student == True:
+            #policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+            #policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
@@ -803,7 +803,10 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            student_optim = torch.optim.SGD(self.student.parameters(),
+                                            self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
 
             self.step = 0
             self.best_acc = 0
@@ -824,6 +827,9 @@ class Trainer:
 
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
+                    # running_train_loss = 0
+                    # correct = 0
+                    # total = 0
                     self.student.train()
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         self.step = self.step + 1
@@ -836,7 +842,6 @@ class Trainer:
 
                         # action: mixup variable lambda
                         action, episode_logits, episode_log_probs = self.select_action(policy, state, inputs_a, inputs_b, targets_a, targets_b)
-
                         # print("state", state)
 
                         if self.step == 1:
@@ -845,17 +850,19 @@ class Trainer:
                         else:
                             episode_logits_all = torch.cat((episode_logits_all, episode_logits), 0)
                             episode_log_probs_all = torch.cat((episode_log_probs_all, episode_log_probs), 0)
+
                         # print('state', state)
                         # action = self.select_action(state)
+                        # action = np.random.beta(1.0, 1.0)
 
                         mixed_x = action * inputs_a + (1 - action) * inputs_b
 
                         outputs = self.student(mixed_x)
 
                         loss = action * self.loss_fn(outputs, targets_a) + (1 - action) * self.loss_fn(outputs, targets_b)
+
                         train_loss += loss.item()
 
-                        # print("train loss", train_loss)
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
                         # outputs = mixup_baseline(mixed_x)
@@ -865,6 +872,16 @@ class Trainer:
                         student_optim.zero_grad()
                         loss.backward()
                         student_optim.step()
+
+                        self.adjust_learning_rate(student_optim, self.step)
+
+                        # running_train_loss += loss.item()
+                        # _, predicted = torch.max(outputs.data, 1)
+                        # total += targets.size(0)
+                        # correct += predicted.eq(targets.data).cpu().sum()
+
+                        # progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        #     % (running_train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                         if self.step == 1:
                             # feat_sim = self.query_model()
@@ -885,18 +902,8 @@ class Trainer:
 
                         # print(state)
 
-                        if self.step % 100 == 0:
-                            _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
-
-                        if batch_idx % self.opt.log_interval == 0:
-                            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
-                                100. * batch_idx / len(self.train_loader), loss.item()), '\t',
-                                'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
-                                100. * batch_idx / len(self.val_loader), loss.item()))
-                            self.log(mode="train", name="loss_student", value=loss.item(), step=self.step)
-                            # self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
+                        if self.step % 100 == 0: # 100
+                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
 
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
@@ -913,6 +920,8 @@ class Trainer:
                 #    print(self.init_feat_sim.mean())
 
                 # self.adjust_learning_rate(student_optim, epoch)
+
+                self.student.train()
 
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -1180,6 +1189,7 @@ class Trainer:
         test_loss = 0
         correct = 0
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.cuda(), target.cuda()
@@ -1202,11 +1212,13 @@ class Trainer:
         if epoch == 0 or acc > self.best_acc:
             self.save_model(model=model, name=self.opt.experiment)
         if acc > self.best_acc:
-            best_acc = acc
+            self.best_acc = acc
         if self.best_test_loss > test_loss:
             self.best_test_loss = test_loss
 
+        model.train()
         return acc, test_loss
+
 
     def avg_loss(self, model, data_loader):
         model.eval()
@@ -1227,56 +1239,13 @@ class Trainer:
         return train_loss
 
     def model_features(self, avg_train_loss):
-
-        current_iter = self.step / (self.opt.n_epochs * len(self.train_loader))
+        current_iter = self.step / (self.opt.n_epochs * len(self.loader))
         avg_training_loss = avg_train_loss / self.init_train_loss
         best_val_loss = self.best_test_loss / self.init_test_loss
 
         model_features = [[current_iter, avg_training_loss, best_val_loss]]
 
         return torch.FloatTensor(model_features).cuda()
-
-    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        fig.set_size_inches(20, 5.8)
-        ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
-        ax1.legend(loc="upper right")
-        ax1.set_title("Data Generation (Optimizer)")
-        #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-        #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-        # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax2.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax2.legend(loc="upper right")
-        ax2.set_title("Test Set Accuracy")
-        #ax2.set_aspect('equal')
-
-        ax3.plot(loss_g, c='b', label="netG loss")
-        ax3.plot(loss_d, c='g', label="netD loss")
-        ax3.plot(loss_student, c='r', label="generator loss")
-        ax3.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax3.xlabel("Iteration")
-        # ax3.ylabel("Loss")
-        ax3.legend(loc="upper right")
-
-        fig.suptitle('Epoch {}'.format(epoch), fontsize=16)
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
-
-        plt.savefig(img_path)
-        # plt.show()
-        plt.close()
 
     def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
         # unproj_matrix = np.linalg.pinv(proj_matrix)

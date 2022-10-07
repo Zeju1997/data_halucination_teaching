@@ -1706,7 +1706,6 @@ class Trainer:
         return train_loss
 
     def model_features(self, avg_train_loss):
-
         current_iter = self.step / (self.opt.n_epochs * len(self.train_loader))
         avg_training_loss = avg_train_loss / self.init_train_loss
         best_val_loss = self.best_test_loss / self.init_test_loss
