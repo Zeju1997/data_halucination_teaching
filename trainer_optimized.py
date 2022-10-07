@@ -258,7 +258,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "SGD"
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
@@ -322,7 +322,7 @@ class Trainer:
 
         # self.opt.experiment = "IMT_Baseline_random_label"
         self.opt.experiment = "IMT_Baseline"
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
             print("Start training {} ...".format(self.opt.experiment))
@@ -392,7 +392,7 @@ class Trainer:
         # ---------------------
 
         self.opt.experiment = "Student"
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -634,8 +634,8 @@ class Trainer:
             # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
             # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed res_student_label, w_diff_student_label)
         else:
-            # make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, 0, self.opt.seed)
-            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            make_results(self.opt, res_sgd, res_baseline, res_student, res_student_label, res_label, res_imt_label, w_diff_sgd, w_diff_baseline, w_diff_student, w_diff_student_label, w_diff_label, w_diff_imt_label, 0, self.opt.seed)
+            # make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
             # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
         if self.visualize == False:
