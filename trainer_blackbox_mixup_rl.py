@@ -269,11 +269,11 @@ class Trainer:
 
             self.train_dataset, self.val_dataset = random_split(dataset, [40000, 10000])
 
-            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False)
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=False, drop_last=True)
 
-            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True)
+            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=True)
 
         elif self.opt.data_mode == "cifar100":
             if self.opt.augment:
@@ -429,15 +429,12 @@ class Trainer:
 
         return x, y
 
-    def adjust_learning_rate(self, optimizer, epoch):
+    def adjust_learning_rate(self, optimizer, iter):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
-        if epoch >= 50: # 100
-            # lr /= 10
-            lr = 0.01
-        if epoch >= 75: # 150
-            # lr /= 100
-            lr = 0.001
+        if iter == 20000 or iter == 30000 or iter == 37500: # 100
+            lr /= 10
+            self.opt.lr = lr
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
@@ -579,7 +576,7 @@ class Trainer:
         tmp_student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         mixup_baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -697,7 +694,10 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
+                                                    lr=self.opt.lr,
+                                                    momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                                    weight_decay=self.opt.weight_decay)
             self.step = 0
             self.best_acc = 0
             self.best_acc = 0
@@ -1194,8 +1194,8 @@ class Trainer:
         acc = correct / len(test_loader.dataset)
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(test_loader.dataset),
+        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            epoch, test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
