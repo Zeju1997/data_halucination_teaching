@@ -35,11 +35,11 @@ train_sgd: True
 train_baseline: True
 num_workers: 0
 n_query_classes: 100
-n_weight_update: 15
-n_z_update: 25
+n_weight_update: 3
+n_z_update: 10
 droprate: 0.3
 model: CNN6
 momentum: 0.9
 nesterov: True
 weight_decay: 0.0005
-epsilon: 0.05
+epsilon: 0.2
