@@ -413,8 +413,6 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
             min_score = s
             arg_min = i
 
-    print("jaksldjf", arg_min)
-
     if optimize_label:
 
         alpha = opt.label_alpha
@@ -445,8 +443,6 @@ def __select_example__(teacher, student, opt, X, y, optimize_label=False):
         # generated_label = torch.randint(0, 2, (opt.batch_size,)).cuda()
         generated_label = F.one_hot(generated_label.long(), num_classes=2).type(torch.FloatTensor).cuda()
         generated_label.requires_grad = True
-        print(arg_min)
-        print(generated_label)
 
         constraints = [False] * opt.n_classes
 
@@ -769,6 +765,7 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
 
                     if generated_label[0, i] < 0:
                         constraints[i] = True
+                        generated_label[0, i] = 0
 
             if torch.norm(generated_label, p=2) > opt.label_norm:
                 generated_label = generated_label / torch.norm(generated_label) * opt.label_norm
@@ -787,12 +784,12 @@ def __generate_example__(teacher, opt, student, X, Y, optimize_label):
 
             s1.append(s)
 
-        fig = plt.figure()
-        plt.plot(x, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        # fig = plt.figure()
+        # plt.plot(x, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
     else:
         generated_label = label_new

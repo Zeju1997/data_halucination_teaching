@@ -12,7 +12,7 @@ class_1: 0
 class_2: 1
 lr_factor: 100000
 gd_n: 300 # 1000
-gd_n_label: 200 # 1000
+gd_n_label: 300 # 1000
 optim: Adam
 hidden_dim: 8
 latent_dim: 2
