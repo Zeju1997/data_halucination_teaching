@@ -779,11 +779,13 @@ class Trainer:
                         # model_mdl = copy.deepcopy(self.student)
                         z = self.student(inputs)
 
-                        torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                        if self.step > 20000:
+                            torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                            z_updated = unrolled_optimizer(z, inputs, targets)
+                            outputs = self.student_fc(z_updated)
+                        else:
+                            outputs = self.student_fc(z)
 
-                        z_updated = unrolled_optimizer(z, inputs, targets)
-
-                        outputs = self.student_fc(z_updated)
                         loss = self.loss_fn(outputs, targets)
 
                         # grad = torch.autograd.grad(loss, student_parameters)
