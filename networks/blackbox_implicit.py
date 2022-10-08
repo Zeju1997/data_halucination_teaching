@@ -400,7 +400,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
         example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
 
-        self.opt.n_z_update = 100
         for n in range(self.opt.n_z_update):
             loss = example_difficulty(z) - example_usefulness(z)
 
