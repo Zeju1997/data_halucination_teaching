@@ -35,16 +35,11 @@ train_sgd: True
 train_baseline: True
 num_workers: 0
 n_query_classes: 100
-<<<<<<< HEAD
-n_weight_update: 10 # 3
-n_z_update: 10 # 15
-=======
 action_space: 2
 n_pg_epochs: 3
 n_tries: 30
 n_weight_update: 3
 n_z_update: 10
->>>>>>> 5fb1ae6dc080c2c0dea2a144ac2827e6984b2be5
 droprate: 0.3
 model: CNN15
 momentum: 0.9

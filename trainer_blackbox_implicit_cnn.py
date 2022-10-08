@@ -291,11 +291,7 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-<<<<<<< HEAD
-        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon) + '_0.02' + '_CNN15'
-=======
         self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.model)
->>>>>>> 5fb1ae6dc080c2c0dea2a144ac2827e6984b2be5
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
