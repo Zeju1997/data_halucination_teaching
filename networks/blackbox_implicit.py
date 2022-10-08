@@ -309,6 +309,152 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         # self.proj_matrix = proj_matrix
 
+    def forward(self, z0, inputs, targets):
+        # self.generator.linear.weight = weight
+        # self.student.lin.weight = w_init
+
+        with torch.no_grad():
+            # for param1 in self.generator.parameters():
+            #    param1 = weight
+            self.fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'tmp_fc.pth')))
+            # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
+            # self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            # for param1 in self.student.parameters():
+            #     param1 = w_init
+            # for param2 in self.teacher.parameters():
+            #     param2 = w_star
+
+        loss_stu = 0
+        w_loss = 0
+        tau = 1
+
+        fc_orig = copy.deepcopy(self.fc)
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+        num_steps = 2
+        step_size = 0.001
+        epsilon = 0.1
+        norm = 0.0
+        p = 2
+
+        optim = torch.optim.SGD(self.fc.parameters(), lr=0.001)
+        num_steps = 5
+
+        # optim_loss = []
+
+        # w = fc.lin.weight
+        for n in range(self.opt.n_weight_update):
+
+            optim.zero_grad()
+            outputs = self.fc(z0)
+
+            loss = self.loss_fn(outputs, targets)
+            loss.backward(retain_graph=True, create_graph=True)
+
+            # optim_loss.append(loss.item())
+
+            optim.step()
+
+        '''
+        for n in range(self.opt.n_weight_update):
+            try:
+                (gt_x, gt_y) = data_iter.next()
+            except:
+                data_iter = iter(self.loader)
+                (gt_x, gt_y) = data_iter.next()
+
+            inputs, targets = gt_x.cuda(), gt_y.long().cuda()
+
+            z = model(inputs)
+
+            optim.zero_grad()
+            outputs = fc(z)
+
+            loss = self.loss_fn(outputs, targets)
+            loss.backward()
+
+            optim_loss.append(loss.item())
+
+            optim.step()
+        '''
+
+        # z = self.update_z(fc, fc_mdl, z0, targets)
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        z = z0
+        p = 2
+        step_size = 0.02
+        epsilon = self.opt.epsilon
+        # optim_loss = []
+
+        norm_0 = torch.norm(z0.detach().clone(), p=p)
+
+        example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
+        example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
+
+        for n in range(self.opt.n_z_update):
+            loss = example_difficulty(z) - example_usefulness(z)
+
+            gradients = torch.autograd.grad(outputs=loss,
+                                            inputs=z,
+                                            retain_graph=False, create_graph=False)
+
+            gradients = self.normalize_lp_norms(gradients[0], p=p)
+            z = z - step_size * gradients
+            z = self.project(z, z0, epsilon, p)
+            # diff1 = pdist(z, z0)
+            norm_1 = torch.norm(z.detach().clone(), p=p)
+            z = z * (norm_0 / norm_1)
+            # diff2 = pdist(z, z0)
+            # print('diff1', diff1.max(), 'diff2', diff2.max())
+            # optim_loss.append(loss.item())
+
+            # print(n, "iter pass", torch.cuda.memory_allocated(0))
+
+        # diff = pdist(z, z0)
+        # print('diff', diff.max())
+
+        '''
+        z0 = model(inputs)
+        z = z0
+        for _ in range(num_steps):
+            output = fc(z)
+            loss = self.loss_fn(output, targets)
+            gradients = torch.autograd.grad(outputs=loss,
+                                            inputs=z,
+                                            create_graph=True, retain_graph=True)
+
+            gradients = self.normalize_lp_norms(gradients[0], p=p)
+            z = z - step_size * gradients
+            z = self.project(z, z0, epsilon, p)
+
+            optim_loss.append(loss.item())
+        '''
+        '''
+        optim.zero_grad()
+
+        outputs = fc(z)
+        loss = self.loss_fn(outputs, targets)
+        loss.backward()
+
+        optim_loss.append(loss.item())
+
+        optim.step()
+
+        weight = fc.state_dict()
+        '''
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
+
+        del fc_orig
+
+        return z
+
     def optimize_latent_features(self, fc, z, labels):
         """Run the style transfer."""
         # print('Building the style transfer model..')
@@ -614,151 +760,6 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # return delta_z
         return z
 
-    def forward(self, z0, inputs, targets):
-        # self.generator.linear.weight = weight
-        # self.student.lin.weight = w_init
-
-        with torch.no_grad():
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'tmp_fc.pth')))
-            # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
-            # self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            # for param1 in self.student.parameters():
-            #     param1 = w_init
-            # for param2 in self.teacher.parameters():
-            #     param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        fc_orig = copy.deepcopy(self.fc)
-
-        pdist = torch.nn.PairwiseDistance(p=2)
-        num_steps = 2
-        step_size = 0.001
-        epsilon = 0.1
-        norm = 0.0
-        p = 2
-
-        optim = torch.optim.SGD(self.fc.parameters(), lr=0.001)
-        num_steps = 5
-
-        # optim_loss = []
-
-        # w = fc.lin.weight
-        for n in range(self.opt.n_weight_update):
-
-            optim.zero_grad()
-            outputs = self.fc(z0)
-
-            loss = self.loss_fn(outputs, targets)
-            loss.backward(retain_graph=True, create_graph=True)
-
-            # optim_loss.append(loss.item())
-
-            optim.step()
-
-        '''
-        for n in range(self.opt.n_weight_update):
-            try:
-                (gt_x, gt_y) = data_iter.next()
-            except:
-                data_iter = iter(self.loader)
-                (gt_x, gt_y) = data_iter.next()
-
-            inputs, targets = gt_x.cuda(), gt_y.long().cuda()
-
-            z = model(inputs)
-
-            optim.zero_grad()
-            outputs = fc(z)
-
-            loss = self.loss_fn(outputs, targets)
-            loss.backward()
-
-            optim_loss.append(loss.item())
-
-            optim.step()
-        '''
-
-        # z = self.update_z(fc, fc_mdl, z0, targets)
-
-        pdist = torch.nn.PairwiseDistance(p=2)
-
-        z = z0
-        p = 2
-        step_size = 0.001
-        epsilon = self.opt.epsilon
-        # optim_loss = []
-
-        norm_0 = torch.norm(z0.detach().clone(), p=p)
-
-        example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
-        example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
-
-        for n in range(self.opt.n_z_update):
-            loss = example_difficulty(z) - example_usefulness(z)
-
-            gradients = torch.autograd.grad(outputs=loss,
-                                            inputs=z,
-                                            retain_graph=False, create_graph=False)
-
-            gradients = self.normalize_lp_norms(gradients[0], p=p)
-            z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
-            # diff1 = pdist(z, z0)
-            norm_1 = torch.norm(z.detach().clone(), p=p)
-            z = z * (norm_0 / norm_1)
-            # diff2 = pdist(z, z0)
-            # print('diff1', diff1.max(), 'diff2', diff2.max())
-            # optim_loss.append(loss.item())
-
-            # print(n, "iter pass", torch.cuda.memory_allocated(0))
-
-        # diff = pdist(z, z0)
-        # print('diff', diff.max())
-
-        '''
-        z0 = model(inputs)
-        z = z0
-        for _ in range(num_steps):
-            output = fc(z)
-            loss = self.loss_fn(output, targets)
-            gradients = torch.autograd.grad(outputs=loss,
-                                            inputs=z,
-                                            create_graph=True, retain_graph=True)
-
-            gradients = self.normalize_lp_norms(gradients[0], p=p)
-            z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
-
-            optim_loss.append(loss.item())
-        '''
-        '''
-        optim.zero_grad()
-
-        outputs = fc(z)
-        loss = self.loss_fn(outputs, targets)
-        loss.backward()
-
-        optim_loss.append(loss.item())
-
-        optim.step()
-
-        weight = fc.state_dict()
-        '''
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
-
-        del fc_orig
-
-        return z
 
     def forward1(self, model, fc, model_star, inputs, targets):
 

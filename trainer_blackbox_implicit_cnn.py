@@ -291,7 +291,7 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update)
+        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon) + '_0.02' + '_CNN15'
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -409,7 +409,7 @@ class Trainer:
 
     def get_teacher_student(self):
         # self.teacher = networks.CNN(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
-        self.teacher = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         self.teacher_fc = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
@@ -419,11 +419,11 @@ class Trainer:
         # self.teacher.load_state_dict(torch.load('teacher.pth'))
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.student_fc = networks.FullLayer(feature_dim=self.student.feature_num, n_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        self.baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.baseline_fc = networks.FullLayer(feature_dim=self.baseline.feature_num, n_classes=self.opt.n_classes).cuda()
 
         # load teacher weights
@@ -598,7 +598,7 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        example = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
         if self.opt.train_sgd == False:
@@ -711,6 +711,7 @@ class Trainer:
                 ax2.ylabel("Accuracy")
                 ax2.legend()
                 ax2.show()
+
 
         if self.opt.train_student == True:
             # student
