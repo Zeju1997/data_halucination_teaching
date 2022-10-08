@@ -291,7 +291,11 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
+<<<<<<< HEAD
         self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon) + '_0.02' + '_CNN15'
+=======
+        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.model)
+>>>>>>> 5fb1ae6dc080c2c0dea2a144ac2827e6984b2be5
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -533,7 +537,7 @@ class Trainer:
     def get_query_set2(self):
         """decrease the learning rate at 100 and 150 epoch"""
         n_samples = 10
-        query_set = torch.zeros(self.opt.n_query_classes, n_samples, self.opt.channels, self.opt.img_size, self.opt.img_size)
+        query_set = torch.zeros(self.opt.n_query_classes, n_samples, self.opt.channels, self.opt.img_size, self.opt.imgF_size)
 
         sample_classes = np.random.choice(self.opt.n_classes, self.opt.n_query_classes)
 
@@ -1711,48 +1715,6 @@ class Trainer:
             best_val_loss = self.best_test_loss / self.init_test_loss
         model_features = [current_iter, avg_training_loss, best_val_loss]
         return torch.FloatTensor(model_features).cuda()
-
-    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        fig.set_size_inches(20, 5.8)
-        ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
-        ax1.legend(loc="upper right")
-        ax1.set_title("Data Generation (Optimizer)")
-        #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-        #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-        # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax2.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax2.legend(loc="upper right")
-        ax2.set_title("Test Set Accuracy")
-        #ax2.set_aspect('equal')
-
-        ax3.plot(loss_g, c='b', label="netG loss")
-        ax3.plot(loss_d, c='g', label="netD loss")
-        ax3.plot(loss_student, c='r', label="generator loss")
-        ax3.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax3.xlabel("Iteration")
-        # ax3.ylabel("Loss")
-        ax3.legend(loc="upper right")
-
-        fig.suptitle('Epoch {}'.format(epoch), fontsize=16)
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
-
-        plt.savefig(img_path)
-        # plt.show()
-        plt.close()
 
     def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
         # unproj_matrix = np.linalg.pinv(proj_matrix)

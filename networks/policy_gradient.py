@@ -30,12 +30,11 @@ class PolicyGradient:
         NUM_STEPS = 4
         GAMMA = 0.99
 
-        self.opt.experiment = "policy gradient"
-
         self.student = student
         # self.student.lin2.register_forward_hook(self.get_activation('latent'))
 
         self.opt = opt
+        self.opt.experiment = "Policy_Gradient"
 
         self.NUM_TRIES = self.opt.n_tries
         self.ALPHA = ALPHA
@@ -214,12 +213,11 @@ class PolicyGradient:
 
     def model_features(self, avg_train_loss):
         current_iter = self.step / (self.opt.n_pg_epochs * len(self.train_loader))
-
         avg_training_loss = avg_train_loss / self.init_train_loss
-
         best_val_loss = self.best_test_loss / self.init_test_loss
 
         model_features = [[current_iter, avg_training_loss, best_val_loss]]
+
         return model_features
         # return torch.FloatTensor(model_features).cuda()
 
@@ -367,7 +365,7 @@ class PolicyGradient:
 
         if acc > self.best_final_acc:
             self.best_final_acc = acc
-            torch.save(self.agent.state_dict(), 'policy_w.pth')
+            torch.save(self.agent.state_dict(), os.path.join(self.opt.log_path, 'policy_w.pth'))
 
     def play_episode(self):
         """
@@ -393,7 +391,7 @@ class PolicyGradient:
 
         # generate a submodel given predicted actions
         # net = NASModel(action)
-        self.student.load_state_dict(torch.load('teacher_w0.pth'))
+        self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
         #net = Net()
 
         criterion = nn.CrossEntropyLoss()
@@ -504,6 +502,30 @@ class PolicyGradient:
 
         return sum_weighted_log_probs, episode_logits_all, reward, acc_test
 
+    def train(self, net, criterion):
+        # evaluate the model
+        correct = 0
+        total = 0
+        test_loss = 0
+        with torch.no_grad():
+            for (inputs, targets) in self.train_loader:
+                inputs, targets = inputs.cuda(), targets.long().cuda()
+
+                outputs = net(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+                total += inputs.size(0)
+                correct += (predicted == targets).sum().item()
+
+                test_loss += criterion(outputs, targets.long()).item()
+
+        test_loss /= len(self.train_loader)
+        if self.best_test_loss > test_loss:
+            self.best_test_loss = test_loss
+
+        acc = 100 * correct / total
+        # print('Accuracy of the network on the 10000 test images: {}'.format(acc))
+        return acc
+
     def val(self, net, criterion):
         # evaluate the model
         correct = 0
@@ -520,7 +542,7 @@ class PolicyGradient:
 
                 test_loss += criterion(outputs, targets.long()).item()
 
-        test_loss /= len(self.test_loader)
+        test_loss /= len(self.val_loader)
         if self.best_test_loss > test_loss:
             self.best_test_loss = test_loss
 
