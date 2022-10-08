@@ -361,16 +361,16 @@ class Trainer:
         # features, labels = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        # self.baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        # self.baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         # self.student.load_state_dict(self.teacher.state_dict())
         # self.baseline.load_state_dict(self.teacher.state_dict())
@@ -572,9 +572,9 @@ class Trainer:
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
-        example = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        tmp_student = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        mixup_baseline = networks.CNN('CNN6', in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        tmp_student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
         if self.opt.train_sgd == False:
             # train example
@@ -775,9 +775,9 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.train_student == False:
-            #policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-            #policy_gradient.solve_environment()
+        if self.opt.train_student == True:
+            # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+            # policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
@@ -905,7 +905,7 @@ class Trainer:
                         if self.step % 100 == 0: # 100
                             _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=True)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 

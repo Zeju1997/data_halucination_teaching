@@ -556,7 +556,7 @@ class PolicyGradient:
         total = 0
         test_loss = 0
         with torch.no_grad():
-            for (inputs, targets) in self.val_loader:
+            for (inputs, targets) in self.test_loader:
                 inputs, targets = inputs.cuda(), targets.long().cuda()
 
                 outputs = net(inputs)
