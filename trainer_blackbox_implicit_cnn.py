@@ -810,6 +810,8 @@ class Trainer:
 
                         batch_idx = batch_idx + 1
 
+                    print('Epoch: %d | Train Loss: %.3f | Train Acc: %.3f%% (%d/%d)' % (epoch, train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
                 acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
