@@ -47,3 +47,4 @@ layers: 40
 widen_factor: 4
 droprate: 0.3
 model: CNN9
+epsilon: 0.1
