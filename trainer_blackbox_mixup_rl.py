@@ -775,7 +775,7 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             #policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
             #policy_gradient.solve_environment()
 
@@ -889,7 +889,7 @@ class Trainer:
                             # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
                             # print(self.init_feat_sim.mean())
 
-                            _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                            _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
 
                             self.init_train_loss = train_loss / self.step
                             avg_train_loss = self.init_train_loss
@@ -903,9 +903,9 @@ class Trainer:
                         # print(state)
 
                         if self.step % 100 == 0: # 100
-                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
@@ -1184,7 +1184,7 @@ class Trainer:
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item())
 
-    def test(self, model, test_loader, epoch):
+    def test(self, model, test_loader, epoch, log=True):
         model.eval()
         test_loss = 0
         correct = 0
@@ -1204,10 +1204,11 @@ class Trainer:
         acc = correct / len(test_loader.dataset)
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            epoch, test_loss, correct, len(test_loader.dataset),
-            100. * correct / len(test_loader.dataset)))
-        self.log(mode="test", name="loss", value=test_loss, step=epoch)
+        if log:
+            print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+                epoch, test_loss, correct, len(test_loader.dataset),
+                100. * correct / len(test_loader.dataset)))
+            self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         if epoch == 0 or acc > self.best_acc:
             self.save_model(model=model, name=self.opt.experiment)
