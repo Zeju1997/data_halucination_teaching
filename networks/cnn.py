@@ -75,8 +75,8 @@ class CNN(nn.Module):
         super(CNN, self).__init__()
         self.feature_num = 256
         self.features = self._make_layers(cfg[cnn_name])
-        self.classifier = nn.Linear(self.feature_num, num_classes)
-        # self.classifier = nn.Identity()
+        # self.classifier = nn.Linear(self.feature_num, num_classes)
+        self.classifier = nn.Identity()
         self.in_channels = in_channels
 
     def forward(self, x):
