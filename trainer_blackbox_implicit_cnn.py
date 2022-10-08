@@ -716,7 +716,7 @@ class Trainer:
             # student
             self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
