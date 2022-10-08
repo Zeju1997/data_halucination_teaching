@@ -355,12 +355,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             optim.step()
 
-        fig = plt.figure()
-        plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
         '''
         for n in range(self.opt.n_weight_update):
@@ -421,12 +421,12 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             # print(n, "iter pass", torch.cuda.memory_allocated(0))
 
-        fig = plt.figure()
-        plt.plot(optim_loss, c="r", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
+        # fig = plt.figure()
+        # plt.plot(optim_loss, c="r", label="Teacher (CNN)")
+        # plt.xlabel("Epoch")
+        # plt.ylabel("Accuracy")
+        # plt.legend()
+        # plt.show()
 
         # diff = pdist(z, z0)
         # print('diff', diff.max())
