@@ -22,7 +22,6 @@ import os
 
 import copy
 
-import eagerpy as ep
 
 def approx_fprime(xk, f, epsilon, args=(), f0=None):
     """
