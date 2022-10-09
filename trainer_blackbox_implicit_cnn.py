@@ -601,7 +601,7 @@ class Trainer:
         example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -713,6 +713,8 @@ class Trainer:
                 ax2.ylabel("Accuracy")
                 ax2.legend()
                 ax2.show()
+
+        sys.exit()
 
         if self.opt.train_student == True:
             # student
@@ -826,7 +828,9 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        if self.opt.train_baseline == True:
+        sys.exit()
+
+        if self.opt.train_baseline == False:
             # student
             self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
