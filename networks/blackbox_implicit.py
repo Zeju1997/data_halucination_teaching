@@ -291,7 +291,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         z = z0
         p = 2
-        step_size = 1 # 0.02
+        step_size = 0.02
         epsilon = self.opt.epsilon
         # optim_loss = []
 
