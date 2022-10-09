@@ -1207,8 +1207,8 @@ class Trainer:
         if log:
             print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
                 epoch, test_loss, correct, len(test_loader.dataset),
-                100. * correct / len(test_loader.dataset)))
-            self.log(mode="test", name="loss", value=test_loss, step=epoch)
+            100. * correct / len(test_loader.dataset)))
+        self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
         if epoch == 0 or acc > self.best_acc:
             self.save_model(model=model, name=self.opt.experiment)

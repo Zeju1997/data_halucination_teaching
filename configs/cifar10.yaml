@@ -41,9 +41,10 @@ num_workers: 0 # 10
 action_space: 2
 n_pg_epochs: 3
 n_tries: 30
-n_weight_update: 10 # 5
-n_z_update: 10 # 20
+n_weight_update: 100 # 5
+n_z_update: 100 # 20
 layers: 40
 widen_factor: 4
 droprate: 0.3
-model: CNN9
+model: CNN15
+epsilon: 0.1
