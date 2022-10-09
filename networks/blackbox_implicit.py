@@ -340,9 +340,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         optim = torch.optim.SGD(self.fc.parameters(), lr=0.001)
         num_steps = 5
 
-        optim_loss = []
+        # optim_loss = []
 
-        self.fc.train()
+        # w = fc.lin.weight
         for n in range(self.opt.n_weight_update):
 
             optim.zero_grad()
@@ -351,16 +351,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             loss = self.loss_fn(outputs, targets)
             loss.backward(retain_graph=True, create_graph=True)
 
-            optim_loss.append(loss.item())
+            # optim_loss.append(loss.item())
 
             optim.step()
-
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
 
         '''
         for n in range(self.opt.n_weight_update):
@@ -391,9 +384,9 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         z = z0
         p = 2
-        step_size = 0.01
+        step_size = 0.02
         epsilon = self.opt.epsilon
-        optim_loss = []
+        # optim_loss = []
 
         norm_0 = torch.norm(z0.detach().clone(), p=p)
 
@@ -413,19 +406,11 @@ class UnrolledBlackBoxOptimizer(nn.Module):
             # diff1 = pdist(z, z0)
             norm_1 = torch.norm(z.detach().clone(), p=p)
             z = z * (norm_0 / norm_1)
-            diff2 = pdist(z, z0)
+            # diff2 = pdist(z, z0)
             # print('diff1', diff1.max(), 'diff2', diff2.max())
             # optim_loss.append(loss.item())
-            optim_loss.append(diff2.mean())
 
             # print(n, "iter pass", torch.cuda.memory_allocated(0))
-
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="r", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
 
         # diff = pdist(z, z0)
         # print('diff', diff.max())

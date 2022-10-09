@@ -714,6 +714,8 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
+        sys.exit()
+
         if self.opt.train_student == True:
             # student
             self.opt.experiment = "Student"
