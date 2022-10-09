@@ -22,6 +22,7 @@ import os
 
 import copy
 
+import eagerpy as ep
 
 def approx_fprime(xk, f, epsilon, args=(), f0=None):
     """
@@ -180,98 +181,28 @@ class CloseToMask(nn.Module):
         return Z
 
 
-def project_onto_l1_ball1(x_orig, x, eps):
+def uniform_l2_n_spheres(dummy, batch_size, n):
+    x = torch.randn((batch_size, n + 1))
+    # r = x.norms.l2(axis=-1, keepdims=True)
+    r = torch.norm(x, p=2, dim=-1, keepdim=True)
+    s = x / r
+    return s
+
+
+def uniform_l2_n_balls(dummy, batch_size, n):
+    """Sampling from the n-ball
+
+    Implementation of the algorithm proposed by Voelker et al. [#Voel17]_
+
+    References:
+        .. [#Voel17] Voelker et al., 2017, Efficiently sampling vectors and coordinates
+            from the n-sphere and n-ball
+            http://compneuro.uwaterloo.ca/files/publications/voelker.2017.pdf
     """
-    Compute Euclidean projection onto the L1 ball for a batch.
+    s = uniform_l2_n_spheres(dummy, batch_size, n + 1)
+    b = s[:, :n]
+    return b
 
-      min ||x - u||_2 s.t. ||u||_1 <= eps
-
-    Inspired by the corresponding numpy version by Adrien Gaidon.
-
-    Parameters
-    ----------
-    x: (batch_size, *) torch array
-      batch of arbitrary-size tensors to project, possibly on GPU
-
-    eps: float
-      radius of l-1 ball to project onto
-
-    Returns
-    -------
-    u: (batch_size, *) torch array
-      batch of projected tensors, reshaped to match the original
-
-    Notes
-    -----
-    The complexity of this algorithm is in O(dlogd) as it involves sorting x.
-
-    References
-    ----------
-    [1] Efficient Projections onto the l1-Ball for Learning in High Dimensions
-        John Duchi, Shai Shalev-Shwartz, Yoram Singer, and Tushar Chandra.
-        International Conference on Machine Learning (ICML 2008)
-    """
-    # original_shape = x.shape
-    # x = x.view(x.shape[0], -1)
-    diff = torch.norm(x - x_orig, p=1, dim=1)
-    mask = (diff < eps).float().unsqueeze(1)
-    mu, _ = torch.sort(torch.abs(x), dim=1, descending=True)
-    cumsum = torch.cumsum(mu, dim=1)
-    arange = torch.arange(1, x.shape[1] + 1, device=x.device)
-    rho, _ = torch.max((mu * arange > (cumsum - eps)) * arange, dim=1)
-    theta = (cumsum[torch.arange(x.shape[0]), rho.cpu() - 1] - eps) / rho
-    proj = (torch.abs(x) - theta.unsqueeze(1)).clamp(min=0)
-    x_proj = mask * x + (1 - mask) * proj * torch.sign(x) + x_orig
-
-    diff = torch.norm(x_proj - x_orig, p=1, dim=1)
-    mask = (diff < eps).float().unsqueeze(1)
-    return x_proj
-
-
-def project_onto_l1_ball(x, eps):
-    """
-    Compute Euclidean projection onto the L1 ball for a batch.
-
-      min ||x - u||_2 s.t. ||u||_1 <= eps
-
-    Inspired by the corresponding numpy version by Adrien Gaidon.
-
-    Parameters
-    ----------
-    x: (batch_size, *) torch array
-      batch of arbitrary-size tensors to project, possibly on GPU
-
-    eps: float
-      radius of l-1 ball to project onto
-
-    Returns
-    -------
-    u: (batch_size, *) torch array
-      batch of projected tensors, reshaped to match the original
-
-    Notes
-    -----
-    The complexity of this algorithm is in O(dlogd) as it involves sorting x.
-
-    References
-    ----------
-    [1] Efficient Projections onto the l1-Ball for Learning in High Dimensions
-        John Duchi, Shai Shalev-Shwartz, Yoram Singer, and Tushar Chandra.
-        International Conference on Machine Learning (ICML 2008)
-    """
-    original_shape = x.shape
-    x = x.view(x.shape[0], -1)
-    mask = (torch.norm(x, p=1, dim=1) < eps).float().unsqueeze(1)
-    mu, _ = torch.sort(torch.abs(x), dim=1, descending=True)
-    cumsum = torch.cumsum(mu, dim=1)
-    arange = torch.arange(1, x.shape[1] + 1, device=x.device)
-    rho, _ = torch.max((mu * arange > (cumsum - eps)) * arange, dim=1)
-    theta = (cumsum[torch.arange(x.shape[0]), rho.cpu() - 1] - eps) / rho
-    proj = (torch.abs(x) - theta.unsqueeze(1)).clamp(min=0)
-    x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
-
-    mask = (torch.norm(x, p=1, dim=1) < eps).float().unsqueeze(1)
-    return x_proj.view(original_shape)
 
 
 class UnrolledBlackBoxOptimizer(nn.Module):
@@ -355,36 +286,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             optim.step()
 
-        '''
-        for n in range(self.opt.n_weight_update):
-            try:
-                (gt_x, gt_y) = data_iter.next()
-            except:
-                data_iter = iter(self.loader)
-                (gt_x, gt_y) = data_iter.next()
-
-            inputs, targets = gt_x.cuda(), gt_y.long().cuda()
-
-            z = model(inputs)
-
-            optim.zero_grad()
-            outputs = fc(z)
-
-            loss = self.loss_fn(outputs, targets)
-            loss.backward()
-
-            optim_loss.append(loss.item())
-
-            optim.step()
-        '''
-
         # z = self.update_z(fc, fc_mdl, z0, targets)
 
         pdist = torch.nn.PairwiseDistance(p=2)
 
         z = z0
         p = 2
-        step_size = 0.02
+        step_size = 1 # 0.02
         epsilon = self.opt.epsilon
         # optim_loss = []
 
@@ -455,164 +363,23 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         return z
 
-    def forward_random(self, z0, inputs, targets):
+    def forward_random(self, z0):
         # self.generator.linear.weight = weight
         # self.student.lin.weight = w_init
 
-        with torch.no_grad():
-            # for param1 in self.generator.parameters():
-            #    param1 = weight
-            self.fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'tmp_fc.pth')))
-            # self.teacher.load_state_dict(torch.load('teacher_wstar.pth'))
-            # self.student.load_state_dict(torch.load('teacher_w0.pth'))
-            # for param1 in self.student.parameters():
-            #     param1 = w_init
-            # for param2 in self.teacher.parameters():
-            #     param2 = w_star
-
-        loss_stu = 0
-        w_loss = 0
-        tau = 1
-
-        fc_orig = copy.deepcopy(self.fc)
-
-        pdist = torch.nn.PairwiseDistance(p=2)
-        num_steps = 2
-        step_size = 0.001
-        epsilon = 0.1
-        norm = 0.0
         p = 2
-
-        optim = torch.optim.SGD(self.fc.parameters(), lr=0.001)
-        num_steps = 5
-
-        optim_loss = []
-
-        self.fc.train()
-        for n in range(self.opt.n_weight_update):
-
-            optim.zero_grad()
-            outputs = self.fc(z0)
-
-            loss = self.loss_fn(outputs, targets)
-            loss.backward(retain_graph=True, create_graph=True)
-
-            optim_loss.append(loss.item())
-
-            optim.step()
-
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
-
-        '''
-        for n in range(self.opt.n_weight_update):
-            try:
-                (gt_x, gt_y) = data_iter.next()
-            except:
-                data_iter = iter(self.loader)
-                (gt_x, gt_y) = data_iter.next()
-
-            inputs, targets = gt_x.cuda(), gt_y.long().cuda()
-
-            z = model(inputs)
-
-            optim.zero_grad()
-            outputs = fc(z)
-
-            loss = self.loss_fn(outputs, targets)
-            loss.backward()
-
-            optim_loss.append(loss.item())
-
-            optim.step()
-        '''
-
-        # z = self.update_z(fc, fc_mdl, z0, targets)
-
-        pdist = torch.nn.PairwiseDistance(p=2)
-
-        z = z0
-        p = 2
-        step_size = 0.01
         epsilon = self.opt.epsilon
-        optim_loss = []
 
         norm_0 = torch.norm(z0.detach().clone(), p=p)
 
-        example_difficulty = ExampleDifficulty(fc_orig, self.loss_fn, self.opt.lr, targets)
-        example_usefulness = ExampleUsefulness(fc_orig, self.fc, self.loss_fn, self.opt.lr, targets)
+        batch_size, n = z0.shape
+        r = uniform_l2_n_balls(z0, batch_size, n)
+        z = z0 + self.opt.epsilon * r.cuda()
 
-        for n in range(self.opt.n_z_update):
-            loss = example_difficulty(z) - example_usefulness(z)
-
-            gradients = torch.autograd.grad(outputs=loss,
-                                            inputs=z,
-                                            retain_graph=False, create_graph=False)
-
-            gradients = self.normalize_lp_norms(gradients[0], p=p)
-            z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
-            # diff1 = pdist(z, z0)
-            norm_1 = torch.norm(z.detach().clone(), p=p)
-            z = z * (norm_0 / norm_1)
-            diff2 = pdist(z, z0)
-            # print('diff1', diff1.max(), 'diff2', diff2.max())
-            # optim_loss.append(loss.item())
-            optim_loss.append(diff2.mean())
-
-            # print(n, "iter pass", torch.cuda.memory_allocated(0))
-
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="r", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
-
-        # diff = pdist(z, z0)
-        # print('diff', diff.max())
-
-        '''
-        z0 = model(inputs)
-        z = z0
-        for _ in range(num_steps):
-            output = fc(z)
-            loss = self.loss_fn(output, targets)
-            gradients = torch.autograd.grad(outputs=loss,
-                                            inputs=z,
-                                            create_graph=True, retain_graph=True)
-
-            gradients = self.normalize_lp_norms(gradients[0], p=p)
-            z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
-
-            optim_loss.append(loss.item())
-        '''
-        '''
-        optim.zero_grad()
-
-        outputs = fc(z)
-        loss = self.loss_fn(outputs, targets)
-        loss.backward()
-
-        optim_loss.append(loss.item())
-
-        optim.step()
-
-        weight = fc.state_dict()
-        '''
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Teacher (CNN)")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
-
-        del fc_orig
+        z = self.project(z, z0, epsilon, p)
+        # diff1 = pdist(z, z0)
+        norm_1 = torch.norm(z.detach().clone(), p=p)
+        z = z * (norm_0 / norm_1)
 
         return z
 
