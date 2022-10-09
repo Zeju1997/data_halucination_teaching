@@ -601,7 +601,7 @@ class Trainer:
         example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -781,12 +781,9 @@ class Trainer:
                         # model_mdl = copy.deepcopy(self.student)
                         z = self.student(inputs)
 
-                        if self.step > 20000:
-                            torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
-                            z_updated = unrolled_optimizer(z, inputs, targets)
-                            outputs = self.student_fc(z_updated)
-                        else:
-                            outputs = self.student_fc(z)
+                        torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                        z_updated = unrolled_optimizer(z, inputs, targets)
+                        outputs = self.student_fc(z_updated)
 
                         loss = self.loss_fn(outputs, targets)
 
@@ -828,6 +825,119 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+
+        if self.opt.train_baseline == True:
+            # student
+            self.opt.experiment = "Baseline"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '_' + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            res_mixup = []
+            res_loss_mixup = []
+
+            tmp_student = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
+
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader, fc=tmp_student)
+
+            res_student = []
+            res_loss_student = []
+            cls_loss = []
+
+            w_init = self.student.state_dict()
+            # new_weight = w_init
+            train_loss = []
+
+            self.step = 0
+            self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            self.init_feat_sim = 0
+
+            loader_eval = iter(self.val_loader)
+            avg_train_loss = 0
+            tmp_train_loss = 0
+            feat_sim = 0
+
+            self.baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
+            self.baseline_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
+            baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
+            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
+
+            # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
+            # train_loss = []
+            # train_loss2 = []
+            for epoch in range(self.opt.n_epochs):
+                if epoch != 0:
+                    self.baseline.train()
+                    self.baseline_fc.train()
+                    batch_idx = 0
+
+                    train_loss = 0
+                    correct = 0
+                    total = 0
+
+                    for (inputs, targets) in self.train_loader:
+
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        baseline_optim.zero_grad()
+
+                        # model_mdl = copy.deepcopy(self.student)
+                        z = self.baseline(inputs)
+
+                        torch.save(self.baseline_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                        z_updated = unrolled_optimizer.forward_random(z, inputs, targets)
+                        outputs = self.baseline_fc(z_updated)
+
+                        loss = self.loss_fn(outputs, targets)
+
+                        # grad = torch.autograd.grad(loss, student_parameters)
+
+                        loss.backward()
+
+                        baseline_optim.step()
+                        # student_scheduler.step()
+
+                        train_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += targets.size(0)
+                        correct += predicted.eq(targets.data).cpu().sum()
+
+                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+                        self.step = self.step + 1
+                        self.adjust_learning_rate(baseline_optim, self.step)
+
+                        batch_idx = batch_idx + 1
+
+                    print('Epoch: %d | Train Loss: %.3f | Train Acc: %.3f%% (%d/%d)' % (epoch, train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+                acc, test_loss = self.test(self.baseline, self.baseline_fc, test_loader=self.test_loader, epoch=epoch)
+                res_student.append(acc)
+                res_loss_student.append(test_loss)
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+
+            if self.visualize == False:
+                fig = plt.figure()
+                plt.plot(res_student, c="r", label="Student")
+                plt.plot(res_example, c="g", label="SGD")
+                plt.xlabel("Epoch")
+                plt.ylabel("Accuracy")
+                plt.legend()
+                plt.show()
+
 
         sys.exit()
 
