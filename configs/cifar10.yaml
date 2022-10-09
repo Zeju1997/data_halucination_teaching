@@ -32,7 +32,7 @@ weight_decay: 0.0005
 decay: 0.0001
 channels: 3
 img_size: 32
-augment: False
+augment: True
 train_student: True
 train_sgd: True
 train_baseline: True
@@ -42,7 +42,7 @@ action_space: 2
 n_pg_epochs: 3
 n_tries: 30
 n_weight_update: 5 # 5
-n_z_update: 15 # 20
+n_z_update: 10 # 20
 layers: 40
 widen_factor: 4
 droprate: 0.3
