@@ -45,4 +45,4 @@ model: CNN3
 momentum: 0.9
 nesterov: True
 weight_decay: 0.0005
-epsilon: 0.1
+epsilon: 0.3
