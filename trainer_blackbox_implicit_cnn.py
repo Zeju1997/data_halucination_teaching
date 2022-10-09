@@ -667,6 +667,8 @@ class Trainer:
                         progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
+                    print('Epoch: %d | Train Loss: %.3f | Train Acc: %.3f%% (%d/%d)' % (epoch, train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
                 acc, test_loss = self.test(example, example_fc, test_loader=self.test_loader, epoch=epoch)
                 res_loss_example.append(test_loss)
                 res_example.append(acc)
@@ -781,11 +783,13 @@ class Trainer:
                         # model_mdl = copy.deepcopy(self.student)
                         z = self.student(inputs)
 
-                        torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                        if self.step > 20000:
+                            torch.save(self.student_fc.state_dict(), os.path.join(self.opt.log_path, 'tmp_fc.pth'))
+                            z_updated = unrolled_optimizer(z, inputs, targets)
+                            outputs = self.student_fc(z_updated)
+                        else:
+                            outputs = self.student_fc(z)
 
-                        z_updated = unrolled_optimizer(z, inputs, targets)
-
-                        outputs = self.student_fc(z_updated)
                         loss = self.loss_fn(outputs, targets)
 
                         # grad = torch.autograd.grad(loss, student_parameters)
@@ -807,6 +811,8 @@ class Trainer:
                         self.adjust_learning_rate(student_optim, self.step)
 
                         batch_idx = batch_idx + 1
+
+                    print('Epoch: %d | Train Loss: %.3f | Train Acc: %.3f%% (%d/%d)' % (epoch, train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                 acc, test_loss = self.test(self.student, self.student_fc, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
@@ -1664,7 +1670,7 @@ class Trainer:
         acc = correct / len(test_loader.dataset)
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        print('\nEpoch: {}, Test Average loss: {:.4f}, Test Accuracy: {}/{} ({:.0f}%)\n'.format(
             epoch, test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
