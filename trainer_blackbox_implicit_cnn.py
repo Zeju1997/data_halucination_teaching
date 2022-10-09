@@ -642,7 +642,7 @@ class Trainer:
                     total = 0
                     example.train()
                     example_fc.train()
-                    for batch_idx, (data, target) in enumerate(self.train_loader):
+                    for batch_idx, (data, target) in enumerate(self.loader):
                         data, target = data.cuda(), target.long().cuda()
 
                         example_optim.zero_grad()
@@ -664,7 +664,7 @@ class Trainer:
                         total += target.size(0)
                         correct += predicted.eq(target.data).cpu().sum()
 
-                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                     print('Epoch: %d | Train Loss: %.3f | Train Acc: %.3f%% (%d/%d)' % (epoch, train_loss/(batch_idx+1), 100.*correct/total, correct, total))
@@ -714,7 +714,8 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        if self.opt.train_student == True:
+
+        if self.opt.train_student == False:
             # student
             self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
@@ -729,7 +730,7 @@ class Trainer:
 
             tmp_student = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
 
-            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader, fc=tmp_student)
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.loader, fc=tmp_student)
 
             res_student = []
             res_loss_student = []
@@ -773,7 +774,7 @@ class Trainer:
                     correct = 0
                     total = 0
 
-                    for (inputs, targets) in self.train_loader:
+                    for (inputs, targets) in self.loader:
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         student_optim.zero_grad()
@@ -799,7 +800,7 @@ class Trainer:
                         total += targets.size(0)
                         correct += predicted.eq(targets.data).cpu().sum()
 
-                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                         self.step = self.step + 1
@@ -826,9 +827,8 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        sys.exit()
 
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             # student
             self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
@@ -843,7 +843,7 @@ class Trainer:
 
             tmp_student = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
 
-            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.train_loader, fc=tmp_student)
+            unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.loader, fc=tmp_student)
 
             res_student = []
             res_loss_student = []
@@ -871,7 +871,7 @@ class Trainer:
                                             lr=self.opt.lr,
                                             momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                             weight_decay=self.opt.weight_decay)
-            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
+            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.loader)*self.opt.n_epochs)
 
             # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
             # train_loss = []
@@ -886,7 +886,7 @@ class Trainer:
                     correct = 0
                     total = 0
 
-                    for (inputs, targets) in self.train_loader:
+                    for (inputs, targets) in self.loader:
 
                         inputs, targets = inputs.cuda(), targets.long().cuda()
                         baseline_optim.zero_grad()
@@ -911,7 +911,7 @@ class Trainer:
                         total += targets.size(0)
                         correct += predicted.eq(targets.data).cpu().sum()
 
-                        progress_bar(batch_idx, len(self.train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                         self.step = self.step + 1
@@ -937,6 +937,8 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
+
+        sys.exit()
 
         if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
