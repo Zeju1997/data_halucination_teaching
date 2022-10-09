@@ -826,6 +826,8 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
+        sys.exit()
+
         if self.opt.train_baseline == False:
             # student
             self.opt.experiment = "Baseline"
