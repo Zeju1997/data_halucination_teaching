@@ -714,8 +714,6 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        sys.exit()
-
         if self.opt.train_student == True:
             # student
             self.opt.experiment = "Student"
@@ -828,7 +826,6 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
         if self.opt.train_baseline == True:
             # student
             self.opt.experiment = "Baseline"
@@ -939,7 +936,6 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
-
 
         sys.exit()
 
