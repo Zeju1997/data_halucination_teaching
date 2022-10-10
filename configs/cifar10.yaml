@@ -17,7 +17,7 @@ hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000 # 1000
 n_unroll_blocks: 10 # 40
-n_epochs: 150 # 137 # 50 # 200
+n_epochs: 100 # 137 # 50 # 200
 start_saving: 1
 save_frequency: 1
 label_dim: 10
@@ -46,6 +46,6 @@ n_z_update: 15 # 20
 layers: 40
 widen_factor: 4
 droprate: 0.3
-model: CNN3
+model: CNN6
 epsilon: 0.1
 n_in: 1024
