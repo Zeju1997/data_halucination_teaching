@@ -36,3 +36,4 @@ train_wstar: True
 generator_type: cgan
 label_norm: 2
 label_alpha: 0.002
+model: MLP

@@ -7,6 +7,8 @@ import imageio
 import glob
 import os
 
+from torchvision.utils import save_image
+
 import seaborn as sns
 
 cm = plt.cm.RdBu
@@ -379,6 +381,8 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
         plt.savefig(img_path)
         plt.close()
 
+from PIL import Image
+
 
 def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch, seed):
 
@@ -386,7 +390,7 @@ def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    iterations = [1, 75, 150, 225, -1]
+    iterations = [0, 40, 80, 120, 160, 200, 240, 280]
     for i in iterations:
 
         generated_sample = generated_samples[i, :].squeeze()
@@ -397,15 +401,17 @@ def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch
         else:
             generated_label = opt.class_2
 
-        fig = plt.figure()
-        fig.set_size_inches(5.8, 5.8)
-        plt.imshow(generated_sample, cmap='gray')
-        plt.legend(loc="upper right", fontsize=16)
-        plt.title("Data Generation - Label {}".format(generated_label), fontsize=16)
-        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
-        plt.savefig(img_path)
-        plt.close()
-
+        # fig = plt.figure()
+        # fig.set_size_inches(5.8, 5.8)
+        # plt.imshow(generated_sample, cmap='gray')
+        # plt.legend(loc="upper right", fontsize=16)
+        # plt.title("Data Generation - Label {}".format(generated_label), fontsize=16)
+        # img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i, generated_label))
+        # plt.savefig(img_path)
+        # plt.close()
+        im = torch.from_numpy(generated_sample)
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i, generated_label))
+        save_image(im, img_path)
 def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)
