@@ -106,6 +106,23 @@ class CNN(nn.Module):
         return nn.Sequential(*layers)
 
 
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.classifier = nn.Identity()
+        self.feature_num = 16 * 5 * 5
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = self.classifier(x)
+        return x
+
+
 from torch.autograd import Variable
 
 # net = CNN('CNN6')

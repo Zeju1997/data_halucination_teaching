@@ -34,7 +34,8 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist_blackbox_implicit.yaml")
+    # config = load_config("mnist_blackbox_implicit.yaml")
+    config = load_config("cifar10.yaml")
     opts.set_defaults(**config)
 
     args = opts.parse_args()

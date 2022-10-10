@@ -33,3 +33,4 @@ train_sgd: True
 train_baseline: True
 train_wstar: True
 generator_type: vae
+n_in: 784

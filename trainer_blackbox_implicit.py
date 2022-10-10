@@ -408,8 +408,8 @@ class Trainer:
         # self.query_set = self.get_query_set()
 
     def get_teacher_student(self):
-        # self.teacher = networks.CNN(self.opt.layers, self.opt.n_classes, self.opt.widen_factor, self.opt.droprate).cuda()
-        self.teacher = networks.MLP(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.Net().cuda()
+        # self.teacher = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         self.teacher_fc = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
@@ -419,11 +419,13 @@ class Trainer:
         # self.teacher.load_state_dict(torch.load('teacher.pth'))
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.MLP(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.networks.Net().cuda()
+        # self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         self.student_fc = networks.FullLayer(feature_dim=self.student.feature_num, n_classes=self.opt.n_classes).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        self.baseline = networks.MLP(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.baseline = networks.Net().cuda()
+        # self.baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         self.baseline_fc = networks.FullLayer(feature_dim=self.baseline.feature_num, n_classes=self.opt.n_classes).cuda()
 
         # load teacher weights
@@ -598,10 +600,11 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        example = networks.MLP(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        example = networks.Net().cuda()
+        # example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -713,6 +716,8 @@ class Trainer:
                 ax2.ylabel("Accuracy")
                 ax2.legend()
                 ax2.show()
+
+        sys.exit()
 
         if self.opt.train_student == True:
             # student
@@ -826,7 +831,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # student
             self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
