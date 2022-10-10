@@ -309,10 +309,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             gradients = self.normalize_lp_norms(gradients[0], p=p)
             z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
-            # diff1 = pdist(z, z0)
+
             norm_1 = torch.norm(z.detach().clone(), p=p)
             z = z * (norm_0 / norm_1)
+
+            z = self.project(z, z0, epsilon, p)
+            # diff1 = pdist(z, z0)
+
             # diff2 = pdist(z, z0)
             # print('diff1', diff1.max(), 'diff2', diff2.max())
             # optim_loss.append(loss.item())
@@ -375,10 +378,11 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         r = uniform_l2_n_balls(z0, batch_size, n)
         z = z0 + self.opt.epsilon * r.cuda()
 
-        z = self.project(z, z0, epsilon, p)
-        # diff1 = pdist(z, z0)
         norm_1 = torch.norm(z.detach().clone(), p=p)
         z = z * (norm_0 / norm_1)
+
+        z = self.project(z, z0, epsilon, p)
+        # diff1 = pdist(z, z0)
 
         return z
 
@@ -482,10 +486,13 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             # gradients = self.normalize_lp_norms(gradients[0], p=p)
             z = z - step_size * gradients
-            z = self.project(z, z0, epsilon, p)
+
             # diff1 = pdist(z, z0)
             norm_1 = torch.norm(z.detach().clone(), p=p)
             z = z * (norm_0 / norm_1)
+
+            z = self.project(z, z0, epsilon, p)
+
             diff2 = pdist(z, z0)
             # print('diff1', diff1.max(), 'diff2', diff2.max())
             # optim_loss.append(loss.item())

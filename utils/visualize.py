@@ -383,7 +383,6 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
 
 from PIL import Image
 
-
 def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch, seed):
 
     save_folder = os.path.join(opt.log_path, "generated_samples")
@@ -391,7 +390,7 @@ def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch
         os.makedirs(save_folder)
 
     iterations = [0, 40, 80, 120, 160, 200, 240, 280]
-    for i in iterations:
+    for i in range(298):
 
         generated_sample = generated_samples[i, :].squeeze()
         generated_label = generated_labels[i]
@@ -412,6 +411,8 @@ def plot_generated_samples(opt, X, Y, generated_samples, generated_labels, epoch
         im = torch.from_numpy(generated_sample)
         img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i, generated_label))
         save_image(im, img_path)
+
+
 def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, epoch, seed, proj_matrix=None):
     if proj_matrix is not None:
         unproj_matrix = np.linalg.pinv(proj_matrix)

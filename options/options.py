@@ -35,6 +35,7 @@ class Options:
         self.parser.add_argument("--eta", type=float, help="name of the teaching mode", default=2e-3)
         self.parser.add_argument("--n_unroll", type=int, help="name of the teaching mode", default=1000)
         self.parser.add_argument("--n_unroll_blocks", type=int, help="name of the teaching mode", default=40)
+        self.parser.add_argument("--epsilon", type=float, help="name of the teaching mode", default=0.1)
 
         # conditional GAN
         self.parser.add_argument("--n_epochs", type=int, help="name of the teaching mode", default=40)

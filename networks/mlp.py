@@ -1,5 +1,5 @@
 import torch.nn as nn
-
+import torch
 
 class MLP(nn.Module):
     def __init__(self, in_channels=784, num_classes=2):
@@ -13,6 +13,7 @@ class MLP(nn.Module):
         self.output_act = nn.Softmax()
 
     def forward(self, x):
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
         out = self.act(self.features(x))
         out = self.classifier(out)
         return out
