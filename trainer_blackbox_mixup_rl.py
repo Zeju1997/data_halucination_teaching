@@ -562,13 +562,6 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
@@ -596,7 +589,7 @@ class Trainer:
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_optim = torch.optim.SGD(example.parameters(),
-                                            lr=self.opt.lr,
+                                            lr=0.001,
                                             momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                             weight_decay=self.opt.weight_decay)
             for epoch in tqdm(range(self.opt.n_epochs)):
@@ -623,7 +616,7 @@ class Trainer:
 
                         self.step += 1
 
-                        self.adjust_learning_rate(example_optim, self.step)
+                        # self.adjust_learning_rate(example_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(output.data, 1)
@@ -674,9 +667,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        sys.exit()
-
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -697,7 +688,7 @@ class Trainer:
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
-                                                    lr=self.opt.lr,
+                                                    lr=0.001,
                                                     momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                                     weight_decay=self.opt.weight_decay)
             self.step = 0
@@ -739,7 +730,7 @@ class Trainer:
 
                         self.step += 1
 
-                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
+                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -777,7 +768,7 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.train_student == True:
+        if self.opt.train_student == False:
             policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
             policy_gradient.solve_environment()
 
@@ -806,7 +797,7 @@ class Trainer:
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             student_optim = torch.optim.SGD(self.student.parameters(),
-                                            self.opt.lr,
+                                            lr=0.001,
                                             momentum=self.opt.momentum, nesterov=self.opt.nesterov,
                                             weight_decay=self.opt.weight_decay)
 

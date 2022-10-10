@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 
-class LinearClassifier_normal(nn.Module):
+class LinearClassifier(nn.Module):
     def __init__(self, n_in):
         """
         Constructeur classifieur linéaire simple
@@ -23,7 +23,7 @@ class LinearClassifier_normal(nn.Module):
 
 
     # TODO: Whitebox optimized label
-class LinearClassifier(nn.Module):
+class LinearClassifier_whitebox_optimized(nn.Module):
     def __init__(self, n_in):
         """
         Constructeur classifieur linéaire simple

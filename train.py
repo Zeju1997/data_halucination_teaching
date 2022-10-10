@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 # from trainer_blackbox_mixup_rl import Trainer
-# from trainer_blackbox_implicit_cnn import Trainer
-from trainer_blackbox_implicit_cnn import Trainer
+# from trainer_vae_moon import Trainer
+from trainer_blackbox_mixup_rl import Trainer
 
 from options.options import Options
 import os
@@ -52,4 +52,5 @@ if __name__ == "__main__":
     trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()
+    # trainer.plot_distribution()
     # trainer.plot_perceptual_loss()

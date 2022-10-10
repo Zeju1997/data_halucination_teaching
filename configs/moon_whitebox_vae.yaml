@@ -3,7 +3,7 @@ teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300 # 800 # 1500
 learning_rate: 1e-4
-batch_size: 1 # 128 for pretraining VAE
+batch_size: 1 # 128 # for pretraining VAE
 nb_train: 800
 nb_test: 200
 dim: 2
@@ -26,3 +26,4 @@ train_student: True
 train_sgd: True
 train_baseline: True
 train_wstar: True
+generator_type: vae

@@ -156,7 +156,7 @@ def make_results_img(opt, X, Y, generated_samples, generated_labels, res_sgd, re
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -182,7 +182,7 @@ def make_results_img(opt, X, Y, generated_samples, generated_labels, res_sgd, re
     ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
     ax.axis('off')
     plt.title("Fake Images, Label", )
-    img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
+    img_path = os.path.join(save_folder, "results_{}_imgs.jpg".format(epoch))
     plt.savefig(img_path)
     plt.close()
 
@@ -206,7 +206,7 @@ def make_results_img(opt, X, Y, generated_samples, generated_labels, res_sgd, re
     plt.title("Test Set Accuracy")
     #plt.set_aspect('equal')
 
-    img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
+    img_path = os.path.join(save_folder, "results_{}_w_diff.jpg".format(epoch))
     plt.savefig(img_path)
     plt.close()
     '''
@@ -243,7 +243,7 @@ def make_results(opt, res_sgd, res_baseline, res_student, res_student_label, res
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}_{}_tmp.png'.format(opt.data_mode, epoch, seed))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}_tmp.jpg'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -281,7 +281,7 @@ def make_results_img_2d(opt, X, Y, generated_samples, generated_labels, res_sgd,
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -330,13 +330,13 @@ def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sg
         if not os.path.exists(video_dir):
             os.makedirs(video_dir)
 
-        plt.savefig(video_dir + "/file%03d.png" % i)
+        plt.savefig(video_dir + "/file%03d.jpg" % i)
 
         plt.close()
 
     # os.chdir(video_dir)
     images = []
-    for file_name in sorted(glob.glob(video_dir + "/*.png")):
+    for file_name in sorted(glob.glob(video_dir + "/*.jpg")):
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
@@ -347,10 +347,10 @@ def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sg
     '''
     os.chdir(CONF.PATH.OUTPUT)
     subprocess.call([
-        'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
+        'ffmpeg', '-framerate', '8', '-i', 'file%02d.jpg', '-r', '30', '-pix_fmt', 'yuv420p',
         'video_name.mp4'
     ])
-    for file_name in glob.glob("*.png"):
+    for file_name in glob.glob("*.jpg"):
         os.remove(file_name)
     '''
 
@@ -455,13 +455,13 @@ def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, 
         if not os.path.exists(video_dir):
             os.makedirs(video_dir)
 
-        plt.savefig(video_dir + "/file%03d.png" % i)
+        plt.savefig(video_dir + "/file%03d.jpg" % i)
 
         plt.close()
 
     # os.chdir(video_dir)
     images = []
-    for file_name in sorted(glob.glob(video_dir + "/*.png")):
+    for file_name in sorted(glob.glob(video_dir + "/*.jpg")):
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
@@ -472,10 +472,10 @@ def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, 
     '''
     os.chdir(CONF.PATH.OUTPUT)
     subprocess.call([
-        'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
+        'ffmpeg', '-framerate', '8', '-i', 'file%02d.jpg', '-r', '30', '-pix_fmt', 'yuv420p',
         'video_name.mp4'
     ])
-    for file_name in glob.glob("*.png"):
+    for file_name in glob.glob("*.jpg"):
         os.remove(file_name)
     '''
 
@@ -520,7 +520,7 @@ def make_results_img_blackbox(opt, X, Y, generated_samples, generated_labels, re
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -546,7 +546,7 @@ def make_results_img_blackbox(opt, X, Y, generated_samples, generated_labels, re
     ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
     ax.axis('off')
     plt.title("Fake Images, Label", )
-    img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
+    img_path = os.path.join(save_folder, "results_{}_imgs.jpg".format(epoch))
     plt.savefig(img_path)
     plt.close()
 
@@ -570,7 +570,7 @@ def make_results_img_blackbox(opt, X, Y, generated_samples, generated_labels, re
     plt.title("Test Set Accuracy")
     #plt.set_aspect('equal')
 
-    img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
+    img_path = os.path.join(save_folder, "results_{}_w_diff.jpg".format(epoch))
     plt.savefig(img_path)
     plt.close()
     '''
@@ -598,7 +598,7 @@ def make_results_img_2d_blackbox(opt, X, Y, generated_samples, generated_labels,
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    img_path = os.path.join(save_folder, 'results_{}_{}_{}.png'.format(opt.data_mode, epoch, seed))
+    img_path = os.path.join(save_folder, 'results_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed))
     plt.savefig(img_path)
     plt.close()
 
@@ -638,13 +638,13 @@ def make_results_video_2d_blackbox(opt, X, Y, generated_samples, generated_label
         if not os.path.exists(video_dir):
             os.makedirs(video_dir)
 
-        plt.savefig(video_dir + "/file%03d.png" % i)
+        plt.savefig(video_dir + "/file%03d.jpg" % i)
 
         plt.close()
 
     # os.chdir(video_dir)
     images = []
-    for file_name in sorted(glob.glob(video_dir + "/*.png")):
+    for file_name in sorted(glob.glob(video_dir + "/*.jpg")):
         # print(file_name)
         images.append(imageio.imread(file_name))
         # os.remove(file_name)
@@ -655,12 +655,13 @@ def make_results_video_2d_blackbox(opt, X, Y, generated_samples, generated_label
     '''
     os.chdir(CONF.PATH.OUTPUT)
     subprocess.call([
-        'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
+        'ffmpeg', '-framerate', '8', '-i', 'file%02d.jpg', '-r', '30', '-pix_fmt', 'yuv420p',
         'video_name.mp4'
     ])
-    for file_name in glob.glob("*.png"):
+    for file_name in glob.glob("*.jpg"):
         os.remove(file_name)
     '''
+
 
 import torch.nn as nn
 def plot_classifier(model, max, min):
@@ -677,3 +678,61 @@ def plot_classifier(model, max, min):
     x = np.linspace(min-0.5, max+0.5, 100)
     y = slope * x
     return x, y
+
+
+def plot_distribution(opt, X, Y, generated_samples, generated_labels):
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig.set_size_inches(13.3, 5.8)
+    sns.set_style('whitegrid')
+
+    x0 = []
+    y0 = []
+    x1 = []
+    y1 = []
+    for i in range(Y.shape[0]):
+        if Y[i] == 0:
+            x0.append(X[i, 0].item())
+            y0.append(X[i, 1].item())
+        else:
+            x1.append(X[i, 0].item())
+            y1.append(X[i, 1].item())
+    x0 = np.array(x0)
+    y0 = np.array(y0)
+    x1 = np.array(x1)
+    y1 = np.array(y1)
+
+    sns.kdeplot(x0, shade=True, color="Blue", ax=ax1, label='Class 0 - GT')
+    sns.kdeplot(x1, shade=True, color="Red", ax=ax1, label='Class 1 - GT')
+    sns.kdeplot(y0, shade=True, color="Blue", ax=ax2, label='Class 0 - GT')
+    sns.kdeplot(y1, shade=True, color="Red", ax=ax2, label='Class 1 - GT')
+
+    x0 = []
+    y0 = []
+    x1 = []
+    y1 = []
+    for i in range(generated_labels.shape[0]):
+        if generated_labels[i] == 0:
+            x0.append(generated_samples[i, 0].item())
+            y0.append(generated_samples[i, 1].item())
+        else:
+            x1.append(generated_samples[i, 0].item())
+            y1.append(generated_samples[i, 1].item())
+    x0 = np.array(x0)
+    y0 = np.array(y0)
+    x1 = np.array(x1)
+    y1 = np.array(y1)
+
+    sns.kdeplot(x0, shade=True, color="Green", ax=ax1, label='Class 0 - DHT')
+    sns.kdeplot(x1, shade=True, color="Orange", ax=ax1, label='Class 1 - DHT')
+    sns.kdeplot(y0, shade=True, color="Green", ax=ax2, label='Class 0 - DHT')
+    sns.kdeplot(y1, shade=True, color="Orange", ax=ax2, label='Class 1 - DHT')
+
+    ax1.legend(loc="upper right")
+    ax2.legend(loc="upper right")
+
+    img_path = os.path.join(opt.log_path, 'paper_results_{}_{}_{}_sample_distribution.jpg'.format(opt.data_mode, opt.generator_type, opt.seed))
+    plt.savefig(img_path)
+    plt.close()
+
+

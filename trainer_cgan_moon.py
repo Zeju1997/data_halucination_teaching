@@ -35,7 +35,7 @@ import networks.unrolled_cgan as unrolled
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier, plot_distribution
 from utils.data import init_data, plot_graphs
 from utils.network import initialize_weights
 
@@ -264,7 +264,6 @@ class Trainer:
         # ---------------------
         #  Train Teacher
         # ---------------------
-
         if self.opt.train_wstar == True:
             wstar_trainer = WSTARTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             wstar_trainer.train(self.teacher)
@@ -395,107 +394,110 @@ class Trainer:
                                 "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
                                 % (epoch, self.opt.n_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
                             )
-                            self.log("train", d_loss.item(), g_loss.item())
+                            self.log("train", d_loss.item(), g_loss.item(), self.step)
 
-                    res_student = []
-                    a_student = []
-                    b_student = []
-                    w_diff_student = []
+            res_student = []
+            a_student = []
+            b_student = []
+            w_diff_student = []
 
-                    self.student.load_state_dict(torch.load('teacher_w0.pth'))
+            self.student.load_state_dict(torch.load('teacher_w0.pth'))
 
-                    generated_samples = np.zeros(2)
-                    for idx in tqdm(range(self.opt.n_iter)):
-                        if idx != 0:
-                            w_t = self.student.lin.weight
+            generated_samples = np.zeros(2)
+            for idx in tqdm(range(self.opt.n_iter)):
+                if idx != 0:
+                    w_t = self.student.lin.weight
 
-                            i = torch.randint(0, nb_batch, size=(1,)).item()
-                            gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
+                    i = torch.randint(0, nb_batch, size=(1,)).item()
+                    gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
 
-                            # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                            z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
+                    # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
+                    z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
 
-                            # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
-                            x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
-                            generated_sample = netG(x, gt_y)
+                    # x = torch.cat((w_t, w_t-w_star, gt_x, y.unsqueeze(0)), dim=1)
+                    x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+                    generated_sample = netG(x, gt_y)
 
-                            if idx == 1:
-                                generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                                generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
-                            else:
-                                generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                                generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
-
-                            # generated_sample = generated_sample @ proj_matrix.cuda()
-                            self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
-
-                        self.student.eval()
-                        test = self.student(X_test.cuda()).cpu()
-
-                        a, b = plot_classifier(self.student, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
-                        a_student.append(a)
-                        b_student.append(b)
-
-                        if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-                            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                        elif self.opt.data_mode == "cifar10":
-                            tmp = torch.max(test, dim=1).indices
-                            nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                        else:
-                            sys.exit()
-                        acc = nb_correct / X_test.size(0)
-                        res_student.append(acc)
-
-                        w = self.student.lin.weight
-                        w = w / torch.norm(w)
-                        diff = torch.linalg.norm(w_star - w, ord=2) ** 2
-                        w_diff_student.append(diff.detach().clone().cpu())
-
-                        with open(logname, 'a') as logfile:
-                            logwriter = csv.writer(logfile, delimiter=',')
-                            logwriter.writerow([idx, acc, diff.item()])
-
-                    if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                        make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
-                        # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
-
-                        # a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
-                        # plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+                    if idx == 1:
+                        generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
+                        generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
                     else:
-                        make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
-                        # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
+                        generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
+                        generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
-                    save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
-                    if not os.path.exists(save_folder):
-                        os.makedirs(save_folder)
+                    # generated_sample = generated_sample @ proj_matrix.cuda()
+                    self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
-                    save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
-                    to_save = netG.state_dict()
-                    torch.save(to_save, save_path)
+                self.student.eval()
+                test = self.student(X_test.cuda()).cpu()
 
-                    save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
-                    to_save = netD.state_dict()
-                    torch.save(to_save, save_path)
+                a, b = plot_classifier(self.student, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
+                a_student.append(a)
+                b_student.append(b)
 
-                    # self.make_results_video_generated_data(generated_samples, epoch)
+                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                    tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
+                    nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                elif self.opt.data_mode == "cifar10":
+                    tmp = torch.max(test, dim=1).indices
+                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
+                else:
+                    sys.exit()
+                acc = nb_correct / X_test.size(0)
+                res_student.append(acc)
 
-                    '''
-                    plt.figure(figsize=(10,5))
-                    plt.title("Discriminator and Generator loss during Training")
-                    # plot Discriminator and generator loss
-                    plt.plot(D_losses, label="D Loss")
-                    plt.plot(G_losses, label="G Loss")
-                    # get plot axis
-                    ax = plt.gca()
-                    # remove right and top spine
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['top'].set_visible(False)
-                    # add labels and create legend
-                    plt.xlabel("num_epochs")
-                    plt.legend()
-                    plt.show()
-                    '''
+                w = self.student.lin.weight
+                w = w / torch.norm(w)
+                diff = torch.linalg.norm(w_star - w, ord=2) ** 2
+                w_diff_student.append(diff.detach().clone().cpu())
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([idx, acc, diff.item()])
+
+            plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
+            sys.exit()
+
+            if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+                make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+                # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
+
+                # a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
+                # plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+            else:
+                make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
+                # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
+
+            save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+
+            save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
+            to_save = netG.state_dict()
+            torch.save(to_save, save_path)
+
+            save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
+            to_save = netD.state_dict()
+            torch.save(to_save, save_path)
+
+            # self.make_results_video_generated_data(generated_samples, epoch)
+
+            '''
+            plt.figure(figsize=(10,5))
+            plt.title("Discriminator and Generator loss during Training")
+            # plot Discriminator and generator loss
+            plt.plot(D_losses, label="D Loss")
+            plt.plot(G_losses, label="G Loss")
+            # get plot axis
+            ax = plt.gca()
+            # remove right and top spine
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            # add labels and create legend
+            plt.xlabel("num_epochs")
+            plt.legend()
+            plt.show()
+            '''
 
             if self.visualize == False:
                 fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -581,13 +583,11 @@ class Trainer:
 
         plot_graphs(rootdir, experiment_dict, experiments_lst)
 
-    def log(self, mode, d_loss, g_loss):
+    def log(self, mode, name, value, step):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
-        writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
-
+        writer.add_scalar("{}/{}/{}".format(self.opt.experiment, mode, name), value, step)
 
     def main1(self):
         X_test = next(iter(self.test_loader))[0].numpy()

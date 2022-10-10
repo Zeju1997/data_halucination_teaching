@@ -36,7 +36,7 @@ import networks.unrolled_vae as unrolled
 from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier, plot_distribution
 from utils.data import init_data, plot_graphs
 from utils.network import initialize_weights
 
@@ -368,8 +368,6 @@ class Trainer:
             plt.tight_layout()
             plt.show()
 
-            sys.exit()
-
         if self.opt.train_student == True:
             self.opt.experiment = "Student"
 
@@ -489,6 +487,9 @@ class Trainer:
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([idx, acc, diff.item()])
+
+            plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
+            sys.exit()
 
             if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
