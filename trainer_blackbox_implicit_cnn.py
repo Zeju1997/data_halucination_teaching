@@ -715,7 +715,7 @@ class Trainer:
                 ax2.show()
 
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
             self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
@@ -828,7 +828,7 @@ class Trainer:
                 plt.show()
 
 
-        if self.opt.train_baseline == True:
+        if self.opt.train_baseline == False:
             # student
             self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
