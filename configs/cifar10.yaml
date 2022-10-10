@@ -32,7 +32,7 @@ weight_decay: 0.0005
 decay: 0.0001
 channels: 3
 img_size: 32
-augment: False
+augment: True
 train_student: True
 train_sgd: True
 train_baseline: True
