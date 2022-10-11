@@ -1,3 +1,9 @@
 blackbox implicit final results 
 
 Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.1144, Std: 0.0
+blackbox implicit final results 
+blackbox implicit final results 
+blackbox implicit final results 
+
+Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.1144, Std: 0.0
+0.1144

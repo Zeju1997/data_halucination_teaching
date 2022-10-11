@@ -68,6 +68,8 @@ def calc_results(opt, seeds, models, experiments):
                 f.writelines('\n')
                 f.write("Data: {}, Model: {}, Experiment: {}, Mean: {}, Std: {}".format(opt.data_mode, model, experiment, values_mean, values_std))
                 f.writelines('\n')
+                f.write(" ".join(values))
+                f.writelines('\n')
 
 if __name__ == "__main__":
     options = Options()
@@ -99,7 +101,7 @@ if __name__ == "__main__":
 
     trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
-    # trainer.main()
+    trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()
     # trainer.plot_distribution()
