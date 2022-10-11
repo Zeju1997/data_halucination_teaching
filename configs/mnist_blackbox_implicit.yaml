@@ -40,3 +40,4 @@ model: MLP
 # epsilon: 0.001
 n_weight_update: 5 # 5
 n_z_update: 15 # 20
+n_in: 784

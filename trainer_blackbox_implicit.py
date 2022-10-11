@@ -419,7 +419,7 @@ class Trainer:
         self.teacher_fc.apply(initialize_weights)
         torch.save(self.teacher_fc.state_dict(), os.path.join(self.opt.log_path, 'teacher_fc_w0.pth'))
 
-        if self.opt.mnodel == "MLP":
+        if self.opt.model == "MLP":
             self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         else:
             self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
