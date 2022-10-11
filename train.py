@@ -34,12 +34,12 @@ def load_config(config_name):
     return config
 
 
-seeds = [10094] #, 20058, 27026, 48495, 65800]
+seeds = [10094, 20058, 27026, 48495, 65800]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10.yaml', 'cifar100.yaml']
-models = ['CNN3'] #, 'CNN6', 'CNN9', 'CNN15']
+models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
 # model = ['MLP']
-experiments = ['SGD'] #, 'Student', 'Baseline']
+experiments = ['SGD', 'Student', 'Baseline']
 
 combination = list(itertools.product(seeds, models, experiments))
 
