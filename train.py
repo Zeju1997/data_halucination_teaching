@@ -69,8 +69,6 @@ if __name__ == "__main__":
 
     print(curr_comb)
 
-    sys.exit()
-
     trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
     trainer.main()

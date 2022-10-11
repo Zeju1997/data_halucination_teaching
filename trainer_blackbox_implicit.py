@@ -219,7 +219,7 @@ def off_diagonal(x):
 
 activation = {}
 
-
+'''
 class EstimatorCV():
     def __init__(self, feature_num, class_num):
         super(EstimatorCV, self).__init__()
@@ -285,6 +285,7 @@ class EstimatorCV():
         self.Ave = (self.Ave.mul(1 - weight_AV) + ave_CxA.mul(weight_AV)).detach()
 
         self.Amount += onehot.sum(0)
+'''
 
 
 class Trainer:
@@ -295,6 +296,8 @@ class Trainer:
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name, str(self.opt.seed), str(self.opt.model), str(self.opt.experiment))
         if not os.path.exists(self.opt.log_path):
             os.makedirs(self.opt.log_path)
+
+        sys.exit()
 
         self.visualize = True
 
