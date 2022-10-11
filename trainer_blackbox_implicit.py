@@ -297,8 +297,6 @@ class Trainer:
         if not os.path.exists(self.opt.log_path):
             os.makedirs(self.opt.log_path)
 
-        sys.exit()
-
         self.visualize = True
 
         self.models = {}
