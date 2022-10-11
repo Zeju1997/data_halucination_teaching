@@ -1,10 +1,9 @@
 # chmod a+x ./train_unsupervised_model.py
 # condor_submit -i
 # condor_submit 1L_weight.sub
-#
 
 executable = ./unsup_implicit.sh
-arguments = ./log
+arguments = $(idx)
 error = ./log/test.$(Process).err
 output = ./log/test.$(Process).out
 log = ./log/test.$(Process).log
@@ -14,7 +13,7 @@ request_cpus = 4
 request_gpus = 1
 # requirements = TARGET.CUDACapability < 8.0 
 
-queue 1
+queue 1 idx from seq 0 2 |
 
 # this will start 10 virtual machines, each with 4 GPUs and 12 CPUs
 #  using these 4 GPUs and 12 CPUs the start_liftoff script will lounch 4 x 8 = 32 proceeses

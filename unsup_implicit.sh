@@ -9,7 +9,7 @@ seeds=(10094 16734 20058 26284 27026)
 
 for x in ${seeds[@]}; do
   echo 'Seed' $x
-  # python train.py --seed=$x
+  python train.py --idx=$1
 done
 
 printf "\n"

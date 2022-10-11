@@ -291,9 +291,8 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.model)
-
-        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        self.opt.model_name = "blackbox_implicit_" + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name, str(self.opt.seed), str(self.opt.model), str(self.opt.experiment))
         if not os.path.exists(self.opt.log_path):
             os.makedirs(self.opt.log_path)
 
@@ -399,8 +398,6 @@ class Trainer:
         self.init_train_loss = 0
         self.init_test_loss = 0
         self.init_feat_sim = 0
-
-        self.opt.experiment = "teacher"
 
         self.estimator = EstimatorCV(feature_num=512, class_num=self.opt.n_classes)
 
@@ -609,11 +606,11 @@ class Trainer:
             example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.experiment == 'SGD':
             # train example
-            self.opt.experiment = "SGD"
+            # self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '_' + str(self.opt.data_mode) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -722,16 +719,15 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        if self.opt.train_student == True:
+        if self.opt.experiment == 'Student':
             # student
-            self.opt.experiment = "Student"
+            # self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '_' + self.opt.data_mode + "_" + str(self.opt.n_weight_update) + '_' + str(self.opt.n_z_update) + '_' + str(self.opt.epsilon) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
-
 
             tmp_student = networks.FullLayer(feature_dim=self.teacher.feature_num, n_classes=self.opt.n_classes).cuda()
             unrolled_optimizer = blackbox_implicit.UnrolledBlackBoxOptimizer(opt=self.opt, loader=self.loader, fc=tmp_student)
@@ -831,10 +827,9 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-
-        if self.opt.train_baseline == True:
+        if self.opt.experiment == 'Baseline':
             # student
-            self.opt.experiment = "Baseline"
+            # self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + self.opt.model + '_' + str(self.opt.seed) + '_' + self.opt.data_mode + '_' + str(self.opt.epsilon) + '.csv')
             if not os.path.exists(logname):
