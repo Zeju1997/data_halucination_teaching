@@ -717,7 +717,7 @@ class Trainer:
                 ax2.legend()
                 ax2.show()
 
-        if self.opt.train_student == False:
+        if self.opt.train_student == True:
             # student
             self.opt.experiment = "Student"
             print("Start training {} ...".format(self.opt.experiment))

@@ -38,11 +38,11 @@ n_query_classes: 100
 action_space: 2
 n_pg_epochs: 3
 n_tries: 30
-n_weight_update: 4
+n_weight_update: 5
 n_z_update: 15
 droprate: 0.3
 model: CNN6
 momentum: 0.9
 nesterov: True
 weight_decay: 0.0005
-epsilon: 0.03
+epsilon: 0.1

@@ -46,6 +46,6 @@ n_z_update: 15 # 20
 layers: 40
 widen_factor: 4
 droprate: 0.3
-model: CNN9
+model: CNN15
 epsilon: 0.1
 n_in: 1024
