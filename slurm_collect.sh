@@ -9,7 +9,7 @@
 #SBATCH --error=./slurm_log/slurm_%j.err           # File to which STDERR will be written
 #SBATCH --mail-type=END                     # Type of email notification- BEGIN,END,FAIL,ALL
 #SBATCH --mail-user=zhenzhong.xiao@uni-tuebingen.de  # Email to which notifications will be sent
-#SBATCH --time=3-00:00            # Runtime in D-HH:MM
+#SBATCH --time=0-10:00            # Runtime in D-HH:MM
 
 
 set -o errexit
