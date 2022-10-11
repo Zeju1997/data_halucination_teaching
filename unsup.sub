@@ -3,7 +3,7 @@
 # condor_submit 1L_weight.sub
 #
 
-executable = ./unsup_mnist.sh
+executable = ./unsup_implicit.sh
 arguments = ./log
 error = ./log/test.$(Process).err
 output = ./log/test.$(Process).out
