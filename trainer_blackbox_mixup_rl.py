@@ -589,7 +589,7 @@ class Trainer:
             self.best_acc = 0
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            example_optim = torch.optim.SGD(example.parameters(), lr=0.001)
+            example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             # example_optim = torch.optim.SGD(example.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -694,7 +694,7 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,

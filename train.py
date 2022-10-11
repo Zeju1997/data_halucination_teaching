@@ -76,8 +76,8 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    # config = load_config("mnist_blackbox_implicit.yaml")
-    config = load_config("cifar10.yaml")
+    config = load_config("mnist_blackbox_mixup.yaml")
+    # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
 
     opts.set_defaults(**config)
