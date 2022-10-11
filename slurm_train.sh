@@ -29,7 +29,34 @@ echo "-------- PYTHON OUTPUT ----------"
 
 echo "RUN Script"
 
-python train_slurm.py
+# options:
+# --config: "mnist_blackbox_implicit.yaml", "cifar10.yaml", "cifar100.yaml"
+# --seed: [10094, 20058, 27026, 48495, 65800]
+# --model: ['CNN3', 'CNN6', 'CNN9', 'CNN15', 'MLP']
+# --experiment: ['SGD', 'Student', 'Baseline']
 
+# python train_slurm.py \
+# --config $1 \
+# --seed $2 \
+# --model $3 \
+# --experiment $4
+
+python train_slurm.py \
+--config mnist_blackbox_implicit.yaml \
+--seed 10094 \
+--model MLP \
+--experiment SGD
+
+# python train_slurm.py \
+# --config cifar10.yaml \
+# --seed 10094 \
+# --model CNN3 \
+# --experiment SGD
+
+# python train_slurm.py \
+# --config cifar100.yaml \
+# --seed 10094 \
+# --model CNN3 \
+# --experiment SGD
 
 echo "---------------------------------"
