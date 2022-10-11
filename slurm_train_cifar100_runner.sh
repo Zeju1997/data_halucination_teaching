@@ -16,7 +16,7 @@ do
             echo "--------------------------------------------"
             echo "sbatch slurm_train.sh $config $seed $model $experiment"
             echo "--------------------------------------------"
-            sbatch slurm_train.sh $config $beta_y $model $experiment
+            sbatch slurm_train.sh $config $seed $model $experiment
         done
     done
 done
