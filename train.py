@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 # from trainer_vae_mnist import Trainer
 import itertools
 
-from trainer_blackbox_implicit import Trainer
+from trainer_blackbox_mixup_rl import Trainer
 
 from options.options import Options
 import os
@@ -34,11 +34,11 @@ def load_config(config_name):
     return config
 
 
-seeds = [10094, 20058, 27026, 48495, 65800]
+seeds = [65800] #, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10.yaml', 'cifar100.yaml']
-models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
-# model = ['MLP']
+models = ['CNN3'] # , 'CNN6', 'CNN9', 'CNN15']
+# models = ['MLP']
 experiments = ['SGD', 'Student', 'Baseline']
 
 combination = list(itertools.product(seeds, models, experiments))
@@ -70,6 +70,7 @@ def calc_results(opt, seeds, models, experiments):
                 f.writelines('\n')
                 f.write(" ".join(values))
                 f.writelines('\n')
+
 
 if __name__ == "__main__":
     options = Options()

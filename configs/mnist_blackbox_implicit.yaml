@@ -37,7 +37,7 @@ generator_type: cgan
 label_norm: 2
 label_alpha: 0.002
 model: MLP
-# epsilon: 0.001
+epsilon: 0.1
 n_weight_update: 5 # 5
 n_z_update: 15 # 20
 n_in: 784
