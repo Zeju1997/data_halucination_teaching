@@ -41,7 +41,7 @@ n_tries: 30
 n_weight_update: 5
 n_z_update: 15
 droprate: 0.3
-model: CNN15
+model: CNN3
 momentum: 0.9
 nesterov: True
 weight_decay: 0.0005
