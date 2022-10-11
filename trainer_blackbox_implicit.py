@@ -400,7 +400,7 @@ class Trainer:
         self.init_test_loss = 0
         self.init_feat_sim = 0
 
-        self.estimator = EstimatorCV(feature_num=512, class_num=self.opt.n_classes)
+        # self.estimator = EstimatorCV(feature_num=512, class_num=self.opt.n_classes)
 
         # self.query_set_1, self.query_set_2 = self.get_query_set()
         # self.query_set = self.get_query_set()
