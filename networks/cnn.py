@@ -72,12 +72,14 @@ cfg = {
 }
 
 class CNN(nn.Module):
-    def __init__(self, cnn_name, in_channels=3, num_classes=10):
+    def __init__(self, cnn_name, in_channels=3, num_classes=10, feature_extractor=True):
         super(CNN, self).__init__()
         self.feature_num = 256
         self.features = self._make_layers(cfg[cnn_name])
-        # self.classifier = nn.Linear(self.feature_num, num_classes)
-        self.classifier = nn.Identity()
+        if feature_extractor:
+            self.classifier = nn.Identity()
+        else:
+            self.classifier = nn.Linear(self.feature_num, num_classes)
         self.in_channels = in_channels
 
     def forward(self, x):

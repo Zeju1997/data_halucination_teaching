@@ -354,20 +354,20 @@ class Trainer:
         self.init_test_loss = 0
         self.init_feat_sim = 0
 
-        self.opt.experiment = "teacher"
+        # self.opt.experiment = "teacher"
 
         self.query_set_1, self.query_set_2 = self.get_query_set()
         # self.query_set = self.get_query_set()
         # features, labels = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
         self.teacher.apply(initialize_weights)
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
         # self.student.load_state_dict(torch.load(path))
         # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
         # self.baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
@@ -565,9 +565,9 @@ class Trainer:
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
-        example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        tmp_student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-        mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+        example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
+        tmp_student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
+        mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
 
         if self.opt.experiment == 'SGD':
             # train example
