@@ -70,6 +70,7 @@ if __name__ == "__main__":
     # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
 
+    config = load_config(cli_args.config)
     opts.set_defaults(**config)
 
     args = opts.parse_args()
