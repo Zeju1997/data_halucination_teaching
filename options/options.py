@@ -15,6 +15,7 @@ class Options:
         self.parser.add_argument('--init_data', help="configuration file *.yml", type=bool, required=False, default=True)
         self.parser.add_argument('--idx', help="configuration file *.yml", type=int, required=False, default=0)
         self.parser.add_argument('--experiment', help="configuration file *.yml", type=str, required=False, default='SGD')
+        self.parser.add_argument('--collect', action='store_true', default=False, help='Collect results.')
 
         # PATHS
         self.parser.add_argument("--base_dir", type=str, help="path to the training data", default=os.path.join("datasets/retouch-dataset/pre_processed"))

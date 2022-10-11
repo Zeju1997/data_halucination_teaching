@@ -125,6 +125,7 @@ if __name__ == "__main__":
     if not cli_args.collect:
         trainer.main()
     else:
+        print("Saving.")
         if cli_args.config == "mnist_blackbox_implicit.yaml":
             models = ['MLP']
         else:
