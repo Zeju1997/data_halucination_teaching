@@ -120,9 +120,9 @@ if __name__ == "__main__":
     random.seed(args.seed)
 
     
-    trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
     if not cli_args.collect:
+        trainer = Trainer(args)
         trainer.main()
     else:
         print("Saving.")
