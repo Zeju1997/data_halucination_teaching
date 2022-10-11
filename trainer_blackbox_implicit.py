@@ -604,7 +604,7 @@ class Trainer:
         # example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
         example_fc = networks.FullLayer(feature_dim=example.feature_num, n_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == False:
+        if self.opt.train_sgd == True:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -827,7 +827,7 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             # student
             self.opt.experiment = "Baseline"
             print("Start training {} ...".format(self.opt.experiment))
