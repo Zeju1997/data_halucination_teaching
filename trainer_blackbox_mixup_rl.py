@@ -361,19 +361,19 @@ class Trainer:
         # features, labels = self.get_query_set()
 
     def get_teacher_student(self):
-        self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
+        if self.opt.model == "MLP":
+            self.teacher = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+        else:
+            self.teacher = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
-        self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
-        # self.student.load_state_dict(torch.load(path))
-        # self.student.model.avgpool.register_forward_hook(self.get_activation('latent'))
-        # self.baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
-
-        # self.student.load_state_dict(self.teacher.state_dict())
-        # self.baseline.load_state_dict(self.teacher.state_dict())
+        if self.opt.model == "MLP":
+            self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+        else:
+            self.student = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
     def set_train(self):
         """Convert all models to training mode
@@ -565,10 +565,6 @@ class Trainer:
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
-        example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
-        tmp_student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
-        mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes, feature_extractor=False).cuda()
-
         if self.opt.experiment == 'SGD':
             # train example
             self.opt.experiment = "SGD"
@@ -578,6 +574,11 @@ class Trainer:
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
+
+            if self.opt.model == "MLP":
+                example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+            else:
+                example = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_example = []
             res_loss_example = []
@@ -677,6 +678,11 @@ class Trainer:
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
+
+            if self.opt.model == "MLP":
+                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+            else:
+                mixup_baseline = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_mixup = []
             res_loss_mixup = []

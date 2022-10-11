@@ -24,9 +24,9 @@ class CNN1(nn.Module):
         return x
 
 
-class CNN_MIXUP(nn.Module):
-    def __init__(self, in_channels=3, num_classes=100):
-        super(CNN, self).__init__()
+class NET(nn.Module):
+    def __init__(self, in_channels=3, num_classes=10):
+        super(NET, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
