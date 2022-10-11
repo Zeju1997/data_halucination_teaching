@@ -21,6 +21,8 @@ import torch
 
 import random
 
+import csv
+
 # the directory that options.py resides in
 file_dir = os.path.dirname(__file__)
 
@@ -32,14 +34,40 @@ def load_config(config_name):
     return config
 
 
-seeds = [10094, 20058, 27026, 48495, 51626, 57890, 65800, 70293]
+seeds = [10094] #, 20058, 27026, 48495, 65800]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10.yaml', 'cifar100.yaml']
-models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
+models = ['CNN3'] #, 'CNN6', 'CNN9', 'CNN15']
 # model = ['MLP']
-experiments = ['SGD', 'Student', 'Baseline']
+experiments = ['SGD'] #, 'Student', 'Baseline']
 
 combination = list(itertools.product(seeds, models, experiments))
+
+def calc_results(opt, seeds, models, experiments):
+    results = 'results_blackbox_implicit_{}.txt'.format(opt.data_mode)
+    with open(results, 'a') as f:
+        f.write('blackbox implicit final results ')
+        f.writelines('\n')
+    for experiment in experiments:
+        for model in models:
+            values = []
+            for seed in seeds:
+                model_name = "blackbox_implicit_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
+                log_dir = os.path.join(CONF.PATH.LOG, model_name, str(seed), str(model), str(experiment))
+                for file in os.listdir(log_dir):
+                    if file.endswith(".csv"):
+                        csv_file = os.path.join(log_dir, file)
+                        with open(csv_file, "r") as file:
+                            last_line = file.readlines()[-1]
+                            last_line = last_line.strip('\n').split(',')
+                            values.append(last_line[-1])
+            values_np = np.asarray(values).astype(float)
+            values_mean = np.mean(values_np)
+            values_std = np.std(values_np)
+            with open(results, 'a') as f:
+                f.writelines('\n')
+                f.write("Data: {}, Model: {}, Experiment: {}, Mean: {}, Std: {}".format(opt.data_mode, model, experiment, values_mean, values_std))
+                f.writelines('\n')
 
 if __name__ == "__main__":
     options = Options()
@@ -71,8 +99,10 @@ if __name__ == "__main__":
 
     trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
-    trainer.main()
+    # trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()
     # trainer.plot_distribution()
     # trainer.plot_perceptual_loss()
+
+    # calc_results(args, seeds, models, experiments)

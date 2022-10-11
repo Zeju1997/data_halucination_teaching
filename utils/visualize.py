@@ -457,7 +457,6 @@ def make_results_video_blackbox(opt, X, Y, generated_samples, generated_labels, 
         ax2.set_ylabel("Accuracy")
         ax2.legend(loc="lower right")
 
-
         video_dir = os.path.join(opt.log_path, "video")
         if not os.path.exists(video_dir):
             os.makedirs(video_dir)
