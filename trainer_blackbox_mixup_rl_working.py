@@ -231,6 +231,8 @@ class Trainer:
         self.opt.model_name = "blackbox_mixup_rl_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        if not os.path.exists(self.opt.log_path):
+            os.makedirs(self.opt.log_path)
 
         self.visualize = True
 
@@ -575,7 +577,7 @@ class Trainer:
         tmp_student = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         mixup_baseline = networks.CNN(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
-        if self.opt.train_sgd == True:
+        if self.opt.train_sgd == False:
             # train example
             self.opt.experiment = "SGD"
             print("Start training {} ...".format(self.opt.experiment))
@@ -640,7 +642,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.train_baseline == False:
+        if self.opt.train_baseline == True:
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))

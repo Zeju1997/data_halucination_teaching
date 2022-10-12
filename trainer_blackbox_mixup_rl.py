@@ -325,14 +325,23 @@ class Trainer:
 
             self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=False)
 
-        elif self.opt.data_mode == "gaussian":
-            print("Generating Gaussian data ...")
+        elif self.opt.data_mode == "fashion_mnist":
+            # MNIST normalizing
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,)),
+            ])
+            dataset = torchvision.datasets.FashionMNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            # train, valid = random_split(train_dataset, [50000, 10000])
+            self.test_dataset = torchvision.datasets.FashionMNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
 
-        elif self.opt.data_mode == "moon":
-            print("Generating moon data ...")
+            self.train_dataset, self.val_dataset = random_split(dataset, [50000, 10000])
 
-        elif self.opt.data_mode == "linearly_seperable":
-            print("Generating linearly seperable data ...")
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+
+            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=False)
 
         else:
             print("Unrecognized data!")
@@ -361,19 +370,18 @@ class Trainer:
         # features, labels = self.get_query_set()
 
     def get_teacher_student(self):
-        if self.opt.model == "MLP":
-            self.teacher = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+        if self.opt.model == "NET":
+            self.teacher = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         else:
-            self.teacher = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            self.teacher = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
         torch.save(self.teacher.state_dict(), os.path.join(self.opt.log_path, 'teacher_w0.pth'))
 
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
-
-        if self.opt.model == "MLP":
-            self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+        if self.opt.model == "NET":
+            self.student = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         else:
-            self.student = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
     def set_train(self):
         """Convert all models to training mode
@@ -433,6 +441,15 @@ class Trainer:
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
         if iter == 20000 or iter == 30000 or iter == 37500: # 100
+            lr /= 10
+            self.opt.lr = lr
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+    def adjust_learning_rate1(self, optimizer, epoch):
+        """decrease the learning rate at 100 and 150 epoch"""
+        lr = self.opt.lr
+        if epoch == 30 or iter == 35: # 100
             lr /= 10
             self.opt.lr = lr
         for param_group in optimizer.param_groups:
@@ -567,7 +584,7 @@ class Trainer:
 
         if self.opt.experiment == 'SGD':
             # train example
-            self.opt.experiment = "SGD"
+            self.opt.experiment = "Adam"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -575,10 +592,10 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
 
-            if self.opt.model == "MLP":
-                example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+            if self.opt.model == "NET":
+                example = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
             else:
-                example = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+                example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_example = []
             res_loss_example = []
@@ -589,11 +606,9 @@ class Trainer:
             self.best_acc = 0
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            example_optim = torch.optim.SGD(example.parameters(), lr=0.001) #, momentum=0.9, weight_decay=self.opt.decay)
-            # example_optim = torch.optim.SGD(example.parameters(),
-            #                                 lr=0.001,
-            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-            #                                 weight_decay=self.opt.weight_decay)
+            # example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr) #, momentum=0.9, weight_decay=self.opt.decay)
+            # example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            example_optim = torch.optim.Adam(example.parameters(), lr=self.opt.lr)
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     # self.train(example, self.loader, self.loss_fn, example_optim, epoch)
@@ -601,6 +616,7 @@ class Trainer:
                     correct = 0
                     total = 0
                     example.train()
+
                     for batch_idx, (data, target) in enumerate(self.loader):
 
                         # first_image = np.array(data.cpu(), dtype='float')
@@ -617,8 +633,7 @@ class Trainer:
                         example_optim.step()
 
                         self.step += 1
-
-                        # self.adjust_learning_rate(example_optim, self.step)
+                        self.adjust_learning_rate(example_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(output.data, 1)
@@ -679,10 +694,10 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
 
-            if self.opt.model == "MLP":
-                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+            if self.opt.model == "NET":
+                mixup_baseline = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
             else:
-                mixup_baseline = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+                mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_mixup = []
             res_loss_mixup = []
@@ -694,7 +709,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.01) #, momentum=0.9, weight_decay=self.opt.decay)
+            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -711,20 +727,22 @@ class Trainer:
                     train_loss = 0
                     correct = 0
                     total = 0
-                    for batch_idx, (inputs, targets) in enumerate(self.loader):
-                        inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        # lam = np.random.beta(1.0, 1.0)
-                        prob = [1.0, 0.5]
-                        lam = random.choice(prob)
+                    for batch_idx, (inputs, targets) in enumerate(self.loader):
+                        inputs, targets = inputs.cuda(), targets.cuda()
+
+                        lam = np.random.beta(1.0, 1.0)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
+                        targets_a = one_hot(targets_a, self.opt.n_classes)
+                        targets_b = one_hot(targets_b, self.opt.n_classes)
+
                         mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
 
                         outputs = mixup_baseline(mixed_x)
 
-                        loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+                        loss = lam * self.loss_fn(outputs, targets_a.float()) + (1 - lam) * self.loss_fn(outputs, targets_b.float())
 
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
@@ -737,8 +755,7 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
-
-                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
+                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -786,10 +803,10 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
 
-            if self.opt.model == "MLP":
-                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+            if self.opt.model == "NET":
+                mixup_baseline = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
             else:
-                mixup_baseline = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+                mixup_baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_mixup = []
             res_loss_mixup = []
@@ -801,7 +818,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.01) #, momentum=0.9, weight_decay=self.opt.decay)
+            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -819,19 +837,21 @@ class Trainer:
                     correct = 0
                     total = 0
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
-                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        inputs, targets = inputs.cuda(), targets.cuda()
 
-                        # lam = np.random.beta(1.0, 1.0)
                         prob = [1.0, 0.5]
                         lam = random.choice(prob)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
+                        targets_a = one_hot(targets_a, self.opt.n_classes)
+                        targets_b = one_hot(targets_b, self.opt.n_classes)
+
                         mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
 
                         outputs = mixup_baseline(mixed_x)
 
-                        loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+                        loss = lam * self.loss_fn(outputs, targets_a.float()) + (1 - lam) * self.loss_fn(outputs, targets_b.float())
 
                         # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
 
@@ -845,7 +865,7 @@ class Trainer:
 
                         self.step += 1
 
-                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
+                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -913,7 +933,7 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr)
             # student_optim = torch.optim.SGD(self.student.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -945,10 +965,13 @@ class Trainer:
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         self.step = self.step + 1
 
-                        inputs, targets = inputs.cuda(), targets.long().cuda()
+                        inputs, targets = inputs.cuda(), targets.cuda()
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
+                        targets_a = one_hot(targets_a, self.opt.n_classes)
+                        targets_b = one_hot(targets_b, self.opt.n_classes)
+
                         inputs_a, inputs_b = inputs, inputs[index, :]
 
                         # action: mixup variable lambda
@@ -984,7 +1007,7 @@ class Trainer:
                         loss.backward()
                         student_optim.step()
 
-                        # self.adjust_learning_rate(student_optim, self.step)
+                        self.adjust_learning_rate(student_optim, self.step)
 
                         # running_train_loss += loss.item()
                         # _, predicted = torch.max(outputs.data, 1)
