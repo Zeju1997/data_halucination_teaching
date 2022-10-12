@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 import itertools
 
 from trainer_blackbox_mixup_rl import Trainer
+# from trainer_blackbox_mixup_cnn import Trainer
 # from trainer_blackbox_implicit import Trainer
 
 from options.options import Options
@@ -35,25 +36,29 @@ def load_config(config_name):
     return config
 
 
-seeds = [65800, 10094, 20058, 27026, 48495]
+seeds = [65800] # , 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
 # models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
 models = ['NET']
-experiments = ['Adam', 'Vanilla_Mixup', 'Discrete_Mixup', 'Student']
+experiments = ['Student', 'Adam', 'Vanilla_Mixup', 'Discrete_Mixup']
+# experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
 
 combination = list(itertools.product(seeds, models, experiments))
 
 def calc_results(opt, seeds, models, experiments):
-    results = 'results_blackbox_implicit_{}.txt'.format(opt.data_mode)
+    # results = 'results_blackbox_implicit_{}.txt'.format(opt.data_mode)
+    results = 'results_blackbox_mixup_rl_{}.txt'.format(opt.data_mode)
     with open(results, 'a') as f:
-        f.write('blackbox implicit final results ')
+        # f.write('blackbox implicit final results ')
+        f.write('blackbox mixup rl final results ')
         f.writelines('\n')
     for experiment in experiments:
         for model in models:
             values = []
             for seed in seeds:
-                model_name = "blackbox_implicit_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
+                # model_name = "blackbox_implicit_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
+                model_name = "blackbox_mixup_rl_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
                 log_dir = os.path.join(CONF.PATH.LOG, model_name, str(seed), str(model), str(experiment))
                 for file in os.listdir(log_dir):
                     if file.endswith(".csv"):
@@ -84,6 +89,8 @@ if __name__ == "__main__":
     opts.set_defaults(**config)
 
     args = opts.parse_args()
+
+    args.idx = 0
 
     curr_comb = combination[args.idx]
 

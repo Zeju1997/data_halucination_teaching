@@ -714,7 +714,6 @@ class Trainer:
             #                                         weight_decay=self.opt.weight_decay)
             self.step = 0
             self.best_acc = 0
-            self.best_acc = 0
             self.best_test_loss = 0
             self.init_train_loss = 0
             self.init_test_loss = 0
@@ -822,7 +821,6 @@ class Trainer:
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
             #                                         weight_decay=self.opt.weight_decay)
             self.step = 0
-            self.best_acc = 0
             self.best_acc = 0
             self.best_test_loss = 0
             self.init_train_loss = 0
@@ -1017,7 +1015,8 @@ class Trainer:
                             # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
                             # print(self.init_feat_sim.mean())
 
-                            _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
+                            # _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
+                            _, _ = self.val(self.student, val_loader=self.val_loader, epoch=epoch)
 
                             self.init_train_loss = train_loss / self.step
                             avg_train_loss = self.init_train_loss
@@ -1031,7 +1030,8 @@ class Trainer:
                         # print(state)
 
                         if self.step % 100 == 0: # 100
-                            _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
+                            # _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
+                            _, _ = self.val(self.student, val_loader=self.val_loader, epoch=epoch)
 
                 acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=True)
                 res_student.append(acc)
@@ -1245,29 +1245,35 @@ class Trainer:
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-    def val(self, model, train_loader, loss_fn, optimizer, epoch):
+    def val(self, model, val_loader, epoch):
+        model.eval()
+        test_loss = 0
+        correct = 0
+        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
+        with torch.no_grad():
+            for data, target in val_loader:
+                data, target = data.cuda(), target.cuda()
+                output = model(data)
+
+                test_loss += loss_fn(output, target.long()).item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+        test_loss /= len(val_loader.dataset)
+        acc = correct / len(val_loader.dataset)
+
+        if epoch == 0 or acc > self.best_acc:
+            self.save_model(model=model, name=self.opt.experiment)
+        if acc > self.best_acc:
+            self.best_acc = acc
+        if self.best_test_loss > test_loss:
+            self.best_test_loss = test_loss
+
         model.train()
-        for batch_idx, (data, target) in enumerate(train_loader):
+        return acc, test_loss
 
-            # first_image = np.array(data.cpu(), dtype='float')
-            # pixels = first_image.reshape((28, 28))
-            # plt.imshow(pixels, cmap='gray')
-            # plt.title("Label {}".format(target.item()))
-            # plt.show()
-
-            data, target = data.cuda(), target.long().cuda()
-            optimizer.zero_grad()
-            output = model(data)
-            loss = loss_fn(output, target)
-            loss.backward()
-            optimizer.step()
-            if batch_idx % self.opt.log_interval == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    epoch, batch_idx * len(data), len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader), loss.item()))
-                self.log(mode="train", name="loss", value=loss.item())
-
-    def test(self, model, test_loader, epoch, log=True):
+    def test(self, model, test_loader, epoch):
         model.eval()
         test_loss = 0
         correct = 0
@@ -1283,22 +1289,21 @@ class Trainer:
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
         test_loss /= len(test_loader.dataset)
-
         acc = correct / len(test_loader.dataset)
+
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        if log:
-            print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-                epoch, test_loss, correct, len(test_loader.dataset),
-            100. * correct / len(test_loader.dataset)))
+        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            epoch, test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
-        if epoch == 0 or acc > self.best_acc:
-            self.save_model(model=model, name=self.opt.experiment)
-        if acc > self.best_acc:
-            self.best_acc = acc
-        if self.best_test_loss > test_loss:
-            self.best_test_loss = test_loss
+        # if epoch == 0 or acc > self.best_acc:
+        #     self.save_model(model=model, name=self.opt.experiment)
+        # if acc > self.best_acc:
+        #     self.best_acc = acc
+        # if self.best_test_loss > test_loss:
+        #     self.best_test_loss = test_loss
 
         model.train()
         return acc, test_loss
