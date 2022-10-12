@@ -579,9 +579,6 @@ class Trainer:
         print("Training")
         # self.set_train()
 
-        # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-        # policy_gradient.solve_environment()
-
         if self.opt.experiment == 'Adam':
             # train example
             self.opt.experiment = "Adam"
@@ -633,7 +630,7 @@ class Trainer:
                         example_optim.step()
 
                         self.step += 1
-                        self.adjust_learning_rate(example_optim, self.step)
+                        # self.adjust_learning_rate(example_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(output.data, 1)
@@ -755,7 +752,7 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
-                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
+                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)

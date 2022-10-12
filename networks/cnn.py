@@ -105,7 +105,7 @@ class NET(nn.Module):
         self.lin2 = nn.Linear(120, num_classes)
         self.avg_pool = nn.AvgPool2d(kernel_size=2, stride=2)
         self.feature_num = 120
-        self.output_act = nn.Softmax()
+        self.output_act = nn.Softmax(dim=1)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
