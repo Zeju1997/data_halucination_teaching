@@ -1,0 +1,27 @@
+blackbox implicit final results 
+
+Data: cifar100, Model: CNN3, Experiment: SGD, Mean: 0.62156, Std: 0.0026234328655408683
+
+Data: cifar100, Model: CNN6, Experiment: SGD, Mean: 0.6495, Std: 0.004841900453334421
+
+Data: cifar100, Model: CNN9, Experiment: SGD, Mean: 0.67458, Std: 0.0019177069640588784
+
+Data: cifar100, Model: CNN15, Experiment: SGD, Mean: 0.6852199999999999, Std: 0.0021939917957914177
+
+Data: cifar100, Model: CNN3, Experiment: Student, Mean: 0.62732, Std: 0.0018280043763623894
+
+Data: cifar100, Model: CNN6, Experiment: Student, Mean: 0.6661000000000001, Std: 0.0009507891459203681
+
+Data: cifar100, Model: CNN9, Experiment: Student, Mean: 0.6906199999999999, Std: 0.0016702095676890429
+
+Data: cifar100, Model: CNN15, Experiment: Student, Mean: 0.69192, Std: 0.003995197116538804
+
+Data: cifar100, Model: CNN3, Experiment: Baseline, Mean: 0.62006, Std: 0.0043857040483826675
+
+Data: cifar100, Model: CNN6, Experiment: Baseline, Mean: 0.65344, Std: 0.003091019249373909
+
+Data: cifar100, Model: CNN9, Experiment: Baseline, Mean: 0.6740600000000001, Std: 0.0011359577456930353
+
+Data: cifar100, Model: CNN15, Experiment: Baseline, Mean: 0.68444, Std: 0.004107359248957896
+
+======================== Above is version: dcf6cd67e1c41f42b2d85b621f58c8138a4e8ec9 ====================

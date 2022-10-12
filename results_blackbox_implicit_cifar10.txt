@@ -7,3 +7,30 @@ blackbox implicit final results
 
 Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.1144, Std: 0.0
 0.1144
+blackbox implicit final results 
+
+Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.76694, Std: 0.0017556765077884004
+
+Data: cifar10, Model: CNN6, Experiment: SGD, Mean: 0.8001000000000001, Std: 0.0013114877048604015
+
+Data: cifar10, Model: CNN9, Experiment: SGD, Mean: 0.8202399999999999, Std: 0.0011128342194594713
+
+Data: cifar10, Model: CNN15, Experiment: SGD, Mean: 0.8340400000000001, Std: 0.003708153179144577
+
+Data: cifar10, Model: CNN3, Experiment: Student, Mean: 0.8058, Std: 0.0024746716953972024
+
+Data: cifar10, Model: CNN6, Experiment: Student, Mean: 0.8526999999999999, Std: 0.0024915858403835893
+
+Data: cifar10, Model: CNN9, Experiment: Student, Mean: 0.86738, Std: 0.001966112916391121
+
+Data: cifar10, Model: CNN15, Experiment: Student, Mean: 0.87174, Std: 0.0009478396488858225
+
+Data: cifar10, Model: CNN3, Experiment: Baseline, Mean: 0.76604, Std: 0.0029268413007882575
+
+Data: cifar10, Model: CNN6, Experiment: Baseline, Mean: 0.8019999999999999, Std: 0.0008270429251254323
+
+Data: cifar10, Model: CNN9, Experiment: Baseline, Mean: 0.81584, Std: 0.002514438307057868
+
+Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.8319000000000001, Std: 0.00242074368738203
+
+======================== Above is version: dcf6cd67e1c41f42b2d85b621f58c8138a4e8ec9 ====================
