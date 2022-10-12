@@ -582,11 +582,11 @@ class Trainer:
         # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
         # policy_gradient.solve_environment()
 
-        if self.opt.experiment == 'SGD':
+        if self.opt.experiment == 'Adam':
             # train example
             self.opt.experiment = "Adam"
             print("Start training {} ...".format(self.opt.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '_' + str(self.opt.data_mode) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -688,7 +688,7 @@ class Trainer:
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '_' + str(self.opt.data_mode) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -797,7 +797,7 @@ class Trainer:
             # mixup baseline
             self.opt.experiment = "Discrete_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
-            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '_' + str(self.opt.data_mode) + '.csv')
             if not os.path.exists(logname):
                 with open(logname, 'w') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -864,7 +864,6 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
-
                         self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
@@ -904,10 +903,8 @@ class Trainer:
                 plt.close()
 
         if self.opt.experiment == 'Student':
-            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-            policy_gradient.solve_environment()
-
-            # sys.exit()
+            # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, writers=self.writers)
+            # policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
@@ -933,7 +930,7 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr)
+            student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
             # student_optim = torch.optim.SGD(self.student.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -993,7 +990,7 @@ class Trainer:
 
                         outputs = self.student(mixed_x)
 
-                        loss = action * self.loss_fn(outputs, targets_a) + (1 - action) * self.loss_fn(outputs, targets_b)
+                        loss = action * self.loss_fn(outputs, targets_a.float()) + (1 - action) * self.loss_fn(outputs, targets_b.float())
 
                         train_loss += loss.item()
 
@@ -1070,51 +1067,6 @@ class Trainer:
                 plt.ylabel("Accuracy")
                 plt.legend()
                 plt.show()
-
-        if self.visualize == False:
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(14, 5.8)
-            # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            ax1.plot(res_student, 'r', label="Mixup Trained")
-            ax1.plot(res_mixup, 'b', label="Mixup")
-            ax1.plot(res_example, 'g', label="SGD")
-            # ax1.plot(w_diff_example, 'go', label="sgd linear classifier", alpha=0.5)
-            # ax1.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.plot(w_diff_mixup, 'co', label="%s & mixup classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-            ax1.legend(loc="upper left")
-            ax1.set_title(str(self.opt.data_mode) + "Test Accuracy (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            #ax1.set_aspect('equal')
-            # ax1.close()
-
-            ax2.plot(res_loss_student, c='r', label="Mixup Trained")
-            ax2.plot(res_loss_mixup, c='b', label="Mixup")
-            ax2.plot(res_loss_example, c='g', label="SGD")
-            ax2.set_title(str(self.opt.data_mode) + "Test Loss (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            # ax2.xlabel("Iteration")
-            # ax2.ylabel("Loss")
-            ax2.legend(loc="upper right")
-
-            save_folder = os.path.join(self.opt.log_path, "imgs")
-            if not os.path.exists(save_folder):
-                os.makedirs(save_folder)
-
-            img_path = os.path.join(save_folder, "results_mnist_blackbox_mixup_cnn.png")
-
-            plt.savefig(img_path)
-            plt.show()
-            # plt.close()
-
-            '''
-            os.chdir(CONF.PATH.OUTPUT)
-            subprocess.call([
-                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-                'video_name.mp4'
-            ])
-            for file_name in glob.glob("*.png"):
-                os.remove(file_name)
-            '''
 
     def select_action(self, policy, state, inputs_a, inputs_b, targets_a, targets_b):
         # get the action logits from the agent - (preferences)
