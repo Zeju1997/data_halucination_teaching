@@ -38,8 +38,8 @@ def load_config(config_name):
 seeds = [65800, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10.yaml', 'cifar100.yaml']
-# models = ['CNN3'] # , 'CNN6', 'CNN9', 'CNN15']
-models = ['MLP']
+models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
+# models = ['MLP']
 experiments = ['SGD', 'Student', 'Baseline']
 
 combination = list(itertools.product(seeds, models, experiments))
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist_blackbox_implicit.yaml")
-    # config = load_config("cifar10.yaml")
+    # config = load_config("mnist_blackbox_implicit.yaml")
+    config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
 
     opts.set_defaults(**config)
