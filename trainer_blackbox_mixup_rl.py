@@ -432,7 +432,7 @@ class Trainer:
 
         return x, y
 
-    def adjust_learning_rate_iter(self, optimizer, iter):
+    def adjust_learning_rate(self, optimizer, iter):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
         if iter == 20000 or iter == 30000 or iter == 37500: # 100
@@ -441,7 +441,7 @@ class Trainer:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def adjust_learning_rate(self, optimizer, epoch):
+    def adjust_learning_rate1(self, optimizer, epoch):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
         if epoch == 30 or iter == 35: # 100
@@ -579,7 +579,7 @@ class Trainer:
 
         if self.opt.experiment == 'SGD':
             # train example
-            self.opt.experiment = "SGD"
+            self.opt.experiment = "Adam"
             print("Start training {} ...".format(self.opt.experiment))
             logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
             if not os.path.exists(logname):
@@ -587,7 +587,8 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow(['epoch', 'test acc'])
 
-            example = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            # example = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            example = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
             res_example = []
             res_loss_example = []
@@ -609,8 +610,6 @@ class Trainer:
                     total = 0
                     example.train()
 
-                    self.adjust_learning_rate(example_optim, epoch)
-
                     for batch_idx, (data, target) in enumerate(self.loader):
 
                         # first_image = np.array(data.cpu(), dtype='float')
@@ -627,6 +626,7 @@ class Trainer:
                         example_optim.step()
 
                         self.step += 1
+                        self.adjust_learning_rate(example_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(output.data, 1)
@@ -718,8 +718,6 @@ class Trainer:
                     correct = 0
                     total = 0
 
-                    self.adjust_learning_rate(mixup_baseline_optim, self.step)
-
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         inputs, targets = inputs.cuda(), targets.cuda()
 
@@ -747,6 +745,7 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
+                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -921,7 +920,7 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr)
             # student_optim = torch.optim.SGD(self.student.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,

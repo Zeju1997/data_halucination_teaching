@@ -39,8 +39,8 @@ seeds = [65800]#, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10.yaml', 'cifar100.yaml']
 # models = ['CNN3']#, 'CNN6', 'CNN9', 'CNN15']
-models = ['NET']
-experiments = ['SGD']#, 'Student', 'Baseline']
+models = ['CNN3']
+experiments = ['Baseline1']#, 'Student', 'Baseline']
 
 combination = list(itertools.product(seeds, models, experiments))
 
