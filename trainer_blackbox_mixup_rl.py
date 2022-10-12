@@ -432,10 +432,19 @@ class Trainer:
 
         return x, y
 
-    def adjust_learning_rate(self, optimizer, iter):
+    def adjust_learning_rate_iter(self, optimizer, iter):
         """decrease the learning rate at 100 and 150 epoch"""
         lr = self.opt.lr
         if iter == 20000 or iter == 30000 or iter == 37500: # 100
+            lr /= 10
+            self.opt.lr = lr
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+    def adjust_learning_rate(self, optimizer, epoch):
+        """decrease the learning rate at 100 and 150 epoch"""
+        lr = self.opt.lr
+        if epoch == 30 or iter == 35: # 100
             lr /= 10
             self.opt.lr = lr
         for param_group in optimizer.param_groups:
@@ -590,7 +599,8 @@ class Trainer:
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             # example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr) #, momentum=0.9, weight_decay=self.opt.decay)
-            example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            # example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            example_optim = torch.optim.Adam(example.parameters(), lr=self.opt.lr)
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     # self.train(example, self.loader, self.loss_fn, example_optim, epoch)
@@ -598,6 +608,9 @@ class Trainer:
                     correct = 0
                     total = 0
                     example.train()
+
+                    self.adjust_learning_rate(example_optim, epoch)
+
                     for batch_idx, (data, target) in enumerate(self.loader):
 
                         # first_image = np.array(data.cpu(), dtype='float')
@@ -614,8 +627,6 @@ class Trainer:
                         example_optim.step()
 
                         self.step += 1
-
-                        # self.adjust_learning_rate(example_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(output.data, 1)
@@ -688,7 +699,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -705,6 +717,9 @@ class Trainer:
                     train_loss = 0
                     correct = 0
                     total = 0
+
+                    self.adjust_learning_rate(mixup_baseline_optim, self.step)
+
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         inputs, targets = inputs.cuda(), targets.cuda()
 
@@ -732,8 +747,6 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
-
-                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -793,7 +806,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
