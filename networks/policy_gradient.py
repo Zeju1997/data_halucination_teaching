@@ -394,7 +394,7 @@ class PolicyGradient:
         #net = Net()
 
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9)
+        optimizer = optim.Adam(self.student.parameters(), lr=self.opt.lr) # , momentum=0.9)
 
         running_loss = 0.0
         avg_train_loss = 0.0
@@ -410,6 +410,8 @@ class PolicyGradient:
 
                 index = torch.randperm(inputs.shape[0]).cuda()
                 targets_a, targets_b = targets, targets[index]
+                targets_a = one_hot(targets_a, self.opt.n_classes)
+                targets_b = one_hot(targets_b, self.opt.n_classes)
                 inputs_a, inputs_b = inputs, inputs[index, :]
 
                 # action: mixup variable lambda
@@ -428,7 +430,7 @@ class PolicyGradient:
 
                 outputs = self.student(mixed_x)
 
-                loss = action * criterion(outputs, targets_a) + (1 - action) * criterion(outputs, targets_b)
+                loss = action * criterion(outputs, targets_a.float()) + (1 - action) * criterion(outputs, targets_b.float())
                 train_loss += loss.item()
 
                 # print("train loss", train_loss)
