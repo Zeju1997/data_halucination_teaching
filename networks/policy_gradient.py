@@ -518,9 +518,9 @@ class PolicyGradient:
 
                 test_loss += criterion(outputs, targets.long()).item()
 
-        test_loss /= len(self.train_loader)
-        if self.best_test_loss > test_loss:
-            self.best_test_loss = test_loss
+        # test_loss /= len(self.train_loader)
+        # if self.best_test_loss > test_loss:
+        #     self.best_test_loss = test_loss
 
         acc = 100 * correct / total
         # print('Accuracy of the network on the 10000 test images: {}'.format(acc))
