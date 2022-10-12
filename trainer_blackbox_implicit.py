@@ -630,7 +630,8 @@ class Trainer:
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001)
+            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=self.opt.lr)
+            # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=0.001)
             # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
             #                                 lr=self.opt.lr,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -755,7 +756,8 @@ class Trainer:
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.student_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001)
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr)
+            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=0.001)
             # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
             #                                 lr=self.opt.lr,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -867,7 +869,8 @@ class Trainer:
 
             self.baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.baseline_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=0.001)
+            baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=self.opt.lr)
+            # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=0.001)
             # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
             #                                 lr=self.opt.lr,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,

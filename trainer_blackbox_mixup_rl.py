@@ -362,7 +362,7 @@ class Trainer:
 
     def get_teacher_student(self):
         if self.opt.model == "MLP":
-            self.teacher = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+            self.teacher = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
         else:
             self.teacher = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         self.teacher.apply(initialize_weights)
@@ -371,7 +371,7 @@ class Trainer:
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
         if self.opt.model == "MLP":
-            self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+            self.student = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
         else:
             self.student = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
@@ -576,7 +576,7 @@ class Trainer:
                     logwriter.writerow(['epoch', 'test acc'])
 
             if self.opt.model == "MLP":
-                example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+                example = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
             else:
                 example = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
@@ -669,7 +669,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.experiment == 'Baseline':
+        if self.opt.experiment == 'Baseline1':
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -680,7 +680,7 @@ class Trainer:
                     logwriter.writerow(['epoch', 'test acc'])
 
             if self.opt.model == "MLP":
-                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes).cuda()
+                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
             else:
                 mixup_baseline = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
 
@@ -694,7 +694,7 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001) #, momentum=0.9, weight_decay=self.opt.decay)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.01) #, momentum=0.9, weight_decay=self.opt.decay)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -714,9 +714,116 @@ class Trainer:
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         inputs, targets = inputs.cuda(), targets.long().cuda()
 
-                        lam = np.random.beta(1.0, 1.0)
-                        # prob = [1.0, 0.5]
-                        # lam = random.choice(prob)
+                        # lam = np.random.beta(1.0, 1.0)
+                        prob = [1.0, 0.5]
+                        lam = random.choice(prob)
+
+                        index = torch.randperm(inputs.shape[0]).cuda()
+                        targets_a, targets_b = targets, targets[index]
+                        mixed_x = lam * inputs + (1 - lam) * inputs[index, :]
+
+                        outputs = mixup_baseline(mixed_x)
+
+                        loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
+
+                        # mixed_x, targets_a, targets_b, lam = mixup_data(inputs, targets, alpha=1.0)
+
+                        # outputs = mixup_baseline(mixed_x)
+                        # loss = mixup_criterion(self.loss_fn, outputs, targets_a, targets_b, lam)
+                        # loss = self.loss_fn(outputs, mixed_y.long())
+
+                        mixup_baseline_optim.zero_grad()
+                        loss.backward()
+                        mixup_baseline_optim.step()
+
+                        self.step += 1
+
+                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
+
+                        train_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += targets.size(0)
+                        correct += predicted.eq(targets.data).cpu().sum()
+
+                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+                acc, test_loss = self.test(mixup_baseline, test_loader=self.test_loader, epoch=epoch)
+                res_mixup.append(acc)
+                res_loss_mixup.append(test_loss)
+
+                # self.adjust_learning_rate(mixup_baseline_optim, epoch)
+
+                with open(logname, 'a') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow([epoch, acc])
+
+                mixup_baseline.train()
+
+            if self.visualize == False:
+                save_folder = os.path.join(self.opt.log_path, "imgs")
+                if not os.path.exists(save_folder):
+                    os.makedirs(save_folder)
+
+                img_path = os.path.join(save_folder, "sgd_vanilla_mixup_baseline.png")
+
+                fig = plt.figure()
+                plt.plot(res_example, c="g", label="SGD")
+                plt.plot(res_mixup, c="b", label="Mixup")
+                plt.xlabel("Epoch")
+                plt.ylabel("Accuracy")
+                plt.legend()
+                plt.savefig(img_path)
+                plt.close()
+
+        if self.opt.experiment == 'Baseline2':
+            # mixup baseline
+            self.opt.experiment = "Discrete_Mixup"
+            print("Start training {} ...".format(self.opt.experiment))
+            logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+            if not os.path.exists(logname):
+                with open(logname, 'w') as logfile:
+                    logwriter = csv.writer(logfile, delimiter=',')
+                    logwriter.writerow(['epoch', 'test acc'])
+
+            if self.opt.model == "MLP":
+                mixup_baseline = networks.MLP(n_in=self.opt.n_in, num_classes=self.opt.n_classes, features_extractor=False).cuda()
+            else:
+                mixup_baseline = networks.NET(in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+
+            res_mixup = []
+            res_loss_mixup = []
+            a_mixup = []
+            b_mixup = []
+            loss_mixup = []
+            w_diff_mixup = []
+            train_loss = 0
+            correct = 0
+            total = 0
+            mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.01) #, momentum=0.9, weight_decay=self.opt.decay)
+            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
+            #                                         lr=0.001,
+            #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+            #                                         weight_decay=self.opt.weight_decay)
+            self.step = 0
+            self.best_acc = 0
+            self.best_acc = 0
+            self.best_test_loss = 0
+            self.init_train_loss = 0
+            self.init_test_loss = 0
+            for epoch in tqdm(range(self.opt.n_epochs)):
+                if epoch != 0:
+                    mixup_baseline.train()
+                    train_loss = 0
+                    correct = 0
+                    total = 0
+                    for batch_idx, (inputs, targets) in enumerate(self.loader):
+                        inputs, targets = inputs.cuda(), targets.long().cuda()
+
+                        # lam = np.random.beta(1.0, 1.0)
+                        prob = [1.0, 0.5]
+                        lam = random.choice(prob)
 
                         index = torch.randperm(inputs.shape[0]).cuda()
                         targets_a, targets_b = targets, targets[index]
@@ -780,6 +887,8 @@ class Trainer:
             policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
             policy_gradient.solve_environment()
 
+            # sys.exit()
+
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -804,7 +913,7 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.SGD(example.parameters(), lr=0.001)
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001)
             # student_optim = torch.optim.SGD(self.student.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -875,7 +984,7 @@ class Trainer:
                         loss.backward()
                         student_optim.step()
 
-                        self.adjust_learning_rate(student_optim, self.step)
+                        # self.adjust_learning_rate(student_optim, self.step)
 
                         # running_train_loss += loss.item()
                         # _, predicted = torch.max(outputs.data, 1)

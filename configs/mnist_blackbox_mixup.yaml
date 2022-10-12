@@ -41,3 +41,6 @@ epsilon: 0.1
 n_weight_update: 5 # 5
 n_z_update: 15 # 20
 n_in: 784
+n_tries: 30
+action_space: 2
+n_pg_epochs: 3
