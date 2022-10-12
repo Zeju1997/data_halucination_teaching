@@ -900,8 +900,8 @@ class Trainer:
                 plt.close()
 
         if self.opt.experiment == 'Student':
-            # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, writers=self.writers)
-            # policy_gradient.solve_environment()
+            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+            policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
@@ -952,9 +952,9 @@ class Trainer:
 
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
-                    # running_train_loss = 0
-                    # correct = 0
-                    # total = 0
+                    running_train_loss = 0
+                    correct = 0
+                    total = 0
                     self.student.train()
                     for batch_idx, (inputs, targets) in enumerate(self.loader):
                         self.step = self.step + 1
@@ -1003,13 +1003,13 @@ class Trainer:
 
                         self.adjust_learning_rate(student_optim, self.step)
 
-                        # running_train_loss += loss.item()
-                        # _, predicted = torch.max(outputs.data, 1)
-                        # total += targets.size(0)
-                        # correct += predicted.eq(targets.data).cpu().sum()
+                        running_train_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += targets.size(0)
+                        correct += predicted.eq(targets.data).cpu().sum()
 
-                        # progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                        #     % (running_train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                        progress_bar(batch_idx, len(self.loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (running_train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
                         if self.step == 1:
                             # feat_sim = self.query_model()
