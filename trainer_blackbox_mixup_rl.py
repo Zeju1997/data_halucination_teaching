@@ -1033,7 +1033,7 @@ class Trainer:
                             # _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
                             _, _ = self.val(self.student, val_loader=self.val_loader, epoch=epoch)
 
-                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=True)
+                acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
@@ -1263,8 +1263,8 @@ class Trainer:
         test_loss /= len(val_loader.dataset)
         acc = correct / len(val_loader.dataset)
 
-        if epoch == 0 or acc > self.best_acc:
-            self.save_model(model=model, name=self.opt.experiment)
+        # if epoch == 0 or acc > self.best_acc:
+        #     self.save_model(model=model, name=self.opt.experiment)
         if acc > self.best_acc:
             self.best_acc = acc
         if self.best_test_loss > test_loss:
@@ -1423,25 +1423,6 @@ class Trainer:
             torch.save(self.agent.state_dict(), 'policy_w.pth')
 
         return outputs, losses
-
-    def val(self):
-        """Validate the model on a single minibatch
-        """
-        self.set_eval()
-        try:
-            inputs = self.val_iter.next()
-        except StopIteration:
-            self.val_iter = iter(self.val_loader)
-            inputs = self.val_iter.next()
-
-        with torch.no_grad():
-            outputs, losses = self.process_batch(inputs)
-            self.compute_accuracy(inputs, outputs, losses)
-            self.log("val", inputs, outputs, losses)
-
-            del inputs, outputs, losses
-
-        self.set_train()
 
     def compute_losses(self, inputs, outputs):
         losses = {}
