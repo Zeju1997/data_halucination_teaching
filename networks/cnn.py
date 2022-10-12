@@ -55,6 +55,7 @@ cfg = {
 class CNN(nn.Module):
     def __init__(self, cnn_name, in_channels=3, num_classes=10, feature_extractor=True):
         super(CNN, self).__init__()
+        self.in_channels = in_channels
         self.feature_num = 256
         self.features = self._make_layers(cfg[cnn_name])
         if feature_extractor:
@@ -72,7 +73,7 @@ class CNN(nn.Module):
 
     def _make_layers(self, cfg):
         layers = []
-        in_channels = 3
+        in_channels = self.in_channels
         for x in cfg:
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
