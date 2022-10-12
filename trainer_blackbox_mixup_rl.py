@@ -230,9 +230,9 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "blackbox_mixup_rl_" + self.opt.data_mode + '_' + self.opt.model
+        self.opt.model_name = "blackbox_mixup_rl_" + self.opt.data_mode + '_' + str(self.opt.n_pg_epochs)
 
-        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
+        self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name, str(self.opt.seed), str(self.opt.model), str(self.opt.experiment))
         if not os.path.exists(self.opt.log_path):
             os.makedirs(self.opt.log_path)
 
@@ -681,7 +681,7 @@ class Trainer:
                 # diff = torch.linalg.norm(w_star - example.lin.weight, ord=2) ** 2
                 # w_diff_example.append(diff.detach().clone().cpu())
 
-        if self.opt.experiment == 'Baseline1':
+        if self.opt.experiment == 'Vanilla_Mixup':
             # mixup baseline
             self.opt.experiment = "Vanilla_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -790,7 +790,7 @@ class Trainer:
                 plt.savefig(img_path)
                 plt.close()
 
-        if self.opt.experiment == 'Baseline2':
+        if self.opt.experiment == 'Discrete_Mixup':
             # mixup baseline
             self.opt.experiment = "Discrete_Mixup"
             print("Start training {} ...".format(self.opt.experiment))
@@ -900,7 +900,7 @@ class Trainer:
                 plt.close()
 
         if self.opt.experiment == 'Student':
-            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, writers=self.writers)
             policy_gradient.solve_environment()
 
             # mixup student

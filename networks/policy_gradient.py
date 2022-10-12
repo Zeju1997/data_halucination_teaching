@@ -20,7 +20,7 @@ import csv
 activation = {}
 
 class PolicyGradient:
-    def __init__(self, opt, student, train_loader, val_loader, test_loader, writers):
+    def __init__(self, opt, student, train_loader, val_loader, writers):
         ALPHA = 5e-3        # learning rate
         BATCH_SIZE = 1     # how many episodes we want to pack into an epoch
         HIDDEN_SIZE = 64    # number of hidden nodes we have in our dnn
@@ -49,7 +49,6 @@ class PolicyGradient:
 
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.test_loader = test_loader
 
         # instantiate the tensorboard writer
         """
@@ -557,7 +556,7 @@ class PolicyGradient:
         total = 0
         test_loss = 0
         with torch.no_grad():
-            for (inputs, targets) in self.test_loader:
+            for (inputs, targets) in self.val_loader:
                 inputs, targets = inputs.cuda(), targets.long().cuda()
 
                 outputs = net(inputs)

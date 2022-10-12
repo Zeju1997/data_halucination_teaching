@@ -24,7 +24,6 @@ class CNN1(nn.Module):
         return x
 
 
-
 class CNN2(nn.Module):
     def __init__(self, name, in_channels=3, num_classes=100):
         super(CNN, self).__init__()
