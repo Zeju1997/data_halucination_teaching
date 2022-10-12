@@ -39,7 +39,7 @@ train_baseline: True
 n_query_classes: 10
 num_workers: 0 # 10
 action_space: 2
-n_pg_epochs: 4
+n_pg_epochs: 3
 n_tries: 20
 n_weight_update: 5 # 5
 n_z_update: 15 # 20
