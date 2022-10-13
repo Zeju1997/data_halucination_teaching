@@ -20,7 +20,7 @@ import csv
 activation = {}
 
 class PolicyGradient:
-    def __init__(self, opt, student, train_loader, val_loader, writers):
+    def __init__(self, opt, student, train_loader, val_loader, test_loader, writers):
         ALPHA = 5e-3        # learning rate
         BATCH_SIZE = 1     # how many episodes we want to pack into an epoch
         HIDDEN_SIZE = 64    # number of hidden nodes we have in our dnn
@@ -49,6 +49,7 @@ class PolicyGradient:
 
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.test_loader = test_loader
 
         # instantiate the tensorboard writer
         """
@@ -171,7 +172,7 @@ class PolicyGradient:
 
         # Get action actions
         # action_space = torch.tensor([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
-        action_space = torch.tensor([0.5, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
+        action_space = torch.tensor([0, 0.5, 1.0], device=self.DEVICE).unsqueeze(0).repeat(self.opt.n_epochs, 1)
         # action_space = torch.tensor([[0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0], [0.2, 0.3, 1.0]], device=self.DEVICE)
 
         action = torch.gather(action_space, 1, action_index).squeeze(1)
@@ -364,6 +365,7 @@ class PolicyGradient:
         if acc > self.best_final_acc:
             self.best_final_acc = acc
             torch.save(self.agent.state_dict(), os.path.join(self.opt.log_path, 'policy_w.pth'))
+            print("Save model with best accuracy: {} ....".format(acc))
 
     def play_episode(self):
         """
@@ -480,7 +482,7 @@ class PolicyGradient:
 
         acc = self.val(self.student, criterion)
 
-        acc_test = self.test(self.student, criterion)
+        _ = self.test(self.student, criterion)
 
         # compute the reward
         reward = acc
@@ -500,7 +502,7 @@ class PolicyGradient:
         episode_weighted_log_probs = episode_log_probs_all * reward
         sum_weighted_log_probs = torch.sum(episode_weighted_log_probs).unsqueeze(dim=0)
 
-        return sum_weighted_log_probs, episode_logits_all, reward, acc_test
+        return sum_weighted_log_probs, episode_logits_all, reward, acc
 
     def train(self, net, criterion):
         # evaluate the model
@@ -556,7 +558,7 @@ class PolicyGradient:
         total = 0
         test_loss = 0
         with torch.no_grad():
-            for (inputs, targets) in self.val_loader:
+            for (inputs, targets) in self.test_loader:
                 inputs, targets = inputs.cuda(), targets.long().cuda()
 
                 outputs = net(inputs)

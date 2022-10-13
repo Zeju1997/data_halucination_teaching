@@ -56,7 +56,7 @@ class Policy(nn.Module):
         super(Policy, self).__init__()
         self.affine1 = nn.Linear(3, 128)
         self.dropout = nn.Dropout(p=0.6)
-        self.affine2 = nn.Linear(128, 2)
+        self.affine2 = nn.Linear(128, 3)
 
         self.saved_log_probs = []
         self.rewards = []
