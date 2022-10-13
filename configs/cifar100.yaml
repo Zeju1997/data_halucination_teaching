@@ -43,6 +43,6 @@ n_z_update: 15
 droprate: 0.3
 model: CNN3
 momentum: 0.9
-nesterov: True
-weight_decay: 0.0005
+nesterov: False
+weight_decay: 0.0001
 epsilon: 0.1

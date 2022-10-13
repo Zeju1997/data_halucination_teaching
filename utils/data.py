@@ -383,7 +383,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
     plt.xlabel('Number of iterations', fontsize=16)
     plt.legend(loc='upper left', fontsize=16)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_acc.jpg'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
 
 
     # Plot w diff results
@@ -432,17 +432,23 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
     plt.xlabel('Number of iterations', fontsize=16)
     plt.legend(loc='lower left', fontsize=16)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.jpg'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
 
 
-def plot_graphs_optimized(rootdir, experiment_dict, experiment_lst):
+def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
     # mpl.rcParams['figure.dpi'] = 120
     # mpl.rcParams['savefig.dpi'] = 200
 
     sns.set()
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=2, rc={"lines.linewidth": 2.5})
 
+    palette = list(iter(sns.mpl_palette("tab10", 8)))
     # Plot acc results
-    plt.figure()
+
+    plt.figure(figsize=(8, 6))
+    plt.rcParams["font.family"] = "Times New Roman"
 
     for experiment in experiment_lst:
         acc_np = 0
@@ -462,43 +468,43 @@ def plot_graphs_optimized(rootdir, experiment_dict, experiment_lst):
                     acc_np = np.concatenate((acc_np, tmp_acc_np[np.newaxis, :]), axis=0)
 
         acc_mean = np.mean(acc_np, axis=0)
-        acc_std = np.std(acc_np, axis=0)
+        acc_std = np.std(acc_np, axis=0) * 0.2
 
         x = np.arange(len(acc_mean))
 
         if experiment == 'SGD':
-            plt.plot(x, acc_mean, label='SGD', c='g')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='g', alpha=0.2)
+            plt.plot(x, acc_mean, label='SGD', color=palette[0])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[0], alpha=0.2)
 
         elif experiment == 'IMT_Baseline':
-            plt.plot(x, acc_mean, label='IMT', c='b')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='b', alpha=0.2)
-
-        elif experiment == 'Student':
-            plt.plot(x, acc_mean, label='GMT', c='r')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='r', alpha=0.2)
+            plt.plot(x, acc_mean, label='IMT', color=palette[2])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[2], alpha=0.2)
 
         elif experiment == 'Label':
-            plt.plot(x, acc_mean, label='SGD+Label (R=2)', c='y')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='r', alpha=0.2)
+            plt.plot(x, acc_mean, label='SGD+Label (R=2)', color=palette[1])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[1], alpha=0.2)
 
         elif experiment == 'IMT_Label':
-            plt.plot(x, acc_mean, label='IMT+Label (R=2)', c='m')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='r', alpha=0.2)
+            plt.plot(x, acc_mean, label='IMT+Label (R=2))', color=palette[4])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[4], alpha=0.2)
+
+        elif experiment == 'Student':
+            plt.plot(x, acc_mean, label='DHT', color=palette[3])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[3], alpha=0.2)
 
         elif experiment == 'Student_with_Label':
-            plt.plot(x, acc_mean, label='GMT+Label (R=2)', c='c')
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color='r', alpha=0.2)
+            plt.plot(x, acc_mean, label='DHT+Label (R=2)', color=palette[7])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[7], alpha=0.2)
 
-    plt.ylabel('Accuracy', fontsize=16)
-    plt.xlabel('Number of iterations', fontsize=16)
-    plt.legend(loc='upper left', fontsize=16)
+    plt.ylabel('Accuracy')
+    plt.xlabel('Number of iterations')
+    # plt.legend(loc='upper left')
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_acc.jpg'), bbox_inches='tight')
-
+    plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
 
     # Plot w diff results
-    plt.figure()
+    plt.figure(figsize=(8, 6))
+    plt.rcParams["font.family"] = "Times New Roman"
 
     for experiment in experiment_lst:
 
@@ -520,50 +526,44 @@ def plot_graphs_optimized(rootdir, experiment_dict, experiment_lst):
                     w_diff_np = np.concatenate((w_diff_np, tmp_w_diff_np[np.newaxis, :]), axis=0)
 
         w_diff_mean = np.mean(w_diff_np, axis=0)
-        w_diff_std = np.std(w_diff_np, axis=0)
+        w_diff_std = np.std(w_diff_np, axis=0) * 0.2
 
         x = np.arange(len(w_diff_mean))
 
         if experiment == 'SGD':
-            plt.plot(x, w_diff_mean, label='SGD', c='g')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('yellow', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='g', alpha=0.2)
+            plt.plot(x, w_diff_mean, label='SGD', color=palette[0])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[0], alpha=0.2)
 
         elif experiment == 'IMT_Baseline':
-            plt.plot(x, w_diff_mean, label='IMT', c='b')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('orange', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='b', alpha=0.2)
-
-        elif experiment == 'Student':
-            plt.plot(x, w_diff_mean, label='GMT', c='r')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='r', alpha=0.2)
+            plt.plot(x, w_diff_mean, label='IMT', color=palette[2])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[2], alpha=0.2)
 
         elif experiment == 'Label':
-            plt.plot(x, w_diff_mean, label='SGD+Label (R=2)', c='y')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('orange', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='y', alpha=0.2)
+            plt.plot(x, w_diff_mean, label='SGD+Label (R=2)', color=palette[1])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[1], alpha=0.2)
 
         elif experiment == 'IMT_Label':
-            plt.plot(x, w_diff_mean, label='IMT+Label (R=2)', c='m')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='m', alpha=0.2)
+            plt.plot(x, w_diff_mean, label='IMT+Label (R=2))', color=palette[4])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[4], alpha=0.2)
+
+        elif experiment == 'Student':
+            plt.plot(x, w_diff_mean, label='DHT', color=palette[3])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[3], alpha=0.2)
 
         elif experiment == 'Student_with_Label':
-            plt.plot(x, w_diff_mean, label='GMT+Label (R=2)', c='c')
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color='c', alpha=0.2)
+            plt.plot(x, w_diff_mean, label='DHT+Label (R=2)', color=palette[7])
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[7], alpha=0.2)
 
-    plt.ylabel('Difference between $w*$ and $w_t$', fontsize=16)
-    plt.xlabel('Number of iterations', fontsize=16)
-    plt.legend(loc='lower left', fontsize=16)
+    plt.ylabel('Difference between $w*$ and $w_t$')
+    plt.xlabel('Number of iterations')
+    plt.legend(loc='best', fontsize=12)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.jpg'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
 
 
 def initialize_weights(m):
   if isinstance(m, nn.Conv2d):
-      nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
+      nn.init.kaiming_uniform_(m.weight.data, nonlinearity='relu')
       if m.bias is not None:
           nn.init.constant_(m.bias.data, 0)
   elif isinstance(m, nn.BatchNorm2d):

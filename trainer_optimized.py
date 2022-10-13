@@ -676,7 +676,7 @@ class Trainer:
 
     def plot_results(self):
 
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student', 'Student_with_Label', 'IMT_Label', 'Label']
+        experiments_lst = ['SGD', 'Label', 'IMT_Baseline', 'IMT_Label', 'Student', 'Student_with_Label']
         rootdir = self.opt.log_path
 
         experiment_dict = {
@@ -694,7 +694,7 @@ class Trainer:
                     if experiment in file:
                         experiment_dict[experiment].append(file)
 
-        plot_graphs_optimized(rootdir, experiment_dict, experiments_lst)
+        plot_graphs_optimized(rootdir, experiments_lst, experiment_dict)
 
 
     def process_batch(self, inputs):
