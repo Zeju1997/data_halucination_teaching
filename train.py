@@ -39,8 +39,8 @@ def load_config(config_name):
 seeds = [65800, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
-# models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
-models = ['NET']
+models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
+# models = ['NET']
 experiments = ['SGD', 'Student', 'Baseline']
 # experiments = ['Adam', 'Vanilla_Mixup', 'Discrete_Mixup']
 # experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
