@@ -13,3 +13,6 @@ Data: mnist, Model: MLP, Experiment: SGD, Mean: 0.92454, Std: 0.0007418894796396
 Data: mnist, Model: MLP, Experiment: Student, Mean: 0.9501800000000001, Std: 0.0003709447398198328
 
 Data: mnist, Model: MLP, Experiment: Baseline, Mean: 0.9246800000000001, Std: 0.0006046486583132216
+
+======================== Above is version: 7a50872733aaac9ec8039acd803848d9c14022b6 ====================
+

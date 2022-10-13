@@ -61,6 +61,7 @@ Data: cifar10, Model: CNN9, Experiment: Baseline, Mean: 0.6348, Std: 0.006374637
 Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.6001, Std: 0.003840312487285382
 
 ======================== Above is version: 7db63f417d72d7b36c2e72e2a8c1b29891586d8b ====================
+
 blackbox implicit final results 
 
 Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.8353400000000001, Std: 0.0013821722034536748
@@ -85,4 +86,6 @@ Data: cifar10, Model: CNN6, Experiment: Baseline, Mean: 0.88148, Std: 0.00314350
 
 Data: cifar10, Model: CNN9, Experiment: Baseline, Mean: 0.89748, Std: 0.002145134028446739
 
-Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.8516, Std: 0.11650660067137825
+Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.91052, Std: 0.0018258148865643762
+
+======================== Above is version: 7a50872733aaac9ec8039acd803848d9c14022b6 ====================
