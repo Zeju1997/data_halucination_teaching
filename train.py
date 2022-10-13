@@ -4,9 +4,9 @@ from __future__ import absolute_import, division, print_function
 # from trainer_vae_mnist import Trainer
 import itertools
 
-from trainer_blackbox_mixup_rl import Trainer
+# from trainer_blackbox_mixup_rl import Trainer
 # from trainer_blackbox_mixup_cnn import Trainer
-# from trainer_blackbox_implicit import Trainer
+from trainer_blackbox_implicit import Trainer
 
 from options.options import Options
 import os
@@ -37,19 +37,19 @@ def load_config(config_name):
 
 
 # seeds = [27026, 65800, 10094, 20058, 27026, 48495]
-seeds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+seeds = [8]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
 # models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
 models = ['NET']
-experiments = ['Student', 'Adam', 'Vanilla_Mixup', 'Discrete_Mixup']
+experiments = ['Adam', 'Vanilla_Mixup', 'Discrete_Mixup']
 # experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
 
 combination = list(itertools.product(seeds, models, experiments))
 
 def calc_results(opt, seeds, models, experiments):
-    # results = 'results_blackbox_implicit_{}.txt'.format(opt.data_mode)
-    results = 'results_blackbox_mixup_rl_{}.txt'.format(opt.data_mode)
+    results = 'results_blackbox_implicit_{}.txt'.format(opt.data_mode)
+    # results = 'results_blackbox_mixup_rl_{}.txt'.format(opt.data_mode)
     with open(results, 'a') as f:
         # f.write('blackbox implicit final results ')
         f.write('blackbox mixup rl final results ')
@@ -58,8 +58,8 @@ def calc_results(opt, seeds, models, experiments):
         for model in models:
             values = []
             for seed in seeds:
-                # model_name = "blackbox_implicit_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
-                model_name = "blackbox_mixup_rl_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
+                model_name = "blackbox_implicit_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
+                # model_name = "blackbox_mixup_rl_" + opt.data_mode + "_" + str(opt.n_weight_update) + '_' + str(opt.n_z_update) + '_' + str(opt.epsilon)
                 log_dir = os.path.join(CONF.PATH.LOG, model_name, str(seed), str(model), str(experiment))
                 for file in os.listdir(log_dir):
                     if file.endswith(".csv"):
@@ -83,8 +83,8 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist_blackbox_mixup.yaml")
-    # config = load_config("cifar10_blackbox_mixup.yaml")
+    config = load_config("mnist_blackbox_implicit.yaml")
+    # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
 
     opts.set_defaults(**config)

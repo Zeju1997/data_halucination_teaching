@@ -819,7 +819,6 @@ class Trainer:
 
             model_features = torch.FloatTensor([0, 1.0, 1.0]).cuda()
 
-
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     self.baseline.train()
@@ -1213,11 +1212,40 @@ class Trainer:
                     100. * batch_idx / len(train_loader), loss.item()))
                 self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-    def val(self, model, val_loader, loss_fn, optimizer, epoch):
+    def val(self, model, val_loader, epoch):
         model.eval()
         test_loss = 0
         correct = 0
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
+        with torch.no_grad():
+            for data, target in val_loader:
+                data, target = data.cuda(), target.cuda()
+                output = model(data)
+
+                test_loss += loss_fn(output, target.long()).item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+        test_loss /= len(val_loader.dataset)
+        acc = correct / len(val_loader.dataset)
+
+        # if epoch == 0 or acc > self.best_acc:
+        #     self.save_model(model=model, name=self.opt.experiment)
+        if acc > self.best_acc:
+            self.best_acc = acc
+        if self.best_test_loss > test_loss:
+            self.best_test_loss = test_loss
+
+        model.train()
+        return acc, test_loss
+
+    def test(self, model, test_loader, epoch):
+        model.eval()
+        test_loss = 0
+        correct = 0
+        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.cuda(), target.cuda()
@@ -1228,58 +1256,23 @@ class Trainer:
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
         test_loss /= len(test_loader.dataset)
-
         acc = correct / len(test_loader.dataset)
+
         self.log(mode="test", name="acc", value=acc, step=epoch)
 
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(test_loader.dataset),
-            100. * correct / len(test_loader.dataset)))
+        print('\nEpoch: {}, Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            epoch, test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
-        # if epoch % 1 == 0 or acc > self.best_acc:
-        #    self.save_model(model=model, name=self.opt.experiment)
-        # if netG is not None:
-        #     self.save_model(model=netG, name='netG')
-        if acc > self.best_acc:
-            self.best_acc = acc
-        if self.best_test_loss > test_loss:
-            self.best_test_loss = test_loss
+        # if epoch == 0 or acc > self.best_acc:
+        #     self.save_model(model=model, name=self.opt.experiment)
+        # if acc > self.best_acc:
+        #     self.best_acc = acc
+        # if self.best_test_loss > test_loss:
+        #     self.best_test_loss = test_loss
 
-
-    def test(self, model, test_loader, epoch, netG=None):
-        model.eval()
-        test_loss = 0
-        correct = 0
-        loss_fn = nn.CrossEntropyLoss(reduction='sum')
-        with torch.no_grad():
-            for data, target in test_loader:
-                data, target = data.cuda(), target.cuda()
-                output = model(data)
-
-                test_loss += loss_fn(output, target.long()).item()  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
-
-        test_loss /= len(test_loader.dataset)
-
-        acc = correct / len(test_loader.dataset)
-        self.log(mode="test", name="acc", value=acc, step=epoch)
-
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(test_loader.dataset),
-            100. * correct / len(test_loader.dataset)))
-        self.log(mode="test", name="loss", value=test_loss, step=epoch)
-
-        # if epoch % 1 == 0 or acc > self.best_acc:
-        #    self.save_model(model=model, name=self.opt.experiment)
-        if netG is not None:
-            self.save_model(model=netG, name='netG')
-        if acc > self.best_acc:
-            self.best_acc = acc
-        if self.best_test_loss > test_loss:
-            self.best_test_loss = test_loss
-
+        model.train()
         return acc, test_loss
 
     def avg_loss(self, model, data_loader):
@@ -1421,24 +1414,6 @@ class Trainer:
 
         return outputs, losses
 
-    def val(self):
-        """Validate the model on a single minibatch
-        """
-        self.set_eval()
-        try:
-            inputs = self.val_iter.next()
-        except StopIteration:
-            self.val_iter = iter(self.val_loader)
-            inputs = self.val_iter.next()
-
-        with torch.no_grad():
-            outputs, losses = self.process_batch(inputs)
-            self.compute_accuracy(inputs, outputs, losses)
-            self.log("val", inputs, outputs, losses)
-
-            del inputs, outputs, losses
-
-        self.set_train()
 
     def compute_losses(self, inputs, outputs):
         losses = {}

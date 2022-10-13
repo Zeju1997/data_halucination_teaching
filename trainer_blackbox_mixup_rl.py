@@ -901,8 +901,8 @@ class Trainer:
                 plt.close()
 
         if self.opt.experiment == 'Student':
-            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
-            policy_gradient.solve_environment()
+            # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, test_loader=self.test_loader, writers=self.writers)
+            # policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
