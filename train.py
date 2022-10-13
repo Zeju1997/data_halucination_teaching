@@ -91,8 +91,6 @@ if __name__ == "__main__":
 
     args = opts.parse_args()
 
-    args.idx = 0
-
     curr_comb = combination[args.idx]
 
     # generate data
