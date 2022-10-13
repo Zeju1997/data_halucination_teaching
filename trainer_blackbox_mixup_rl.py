@@ -862,7 +862,7 @@ class Trainer:
                         mixup_baseline_optim.step()
 
                         self.step += 1
-                        self.adjust_learning_rate(mixup_baseline_optim, self.step)
+                        # self.adjust_learning_rate(mixup_baseline_optim, self.step)
 
                         train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)
@@ -1003,7 +1003,7 @@ class Trainer:
                         loss.backward()
                         student_optim.step()
 
-                        self.adjust_learning_rate(student_optim, self.step)
+                        # self.adjust_learning_rate(student_optim, self.step)
 
                         running_train_loss += loss.item()
                         _, predicted = torch.max(outputs.data, 1)

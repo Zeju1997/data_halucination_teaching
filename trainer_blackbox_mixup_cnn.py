@@ -310,6 +310,24 @@ class Trainer:
             self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
 
+        elif self.opt.data_mode == "fashion_mnist":
+            # MNIST normalizing
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,)),
+            ])
+            dataset = torchvision.datasets.FashionMNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
+            # train, valid = random_split(train_dataset, [50000, 10000])
+            self.test_dataset = torchvision.datasets.FashionMNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+
+            self.train_dataset, self.val_dataset = random_split(dataset, [50000, 10000])
+
+            self.train_loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+            self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
+
+            self.loader = DataLoader(dataset, batch_size=self.opt.batch_size, num_workers=self.opt.num_workers, pin_memory=True, shuffle=True, drop_last=False)
+
         elif self.opt.data_mode == "gaussian":
             print("Generating Gaussian data ...")
 
@@ -376,9 +394,9 @@ class Trainer:
         # path = os.path.join(self.opt.log_path, 'weights/best_model_SGD.pth')
 
         if self.opt.model == "NET":
-            self.baseline = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            self.student = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         else:
-            self.baseline = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
+            self.student = networks.CNN(self.opt.model, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
         # self.baseline.load_state_dict(torch.load(path))
         # self.baseline.model.avgpool.register_forward_hook(self.get_activation('latent'))
         if self.opt.model == "NET":
@@ -748,6 +766,7 @@ class Trainer:
                             # _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
                             _, _ = self.val(self.baseline, val_loader=self.val_loader, epoch=epoch)
 
+                # _, _ = self.val(self.baseline, val_loader=self.val_loader, epoch=epoch, netG=netG, save=True)
                 acc, test_loss = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
@@ -764,6 +783,8 @@ class Trainer:
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
+
+            torch.save(netG.state_dict(), os.path.join(self.opt.log_path, 'weights/best_model_netG.pth'))
 
             if self.visualize == False:
                 fig = plt.figure()
@@ -880,7 +901,7 @@ class Trainer:
                         if self.step % 100 == 0:
                             _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
                         '''
-
+                # _, _ = self.val(self.baseline, val_loader=self.val_loader, epoch=epoch, netG=netG, save=True)
                 acc, test_loss = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
@@ -897,6 +918,8 @@ class Trainer:
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
+
+            torch.save(netG.state_dict(), os.path.join(self.opt.log_path, 'weights/best_model_netG.pth'))
 
             if self.visualize == False:
                 fig = plt.figure()
@@ -950,8 +973,8 @@ class Trainer:
         print(y_onehot)
         '''
 
-        self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
-        student_optim = torch.optim.Adam(self.baseline.parameters(), lr=self.opt.lr)
+        self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
+        student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
 
         self.step = 0
         self.best_acc = 0
@@ -983,20 +1006,20 @@ class Trainer:
 
                     index = torch.randperm(inputs.shape[0]).cuda()
 
-                    inputs_logits_1 = self.baseline(inputs)
-                    inputs_logits_2 = self.baseline(inputs[index, :])
+                    inputs_logits_1 = self.student(inputs)
+                    inputs_logits_2 = self.student(inputs[index, :])
                     lam = netG(inputs_logits_1, inputs_logits_2, targets, targets[index], model_features)
 
                     # lam = netG(inputs, inputs[index, :], targets, targets[index], model_features)
 
-                    self.baseline.train()
+                    self.student.train()
                     x_lam = torch.reshape(lam, (n_samples, 1, 1, 1))
                     y_lam = torch.reshape(lam, (n_samples, 1))
 
                     mixed_x = x_lam * inputs + (1 - x_lam) * inputs[index, :]
                     mixed_y = y_lam * targets_onehot + (1 - y_lam) * targets_onehot[index]
 
-                    outputs = self.baseline(mixed_x)
+                    outputs = self.student(mixed_x)
                     loss = self.loss_fn(outputs, mixed_y)
 
                     # loss = lam * self.loss_fn(outputs, targets_a) + (1 - lam) * self.loss_fn(outputs, targets_b)
@@ -1044,7 +1067,7 @@ class Trainer:
                         _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
                     '''
 
-            acc, test_loss = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
+            acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
             res_student.append(acc)
             res_loss_student.append(test_loss)
 
@@ -1231,7 +1254,7 @@ class Trainer:
         acc = correct / len(val_loader.dataset)
 
         # if epoch == 0 or acc > self.best_acc:
-        #     self.save_model(model=model, name=self.opt.experiment)
+        #         self.save_model(model=model, name=self.opt.experiment)
         if acc > self.best_acc:
             self.best_acc = acc
         if self.best_test_loss > test_loss:
@@ -1240,7 +1263,7 @@ class Trainer:
         model.train()
         return acc, test_loss
 
-    def test(self, model, test_loader, epoch):
+    def test(self, model, test_loader, epoch, netG=None):
         model.eval()
         test_loss = 0
         correct = 0
@@ -1265,8 +1288,8 @@ class Trainer:
         100. * correct / len(test_loader.dataset)))
         self.log(mode="test", name="loss", value=test_loss, step=epoch)
 
-        # if epoch == 0 or acc > self.best_acc:
-        #     self.save_model(model=model, name=self.opt.experiment)
+        if epoch == 0 or acc > self.best_acc:
+            self.save_model(model=model, name=self.opt.experiment)
         # if acc > self.best_acc:
         #     self.best_acc = acc
         # if self.best_test_loss > test_loss:

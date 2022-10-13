@@ -677,7 +677,8 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
         self.netG_optim = torch.optim.Adam(self.generator.model.parameters(), lr=0.0002, betas=(0.5, 0.999), weight_decay=0.001)
 
-        self.student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+        # self.student_optim = torch.optim.SGD(self.student.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
+        self.student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
 
         self.val_loader = val_loader
 
@@ -768,12 +769,11 @@ class UnrolledBlackBoxOptimizer(nn.Module):
 
             student_loss.append(loss.detach().item())
 
-        '''
         grad_gen = torch.autograd.grad(outputs=loss_stu,
                                        inputs=model_paramters,
                                        create_graph=False, retain_graph=False)
-        '''
-        grad_gen = 0
+
+        # grad_gen = 0
 
         return grad_gen, loss_stu.item(), loss_stu #, generated_x, gt_y, g_loss
 
@@ -864,7 +864,7 @@ class UnrolledBlackBoxOptimizer(nn.Module):
         # unrolled_loss = self.loss_fn(output_valid, target_valid)
         '''
 
-        unrolled_loss.backward()
+        unrolled_loss.backward(create_graph=True, retain_graph=True)
         dalpha = [v.grad for v in self.generator.model.parameters()]
         vector = [v.grad.data for v in self.student.parameters()]
         implicit_grads = self._hessian_vector_product(vector, input_train, target_train, model_features)

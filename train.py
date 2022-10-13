@@ -5,8 +5,8 @@ from __future__ import absolute_import, division, print_function
 import itertools
 
 # from trainer_blackbox_mixup_rl import Trainer
-# from trainer_blackbox_mixup_cnn import Trainer
-from trainer_blackbox_implicit import Trainer
+from trainer_blackbox_mixup_cnn import Trainer
+# from trainer_blackbox_implicit import Trainer
 
 from options.options import Options
 import os
@@ -36,14 +36,14 @@ def load_config(config_name):
     return config
 
 
-seeds = [65800, 10094, 20058, 27026, 48495]
+seeds = [8, 65800, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
-models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
-# models = ['NET']
-experiments = ['SGD', 'Student', 'Baseline']
-# experiments = ['Adam', 'Vanilla_Mixup', 'Discrete_Mixup']
-# experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
+# models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
+models = ['NET']
+# experiments = ['SGD', 'Student', 'Baseline']
+# experiments = ['Student', 'Discrete_Mixup', 'Adam', 'Vanilla_Mixup']
+experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
 
 combination = list(itertools.product(seeds, models, experiments))
 
@@ -84,7 +84,8 @@ if __name__ == "__main__":
     opts = options.parse()
 
     # config = load_config("mnist_blackbox_implicit.yaml")
-    config = load_config("cifar10.yaml")
+    config = load_config("mnist_blackbox_mixup.yaml")
+    # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
 
     opts.set_defaults(**config)
