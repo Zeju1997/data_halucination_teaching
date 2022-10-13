@@ -36,7 +36,8 @@ def load_config(config_name):
     return config
 
 
-seeds = [27026] # 65800, 10094, 20058, 27026, 48495]
+# seeds = [27026, 65800, 10094, 20058, 27026, 48495]
+seeds = [1]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
 # models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']

@@ -604,8 +604,8 @@ class Trainer:
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             # example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr) #, momentum=0.9, weight_decay=self.opt.decay)
-            # example_optim = torch.optim.SGD(example.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
-            example_optim = torch.optim.Adam(example.parameters(), lr=self.opt.lr)
+            example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=self.opt.momentum)
+            # example_optim = torch.optim.Adam(example.parameters(), lr=self.opt.lr)
             for epoch in tqdm(range(self.opt.n_epochs)):
                 if epoch != 0:
                     # self.train(example, self.loader, self.loss_fn, example_optim, epoch)
@@ -706,8 +706,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
-            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=self.opt.momentum)
+            # mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -814,8 +814,8 @@ class Trainer:
             correct = 0
             total = 0
             mixup_baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
-            mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
+            mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(), lr=self.opt.lr, momentum=self.opt.momentum)
+            # mixup_baseline_optim = torch.optim.Adam(mixup_baseline.parameters(), lr=self.opt.lr)
             # mixup_baseline_optim = torch.optim.SGD(mixup_baseline.parameters(),
             #                                         lr=0.001,
             #                                         momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -898,8 +898,8 @@ class Trainer:
                 plt.close()
 
         if self.opt.experiment == 'Student':
-            policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, writers=self.writers)
-            policy_gradient.solve_environment()
+            # policy_gradient = PolicyGradient(opt=self.opt, student=self.student, train_loader=self.loader, val_loader=self.val_loader, writers=self.writers)
+            # policy_gradient.solve_environment()
 
             # mixup student
             self.opt.experiment = "Policy_Gradient_Mixup"
@@ -925,7 +925,8 @@ class Trainer:
             train_loss = 0.0
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
-            student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
+            student_optim = torch.optim.SGD(self.student.parameters(), lr=self.opt.lr, momentum=self.opt.momentum)
+            # student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
             # student_optim = torch.optim.SGD(self.student.parameters(),
             #                                 lr=0.001,
             #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
@@ -1027,7 +1028,7 @@ class Trainer:
                             avg_train_loss = train_loss / self.step
                             state = self.model_features(avg_train_loss)
 
-                        # print(state)
+                        print(state)
 
                         if self.step % 100 == 0: # 100
                             # _, _ = self.test(self.student, test_loader=self.test_loader, epoch=epoch, log=False)
