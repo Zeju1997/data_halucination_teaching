@@ -49,3 +49,31 @@ Data: cifar100, Model: CNN6, Experiment: Baseline, Mean: 0.33054, Std: 0.0021959
 Data: cifar100, Model: CNN9, Experiment: Baseline, Mean: 0.29676, Std: 0.0038712271956060735
 
 Data: cifar100, Model: CNN15, Experiment: Baseline, Mean: 0.27004, Std: 0.002859790202095241
+
+======================== Above is version: 7db63f417d72d7b36c2e72e2a8c1b29891586d8b ====================
+
+blackbox implicit final results 
+
+Data: cifar100, Model: CNN3, Experiment: SGD, Mean: 0.5395800000000001, Std: 0.003446389415025514
+
+Data: cifar100, Model: CNN6, Experiment: SGD, Mean: 0.60876, Std: 0.0024735399733984602
+
+Data: cifar100, Model: CNN9, Experiment: SGD, Mean: 0.6294, Std: 0.0017720045146669178
+
+Data: cifar100, Model: CNN15, Experiment: SGD, Mean: 0.6202399999999999, Std: 0.005275831687990057
+
+Data: cifar100, Model: CNN3, Experiment: Student, Mean: 0.5326799999999999, Std: 0.001863759641155477
+
+Data: cifar100, Model: CNN6, Experiment: Student, Mean: 0.6043000000000001, Std: 0.002896894889359968
+
+Data: cifar100, Model: CNN9, Experiment: Student, Mean: 0.6103799999999999, Std: 0.004291107083259522
+
+Data: cifar100, Model: CNN15, Experiment: Student, Mean: 0.58012, Std: 0.012322240056093677
+
+Data: cifar100, Model: CNN3, Experiment: Baseline, Mean: 0.53564, Std: 0.004724658717833488
+
+Data: cifar100, Model: CNN6, Experiment: Baseline, Mean: 0.6107800000000001, Std: 0.004451247016286563
+
+Data: cifar100, Model: CNN9, Experiment: Baseline, Mean: 0.63246, Std: 0.005168597488681034
+
+Data: cifar100, Model: CNN15, Experiment: Baseline, Mean: 0.62052, Std: 0.006092749789709074
