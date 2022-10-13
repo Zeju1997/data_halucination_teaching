@@ -77,3 +77,5 @@ Data: cifar100, Model: CNN6, Experiment: Baseline, Mean: 0.6107800000000001, Std
 Data: cifar100, Model: CNN9, Experiment: Baseline, Mean: 0.63246, Std: 0.005168597488681034
 
 Data: cifar100, Model: CNN15, Experiment: Baseline, Mean: 0.62052, Std: 0.006092749789709074
+
+======================== Above is version: 7a50872733aaac9ec8039acd803848d9c14022b6 ====================
