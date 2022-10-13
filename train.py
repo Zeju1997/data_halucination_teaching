@@ -41,7 +41,7 @@ seeds = [65800, 10094, 20058, 27026, 48495]
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
 models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
 # models = ['NET']
-experiments = ['SGD', 'Student', 'Baseline']
+experiments = ['Student', 'SGD', 'Baseline']
 # experiments = ['Student', 'Discrete_Mixup', 'Adam', 'Vanilla_Mixup']
 # experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
 

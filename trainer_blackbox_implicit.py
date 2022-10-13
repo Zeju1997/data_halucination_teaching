@@ -92,7 +92,6 @@ def plot_classifier(model, max, min):
 def approx_fprime(generator, f, epsilon, args=(), f0=None):
     """
     See ``approx_fprime``.  An optional initial function value arg is added.
-
     """
 
     xk = generator.linear.weight
@@ -227,12 +226,10 @@ class EstimatorCV():
         self.CoVariance = torch.zeros(class_num, feature_num, feature_num).cuda()
         self.Ave = torch.zeros(class_num, feature_num).cuda()
         self.Amount = torch.zeros(class_num).cuda()
-
     def update_CV(self, features, labels):
         N = features.size(0)
         C = self.class_num
         A = features.size(1)
-
         NxCxFeatures = features.view(
             N, 1, A
         ).expand(
@@ -240,50 +237,36 @@ class EstimatorCV():
         )
         onehot = torch.zeros(N, C).cuda()
         onehot.scatter_(1, labels.view(-1, 1), 1)
-
         NxCxA_onehot = onehot.view(N, C, 1).expand(N, C, A)
-
         features_by_sort = NxCxFeatures.mul(NxCxA_onehot)
-
         Amount_CxA = NxCxA_onehot.sum(0)
         Amount_CxA[Amount_CxA == 0] = 1
-
         ave_CxA = features_by_sort.sum(0) / Amount_CxA
-
         var_temp = features_by_sort - \
                    ave_CxA.expand(N, C, A).mul(NxCxA_onehot)
-
         var_temp = torch.bmm(
             var_temp.permute(1, 2, 0),
             var_temp.permute(1, 0, 2)
         ).div(Amount_CxA.view(C, A, 1).expand(C, A, A))
-
         sum_weight_CV = onehot.sum(0).view(C, 1, 1).expand(C, A, A)
-
         sum_weight_AV = onehot.sum(0).view(C, 1).expand(C, A)
-
         weight_CV = sum_weight_CV.div(
             sum_weight_CV + self.Amount.view(C, 1, 1).expand(C, A, A)
         )
         weight_CV[weight_CV != weight_CV] = 0
-
         weight_AV = sum_weight_AV.div(
             sum_weight_AV + self.Amount.view(C, 1).expand(C, A)
         )
         weight_AV[weight_AV != weight_AV] = 0
-
         additional_CV = weight_CV.mul(1 - weight_CV).mul(
             torch.bmm(
                 (self.Ave - ave_CxA).view(C, A, 1),
                 (self.Ave - ave_CxA).view(C, 1, A)
             )
         )
-
         self.CoVariance = (self.CoVariance.mul(1 - weight_CV) + var_temp
                       .mul(weight_CV)).detach() + additional_CV.detach()
-
         self.Ave = (self.Ave.mul(1 - weight_AV) + ave_CxA.mul(weight_AV)).detach()
-
         self.Amount += onehot.sum(0)
 '''
 
@@ -567,7 +550,6 @@ class Trainer:
         '''
         from time import time
         import multiprocessing as mp
-
         for num_workers in range(0, mp.cpu_count(), 2):
             train_loader = DataLoader(self.train_dataset, shuffle=True, num_workers=num_workers, batch_size=self.opt.batch_size, pin_memory=True)
             start = time()
@@ -582,12 +564,8 @@ class Trainer:
         import torchvision.datasets as datasets
         import matplotlib.pyplot as plt
         from sklearn.cluster import KMeans
-
-
         kmeans = KMeans(n_clusters=10)
-
         X = self.val_dataset.dataset.data
-
         # KMmodel = kmeans.fit(self.val_dataset.data.numpy())
         KMmodel = kmeans.fit(X)
         print("cluster centers", kmeans.labels_)
@@ -631,9 +609,10 @@ class Trainer:
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=self.opt.lr)
-            example_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
-                                                lr=self.opt.lr,
-                                                momentum=self.opt.momentum, weight_decay=self.opt.weight_decay)
+            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
 
             # cosine learning rate
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
@@ -755,9 +734,10 @@ class Trainer:
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.student_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr)
-            student_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
-                                                lr=self.opt.lr,
-                                                momentum=self.opt.momentum, weight_decay=self.opt.weight_decay)
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
             # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
 
             # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
@@ -867,8 +847,9 @@ class Trainer:
             self.baseline_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=self.opt.lr)
             baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
-                                                lr=self.opt.lr,
-                                                momentum=self.opt.momentum, weight_decay=self.opt.weight_decay)
+                                            lr=self.opt.lr,
+                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+                                            weight_decay=self.opt.weight_decay)
             # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.loader)*self.opt.n_epochs)
 
             # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
@@ -1173,20 +1154,14 @@ class Trainer:
         '''
         for i, cls in enumerate(classes):
             a, b = cls[0], cls[1]
-
             _ = self.student(self.query_set[a, :])
             act1 = activation['latent'].squeeze()
             # act1 = activation['latent'].mean(0).squeeze()
-
             # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-
             _ = self.student(self.query_set[b, :])
             act2 = activation['latent'].squeeze()
-
             # act2 = activation['latent'].mean(0).squeeze()
-
             # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-
             # feat_sim[i] = HSIC(act1_norm, act2_norm)
             cos_sim = cos(act1, act2)
             feat_sim[i] = torch.mean(cos_sim)
@@ -1211,20 +1186,14 @@ class Trainer:
         '''
         for i, cls in enumerate(classes):
             a, b = cls[0], cls[1]
-
             _ = self.student(self.query_set[a, :])
             act1 = activation['latent'].squeeze()
             # act1 = activation['latent'].mean(0).squeeze()
-
             # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-
             _ = self.student(self.query_set[b, :])
             act2 = activation['latent'].squeeze()
-
             # act2 = activation['latent'].mean(0).squeeze()
-
             # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-
             # feat_sim[i] = HSIC(act1_norm, act2_norm)
             cos_sim = cos(act1, act2)
             feat_sim[i] = torch.mean(cos_sim)
