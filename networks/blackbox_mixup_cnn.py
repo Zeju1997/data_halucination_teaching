@@ -123,7 +123,7 @@ class Generator(nn.Module):
         # feat_dim = torch.combinations(torch.arange(self.opt.n_query_classes))
         # feat_dim = self.opt.n_query_classes
 
-        self.fc1 = nn.Linear(self.opt.n_classes + 3, 5)
+        self.fc1 = nn.Linear(self.opt.n_classes + 3, 3)
 
         self.act = nn.Sigmoid()
 
@@ -142,7 +142,8 @@ class Generator(nn.Module):
 
         x = F.softmax(x, dim=1)
 
-        out = x[:, 1] * 0.2 + x[:, 2] * 0.4 + x[:, 3] * 0.6 + x[:, 4] * 0.8
+        # out = x[:, 1] * 0.2 + x[:, 2] * 0.4 + x[:, 3] * 0.6 + x[:, 4] * 0.8
+        out = x[:, 1] * 0.5 + x[:, 2] * 1.0
 
         return out
 
