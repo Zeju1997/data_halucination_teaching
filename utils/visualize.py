@@ -360,6 +360,51 @@ def make_results_video_2d(opt, X, Y, generated_samples, generated_labels, res_sg
 def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
     sns.set()
 
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 5})
+
+    palette = list(iter(sns.mpl_palette("tab10", 8)))
+
+    save_folder = os.path.join(opt.log_path, "generated_samples")
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    for i in range(generated_labels.shape[0]):
+        if generated_labels[i] == 0:
+            generated_labels[i] = 1
+        else:
+            generated_labels[i] = 0
+
+    iterations = [20, 150, 280]
+    for i in iterations:
+
+        fig = plt.figure()
+        fig.set_size_inches(5.8, 5.8)
+        plt.plot(a_star, b_star, '-', color=palette[1], label='$w^*$')
+        plt.plot(a_student[i], b_student[i], '--', color=palette[2], label='$w^t$')
+        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, alpha=0.25)
+        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap='bwr')
+        plt.legend(loc="best", fontsize=22)
+        plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
+        plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
+        plt.xticks([])
+        plt.yticks([])
+
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.pdf'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path, bbox_inches='tight')
+        plt.close()
+
+'''
+def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, seed):
+    sns.set()
+
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
+
+    palette = list(iter(sns.mpl_palette("tab10", 8)))
+
     save_folder = os.path.join(opt.log_path, "generated_samples")
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
@@ -369,17 +414,21 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
 
         fig = plt.figure()
         fig.set_size_inches(5.8, 5.8)
-        plt.plot(a_star, b_star, '-k', label='W star')
-        plt.plot(a_student[i], b_student[i], '-r', label='Learned Classifier')
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, edgecolors='k')
-        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, marker='^')
-        plt.legend(loc="upper right", fontsize=16)
+        plt.plot(a_star, b_star, '-', color=palette[0], label='$w^*$')
+        plt.plot(a_student[i], b_student[i], '-r', color=palette[1], label='$w^t$')
+        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap=cm_bright, alpha=0.3)
+        plt.scatter(generated_samples[:i, 0], generated_samples[:i, 1], c=generated_labels[:i, 0], cmap=cm_bright, edgecolors='k')
+        if i == 1:
+            plt.legend(loc="best", fontsize=16)
         plt.xlim([X[:, 0].min()-0.4, X[:, 0].max()+0.4])
         plt.ylim([X[:, 1].min()-0.4, X[:, 1].max()+0.4])
+        plt.xticks([])
+        plt.yticks([])
 
-        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.jpg'.format(opt.data_mode, epoch, seed, i))
-        plt.savefig(img_path)
+        img_path = os.path.join(save_folder, 'paper_generated_samples_{}_{}_{}_{}.pdf'.format(opt.data_mode, epoch, seed, i))
+        plt.savefig(img_path, bbox_inches='tight')
         plt.close()
+'''
 
 from PIL import Image
 

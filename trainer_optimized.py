@@ -696,7 +696,6 @@ class Trainer:
 
         plot_graphs_optimized(rootdir, experiments_lst, experiment_dict)
 
-
     def process_batch(self, inputs):
         #for key, ipt in inputs.items():
         #    if key != 'case_name':

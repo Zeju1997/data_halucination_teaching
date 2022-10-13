@@ -528,9 +528,15 @@ class Trainer:
                     file_lst.append(file)
 
         sns.set()
+        sns.set_style('white')
+        sns.set_theme(style="ticks")
+        sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
 
+        palette = list(iter(sns.mpl_palette("tab10", 8)))
         # Plot acc results
-        plt.figure()
+
+        plt.figure(figsize=(8, 6))
+        plt.rcParams["font.family"] = "Times New Roman"
 
         for idx, experiment in enumerate(experiments_lst):
             value_np = 0
@@ -555,23 +561,23 @@ class Trainer:
             x = np.arange(len(value_mean))
 
             if experiment == 'SGD':
-                plt.plot(x, value_mean, label='SGD', c='g')
-                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='g', alpha=0.2)
+                plt.plot(x, value_mean, color=palette[0], c='g')
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[0], alpha=0.2)
 
             elif experiment == 'IMT_Baseline':
-                plt.plot(x, value_mean, label='IMT', c='b')
-                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='b', alpha=0.2)
+                plt.plot(x, value_mean, label='IMT', color=palette[2])
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[2], alpha=0.2)
 
             else:
-                plt.plot(x, value_mean, label='GMT', c='r')
-                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color='r', alpha=0.2)
+                plt.plot(x, value_mean, label='DHT', color=palette[3])
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[3], alpha=0.2)
 
         plt.axhline(y=self.opt.epsilon, color='k', linestyle='dashed', label="$\epsilon = {}$".format(self.opt.epsilon), linewidth=4)
-        plt.ylabel('Perceptual Loss', fontsize=16)
-        plt.xlabel('Number of iterations', fontsize=16)
-        plt.legend(loc='center left', fontsize=16)
+        plt.ylabel('Perceptual Loss')
+        plt.xlabel('Number of iterations')
+        plt.legend(loc='best', fontsize=16)
 
-        plt.savefig(os.path.join(rootdir, 'paper_results_perceptual.jpg'), bbox_inches='tight')
+        plt.savefig(os.path.join(rootdir, 'paper_results_perceptual.pdf'), bbox_inches='tight')
 
 
     def make_gif(self):

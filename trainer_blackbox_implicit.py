@@ -354,12 +354,18 @@ class Trainer:
         elif self.opt.data_mode == "mnist":
             # MNIST normalizing
             transform = transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomResizedCrop(28),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,)), # transforms.Normalize((0.1307,), (0.3081,)),
+            ])
+            transform_test = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize((0.5,), (0.5,)), # transforms.Normalize((0.1307,), (0.3081,)),
             ])
             self.train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
             # train, valid = random_split(train_dataset, [50000, 10000])
-            self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
+            self.test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform_test)
             self.loader = DataLoader(self.train_dataset, batch_size=self.opt.batch_size, shuffle=True, num_workers=self.opt.num_workers, pin_memory=True)
             self.test_loader = DataLoader(self.test_dataset, batch_size=self.opt.batch_size, shuffle=False, num_workers=self.opt.num_workers, pin_memory=True)
 
@@ -608,11 +614,11 @@ class Trainer:
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=self.opt.lr)
-            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
-                                            lr=self.opt.lr,
-                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-                                            weight_decay=self.opt.weight_decay)
+            example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=self.opt.lr)
+            # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
+            #                                 lr=self.opt.lr,
+            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+            #                                 weight_decay=self.opt.weight_decay)
 
             # cosine learning rate
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
@@ -733,11 +739,11 @@ class Trainer:
 
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.student_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr)
-            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
-                                            lr=self.opt.lr,
-                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-                                            weight_decay=self.opt.weight_decay)
+            student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr)
+            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
+            #                                 lr=self.opt.lr,
+            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+            #                                 weight_decay=self.opt.weight_decay)
             # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
 
             # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
@@ -845,11 +851,11 @@ class Trainer:
 
             self.baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.baseline_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
-            # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=self.opt.lr)
-            baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
-                                            lr=self.opt.lr,
-                                            momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-                                            weight_decay=self.opt.weight_decay)
+            baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=self.opt.lr)
+            # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
+            #                                 lr=self.opt.lr,
+            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
+            #                                 weight_decay=self.opt.weight_decay)
             # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.loader)*self.opt.n_epochs)
 
             # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
