@@ -16,3 +16,10 @@ Data: mnist, Model: MLP, Experiment: Baseline, Mean: 0.9246800000000001, Std: 0.
 
 ======================== Above is version: 7a50872733aaac9ec8039acd803848d9c14022b6 ====================
 
+blackbox implicit final results 
+
+Data: mnist, Model: MLP, Experiment: SGD, Mean: 0.79714, Std: 0.004542510319195792
+
+Data: mnist, Model: MLP, Experiment: Student, Mean: 0.87486, Std: 0.0016206171663906278
+
+Data: mnist, Model: MLP, Experiment: Baseline, Mean: 0.7978799999999999, Std: 0.00399519711653882
