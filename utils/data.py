@@ -387,7 +387,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
 
     plt.ylabel('Accuracy')
     plt.xlabel('Number of iterations')
-    plt.legend(loc='best', fontsize=16)
+    plt.legend(loc='best', fontsize=22)
 
     plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
 
@@ -435,7 +435,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
 
     plt.ylabel('Difference between $w*$ and $w_t$')
     plt.xlabel('Number of iterations')
-    # plt.legend(loc='best', fontsize=16)
+    # plt.legend(loc='best', fontsize=22)
 
     plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
 
@@ -674,7 +674,7 @@ def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
 
     plt.ylabel('Difference between $w*$ and $w_t$')
     plt.xlabel('Number of iterations')
-    plt.legend(loc='best', fontsize=16)
+    plt.legend(loc='best', fontsize=22)
 
     plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
 

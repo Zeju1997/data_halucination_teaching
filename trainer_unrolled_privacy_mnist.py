@@ -575,7 +575,7 @@ class Trainer:
         plt.axhline(y=self.opt.epsilon, color='k', linestyle='dashed', label="$\epsilon = {}$".format(self.opt.epsilon), linewidth=4)
         plt.ylabel('Perceptual Loss')
         plt.xlabel('Number of iterations')
-        plt.legend(loc='best', fontsize=16)
+        plt.legend(loc='best', fontsize=22)
 
         plt.savefig(os.path.join(rootdir, 'paper_results_perceptual.pdf'), bbox_inches='tight')
 

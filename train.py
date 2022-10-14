@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 # from trainer_vae_mnist import Trainer
 import itertools
 
-from trainer_blackbox_implicit import Trainer
+from trainer_unrolled_privacy_mnist import Trainer
 # from trainer_blackbox_mixup_cnn import Trainer
 # from trainer_cgan_mnist import Trainer
 
@@ -40,7 +40,7 @@ seeds = [65800, 10094, 20058, 27026, 48495]
 
 # config_file = ['mnist_blackbox_implicit.yaml', 'cifar10_blackbox_mixup.yaml']
 models = ['CNN3', 'CNN6', 'CNN9', 'CNN15']
-# models = ['NET']
+# models = ['MLP']
 experiments = ['Student', 'SGD', 'Baseline']
 # experiments = ['Student', 'Discrete_Mixup', 'Adam', 'Vanilla_Mixup']
 # experiments = ['First_Order_Optimization', 'Second_Order_Optimization']
@@ -83,9 +83,10 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist_whitebox_privacy.yaml")
+    config = load_config("mnist.yaml")
     # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
+    # config = load_config("moon.yaml")
 
     opts.set_defaults(**config)
 
@@ -109,10 +110,10 @@ if __name__ == "__main__":
 
     trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
-    trainer.main()
+    # trainer.main()
     # trainer.make_gif()
     # trainer.plot_results()
     # trainer.plot_distribution()
-    # trainer.plot_perceptual_loss()
+    trainer.plot_perceptual_loss()
 
     # calc_results(args, seeds, models, experiments)

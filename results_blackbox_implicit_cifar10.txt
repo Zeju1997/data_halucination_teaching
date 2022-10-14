@@ -89,3 +89,41 @@ Data: cifar10, Model: CNN9, Experiment: Baseline, Mean: 0.89748, Std: 0.00214513
 Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.91052, Std: 0.0018258148865643762
 
 ======================== Above is version: 7a50872733aaac9ec8039acd803848d9c14022b6 ====================
+blackbox mixup rl final results 
+blackbox mixup rl final results 
+
+Data: cifar10, Model: CNN3, Experiment: Student, Mean: 0.8074600000000001, Std: 0.002979664410634202
+0.8094 0.8062 0.8064 0.8033 0.812
+
+Data: cifar10, Model: CNN6, Experiment: Student, Mean: 0.8541399999999999, Std: 0.003323010683100481
+0.8529 0.8548 0.8569 0.8577 0.8484
+
+Data: cifar10, Model: CNN9, Experiment: Student, Mean: 0.8683, Std: 0.0014518953130305129
+0.8669 0.8679 0.868 0.8711 0.8676
+
+Data: cifar10, Model: CNN15, Experiment: Student, Mean: 0.8712199999999999, Std: 0.002762173057576214
+0.8717 0.8729 0.8658 0.8724 0.8733
+
+Data: cifar10, Model: CNN3, Experiment: SGD, Mean: 0.76766, Std: 0.003187224497897849
+0.7718 0.7672 0.7652 0.7707 0.7634
+
+Data: cifar10, Model: CNN6, Experiment: SGD, Mean: 0.8020799999999999, Std: 0.0031083114387075077
+0.7972 0.8062 0.8002 0.8039 0.8029
+
+Data: cifar10, Model: CNN9, Experiment: SGD, Mean: 0.8194199999999998, Std: 0.0005912698199637939
+0.8188 0.8199 0.8187 0.8202 0.8195
+
+Data: cifar10, Model: CNN15, Experiment: SGD, Mean: 0.8325799999999999, Std: 0.0050514948282662005
+0.8271 0.8408 0.829 0.8301 0.8359
+
+Data: cifar10, Model: CNN3, Experiment: Baseline, Mean: 0.76512, Std: 0.001464786673888044
+0.7643 0.7659 0.7643 0.7676 0.7635
+
+Data: cifar10, Model: CNN6, Experiment: Baseline, Mean: 0.80214, Std: 0.003063070355052266
+0.7994 0.8064 0.8002 0.8053 0.7994
+
+Data: cifar10, Model: CNN9, Experiment: Baseline, Mean: 0.8174600000000002, Std: 0.0024848339984795908
+0.8193 0.8192 0.8126 0.818 0.8182
+
+Data: cifar10, Model: CNN15, Experiment: Baseline, Mean: 0.8322, Std: 0.003391164991562641
+0.8359 0.8363 0.828 0.8292 0.8316
