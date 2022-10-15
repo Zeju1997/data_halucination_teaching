@@ -20,6 +20,8 @@ from networks.resnet import ResNet50
 
 from datasets import CovidCTDataset
 
+from matplotlib.ticker import FormatStrFormatter
+
 # import utils
 
 import csv
@@ -350,6 +352,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for experiment in experiment_lst:
         acc_np = 0
@@ -393,6 +396,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for experiment in experiment_lst:
 
@@ -454,6 +458,7 @@ def plot_graphs_vae_cgan(rootdir, experiment_dict, experiment_lst):
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for experiment in experiment_lst:
         acc_np = 0
@@ -501,6 +506,7 @@ def plot_graphs_vae_cgan(rootdir, experiment_dict, experiment_lst):
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for experiment in experiment_lst:
 

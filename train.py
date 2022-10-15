@@ -83,7 +83,7 @@ if __name__ == "__main__":
     options = Options()
     opts = options.parse()
 
-    config = load_config("mnist.yaml")
+    config = load_config("mnist_whitebox_privacy.yaml")
     # config = load_config("cifar10.yaml")
     # config = load_config("cifar100.yaml")
     # config = load_config("moon.yaml")

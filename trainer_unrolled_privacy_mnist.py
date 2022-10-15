@@ -261,6 +261,7 @@ class Trainer:
         w_star = self.teacher.lin.weight
         w_star = w_star / torch.norm(w_star)
 
+
         # ---------------------
         #  Train SGD
         # ---------------------
@@ -516,6 +517,8 @@ class Trainer:
 
 
     def plot_perceptual_loss(self):
+
+        self.opt.epsilon = 50
 
         experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
         rootdir = self.opt.log_path
