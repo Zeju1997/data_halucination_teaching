@@ -154,7 +154,7 @@ def init_data(opt):
     elif opt.data_mode == "moon":
         print("Generating moon data ...")
 
-        np.random.seed(0)
+        # np.random.seed(0)
         noise_val = 0.2
 
         X, Y = make_moons(opt.nb_train+opt.nb_test, noise=noise_val)

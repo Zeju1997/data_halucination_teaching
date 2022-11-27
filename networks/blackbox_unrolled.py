@@ -52,7 +52,7 @@ class Generator(nn.Module):
         self.label_emb = nn.Embedding(self.opt.n_classes, self.opt.label_dim)
         self.img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
 
-        in_channels = teacher.lin.weight.size(1) + student.lin.weight.size(1) + self.opt.label_dim
+        in_channels = self.opt.dim + student.lin.weight.size(1) + self.opt.label_dim
 
         def block(in_feat, out_feat, normalize=False):
             layers = [nn.Linear(in_feat, out_feat)]

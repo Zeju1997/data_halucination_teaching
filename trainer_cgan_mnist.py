@@ -38,7 +38,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples
-from utils.data import init_data, initialize_weights, plot_graphs_vae_cgan
+from utils.data import init_data, initialize_weights, plot_graphs
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -792,14 +792,13 @@ class Trainer:
 
     def plot_results(self):
 
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student_vae', 'Student_cgan']
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
         rootdir = self.opt.log_path
 
         experiment_dict = {
             'SGD': [],
             'IMT_Baseline': [],
-            'Student_vae': [],
-            'Student_cgan': []
+            'Student': []
         }
 
         for experiment in experiments_lst:
@@ -808,7 +807,7 @@ class Trainer:
                     if experiment in file:
                         experiment_dict[experiment].append(file)
 
-        plot_graphs_vae_cgan(rootdir, experiment_dict, experiments_lst)
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
 
 
     def load_experiment_result(self):

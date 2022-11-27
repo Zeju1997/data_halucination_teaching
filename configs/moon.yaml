@@ -1,4 +1,4 @@
-data_mode: moon
+pdata_mode: moon
 teaching_mode: omniscient
 same_feat_space: True
 n_iter: 300 # 800 # 1500

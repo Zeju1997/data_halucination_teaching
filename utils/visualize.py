@@ -9,6 +9,8 @@ import os
 
 from torchvision.utils import save_image
 
+from matplotlib.ticker import FormatStrFormatter
+
 import seaborn as sns
 
 cm = plt.cm.RdBu
@@ -376,7 +378,7 @@ def plot_generated_samples_2d(opt, X, Y, a_star, b_star, a_student, b_student, g
         else:
             generated_labels[i] = 0
 
-    iterations = [20, 150, 280]
+    iterations = [10, 80, 150, 240, 290]
     for i in iterations:
 
         fig = plt.figure()
@@ -737,9 +739,14 @@ def plot_classifier(model, max, min):
 
 def plot_distribution(opt, X, Y, generated_samples, generated_labels):
 
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
+
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    fig.set_size_inches(13.3, 5.8)
-    sns.set_style('whitegrid')
+    fig.set_size_inches(14, 6.8)
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     x0 = []
     y0 = []
@@ -783,11 +790,20 @@ def plot_distribution(opt, X, Y, generated_samples, generated_labels):
     sns.kdeplot(y0, shade=True, color="Green", ax=ax2, label='Class 0 - DHT')
     sns.kdeplot(y1, shade=True, color="Orange", ax=ax2, label='Class 1 - DHT')
 
-    ax1.legend(loc="upper right")
-    ax2.legend(loc="upper right")
+    ax1.legend(loc="best", fontsize=18)
+    ax2.legend(loc="best", fontsize=18)
 
-    img_path = os.path.join(opt.log_path, 'paper_results_{}_{}_{}_sample_distribution.jpg'.format(opt.data_mode, opt.generator_type, opt.seed))
-    plt.savefig(img_path)
+    font = {'family': 'Times New Roman',
+            'size': 22,
+            }
+
+    ax1.set_xlabel(xlabel='X Coordinate', fontdict=font)
+    ax2.set_xlabel(xlabel='Y Coordinate', fontdict=font)
+    ax1.set_ylabel(ylabel='Distribution', fontdict=font)
+    ax2.set_ylabel(ylabel='', fontdict=font)
+
+    img_path = os.path.join(opt.log_path, 'paper_results_{}_{}_{}_sample_distribution.pdf'.format(opt.data_mode, opt.generator_type, opt.seed))
+    plt.savefig(img_path, bbox_inches='tight')
     plt.close()
 
 
