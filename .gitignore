@@ -10,6 +10,7 @@ checkpoints/
 .idea/
 *.mp4
 *.pt
+.idea/
 
 # data folder
 data/
