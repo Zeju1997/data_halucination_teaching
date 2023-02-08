@@ -25,7 +25,6 @@ from torchvision.transforms import ToTensor
 import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from train_utils import *
-from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
 import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation

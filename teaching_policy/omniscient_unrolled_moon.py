@@ -23,7 +23,6 @@ from torchvision.transforms import ToTensor
 import torchvision.utils as vutils
 from torchvision.utils import save_image
 from train_utils import *
-from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
 import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
@@ -45,8 +44,9 @@ import glob
 
 import csv
 
+from utils.data import init_data, load_experiment_result, plot_graphs
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data
+from utils.data import init_data, initialize_weights
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -109,21 +109,6 @@ def to_matrix(l, n):
     return [l[i:i+n] for i in range(0, len(l), n)]
 
 
-def initialize_weights(m):
-  if isinstance(m, nn.Conv2d):
-      nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
-      if m.bias is not None:
-          nn.init.constant_(m.bias.data, 0)
-  elif isinstance(m, nn.BatchNorm2d):
-      if m.bias is not None:
-          nn.init.constant_(m.weight.data, 1)
-          nn.init.constant_(m.bias.data, 0)
-  elif isinstance(m, nn.Linear):
-      if m.bias is not None:
-          nn.init.kaiming_uniform_(m.weight.data)
-          nn.init.constant_(m.bias.data, 0)
-
-
 class Trainer:
     def __init__(self, options):
         self.opt = options
@@ -150,14 +135,9 @@ class Trainer:
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
             self.teacher.apply(initialize_weights)
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
-
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -208,13 +188,6 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         print("Training")
         # self.set_train()
 
@@ -242,6 +215,9 @@ class Trainer:
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+
+            X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
+            X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
 
             proj_matrix = torch.empty(self.opt.img_size**2, self.opt.dim).normal_(mean=0, std=0.1)
             X_train = X_train @ proj_matrix
@@ -295,7 +271,6 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
-
         self.opt.experiment = "Student"
         print("Start training {} ...".format(self.opt.experiment))
         logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
@@ -309,16 +284,13 @@ class Trainer:
         if self.opt.data_mode == "mnist":
             netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
             unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
-        elif self.opt.data_mode == "moon":
+        else:
             netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
             unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
-        else:
-            netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = unrolled.UnrolledOptimizer_CT(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
 
         netG.train()
         netG.apply(weights_init)
-        optimizer = torch.optim.Adam(netG.parameters(), lr=1e-03, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
+        optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
         res_student = []
         a_student = []
@@ -336,14 +308,14 @@ class Trainer:
             w_t = netG.state_dict()
             gradients, loss = unrolled_optimizer(w_t, w_star)
 
-            # loss_student.append(loss.item())
+            loss_student.append(loss.item())
             # loss_student = loss_student + train_loss
 
             with torch.no_grad():
                 for p, g in zip(netG.parameters(), gradients):
                     p.grad = g
 
-            optimizer.step()
+            optimG.step()
 
         # plt.plot(loss_student, c='b', label="loss")
         # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
@@ -352,7 +324,9 @@ class Trainer:
         # plt.legend()
         # plt.show()
 
-        loss111 = []
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
+
         self.student.load_state_dict(torch.load('teacher_w0.pth'))
         w_init = self.student.lin.weight
         for idx in tqdm(range(self.opt.n_iter)):
@@ -372,6 +346,7 @@ class Trainer:
 
                 z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
+                # gt_x = gt_x / torch.norm(gt_x)
                 x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
                 # x = torch.cat((w_t, w_t-w_star), dim=1)
                 generated_sample = netG(x, gt_y)
@@ -381,10 +356,10 @@ class Trainer:
 
                 if idx == 1:
                     generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                    generated_labels = gt_y.cpu().detach().numpy()  # [np.newaxis, :]
+                    generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
                 else:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                    generated_labels = np.concatenate((generated_labels, gt_y.cpu().detach().numpy()), axis=0)
+                    generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
                 self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
@@ -397,11 +372,11 @@ class Trainer:
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
 
-            # a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
-            # a_student.append(a)
-            # b_student.append(b)
+            a, b = plot_classifier(self.student, X.max(axis=0), X.min(axis=0))
+            a_student.append(a)
+            b_student.append(b)
 
-            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "covid":
+            if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
                 nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
             elif self.opt.data_mode == "cifar10":
@@ -423,15 +398,14 @@ class Trainer:
 
             print("acc", acc)
 
-        if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon" or self.opt.data_mode == "covid":
-            # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-            # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0)
-            pass
+        if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
+            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img(self.opt, X, Y, generated_samples, generated_labels, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
-            # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, proj_matrix)
+            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
+            # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
-        if self.visualize == True:
+        if self.visualize == False:
             fig, (ax1, ax2) = plt.subplots(1, 2)
             fig.set_size_inches(12, 6)
             ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
@@ -497,6 +471,27 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
+
+    def plot_results(self):
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            for file in os.listdir(rootdir):
+                if file.endswith('.csv'):
+                    if experiment in file:
+                        experiment_dict[experiment].append(file)
+
+        plot_graphs(rootdir, experiment_dict, experiments_lst)
+
 
     def make_gif(self):
         video_dir = os.path.join(self.opt.log_path, "video")

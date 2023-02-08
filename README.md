@@ -40,18 +40,18 @@ _Below is an example of how you can instruct your audience on installing and set
 
 1. Clone the repo
    ```sh
-   git clone https://github.com/your_username_/Project-Name.git
+   git clone https://github.com/Zeju1997/data_halucination_teaching.git
    ```
 2. Install required packages
    ```sh
     conda create -n dht python=3.6
     conda activate dht
     conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0 -c pytorch
-    pip install imageio scikit-image matplotlib mathutils==2.81.2 
+    pip install imageio scikit-image scikit-learn matplotlib seaborn pyyaml easydict tensorboard tensorboardX tqdm mathutils==2.81.2 
    ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
+3. Create the environment from the yml file
+   ```sh
+    conda env create -f environment.yml
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -64,20 +64,10 @@ _Below is an example of how you can instruct your audience on installing and set
 Using this repository to reproduce results from the paper is very straightforward, i.e., simply run the desired experiment
 specifiying a suited dataset.
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
+
+1. Run different teaching policy with the corresponding config file. Note, the config file should match the teaching policy!
    ```sh
-   git clone https://github.com/your_username_/Project-Name.git
-   ```
-3. Install NPM packages
-   ```sh
-    conda create -n pytorch3d python=3.6
-    conda activate pytorch3d
-    conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0 -c pytorch
-    conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-    conda install -c bottler nvidiacub
-    conda install pytorch3d -c pytorch3d
-    pip install imageio scikit-image matplotlib mathutils==2.81.2 
+   python train.py --teaching_policy='omniscient_unrolled' --config='mnist'
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

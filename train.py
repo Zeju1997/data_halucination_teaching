@@ -1,33 +1,22 @@
 from __future__ import absolute_import, division, print_function
 
-# from trainer_blackbox_mixup_rl import Trainer
-# from trainer_vae_moon import Trainer
-import itertools
-
-from trainer_vae_moon import Trainer
-# from trainer_blackbox_mixup_cnn import Trainer
-# from trainer_cgan_mnist import Trainer
-
-from options.options import Options
 import os
 import argparse
 import sys
-
+import csv
+import itertools
+import importlib
 import yaml
+import random
+import torch
+import numpy as np
+from options.options import Options
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
-import numpy as np
-import torch
-
-import random
-
-import csv
-
-# the directory that options.py resides in
+# the directory that current file resides in
 file_dir = os.path.dirname(__file__)
-
 
 # Function to load yaml configuration file
 def load_config(config_name):
@@ -80,17 +69,25 @@ def calc_results(opt, seeds, models, experiments):
                 f.writelines('\n')
 
 
+def get_parser():
+    parser = argparse.ArgumentParser(description="Command line parser.")
+    parser.add_argument('--config', help="configuration file *.yml", type=str, required=True)
+    parser.add_argument('--teaching_policy', help="choose one policy from the teaching policy directory", type=str, required=True)
+    return parser
+
+
 if __name__ == "__main__":
+    # command line parser
+    parser = get_parser()
+    p = parser.parse_args()
+
+    # base config parser
     options = Options()
     opts = options.parse()
 
-    # config = load_config("mnist_whitebox_privacy.yaml")
-    # config = load_config("cifar10.yaml")
-    # config = load_config("cifar100.yaml")
-    config = load_config("moon.yaml")
-
+    # specify the config file
+    config = load_config(p.config + '.yaml')
     opts.set_defaults(**config)
-
     args = opts.parse_args()
 
     curr_comb = combination[args.idx]
@@ -109,11 +106,16 @@ if __name__ == "__main__":
 
     print(curr_comb)
 
-    trainer = Trainer(args)
+    module_name = "teaching_policy." + args.teaching_policy
+    module = importlib.import_module(module_name)
+
+    trainer = module.Trainer(args)
+
+    # trainer = Trainer(args)
     # trainer = Trainer(opts.parse_args())
-    # trainer.main()
+    trainer.main()
     # trainer.make_gif()
-    trainer.plot_results()
+    # trainer.plot_results()
     # trainer.plot_distribution()
     # trainer.plot_perceptual_loss()
 

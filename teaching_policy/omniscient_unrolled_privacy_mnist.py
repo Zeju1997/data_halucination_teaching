@@ -14,37 +14,48 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 import json
+import os
+import networks
 from tqdm import tqdm
 import torchvision
 from torchvision import transforms
-from torchvision.utils import save_image, make_grid
+from torchvision.transforms import ToTensor
+import torchvision.utils as vutils
+from torchvision.utils import save_image
 from train_utils import *
-
 import teachers.omniscient_teacher as omniscient
-
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data, plot_graphs
-
-from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
-
+import networks.cgan as cgan
+import networks.unrolled_privacy as unrolled
 
 from datasets import BaseDataset
 
-import networks.blackbox_unrolled as blackbox
-
-import csv
 import seaborn as sns
 
-from utils.visualize import make_results_video_blackbox, make_results_video_2d_blackbox, make_results_img_blackbox, make_results_img_2d_blackbox
+from sklearn.datasets import make_moons, make_classification
+from sklearn.model_selection import train_test_split
+
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+
+import imageio
 
 import subprocess
 import glob
 
+import csv
+
+from utils.data import init_data, load_experiment_result, plot_graphs
+from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
+from utils.data import init_data, initialize_weights
+
+from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
+
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
+
+from networks.resnet import ResNet50
 
 
 # custom weights initialization called on netG and netD
@@ -102,42 +113,11 @@ def to_matrix(l, n):
     return [l[i:i+n] for i in range(0, len(l), n)]
 
 
-def mixup_data(x, y, alpha=1.0):
-    '''Returns mixed inputs, pairs of targets, and lambda'''
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-
-    batch_size = x.shape[0]
-    index = torch.randperm(batch_size)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :, :, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-mean = (0.1307,)
-std = (0.3081,)
-def plot_mixed_images(images):
-    inv_normalize = transforms.Normalize(
-                      mean= [-m/s for m, s in zip(mean, std)],
-                      std= [1/s for s in std]
-                      )
-    inv_PIL = transforms.ToPILImage()
-    fig = plt.figure(figsize=(16, 3))
-    for i in range(1, len(images) + 1):
-        image = images[i-1]
-        ax = fig.add_subplot(1, 8, i)
-        inv_tensor = inv_normalize(image).cpu()
-        ax.imshow(inv_PIL(inv_tensor))
-    plt.show()
-
-
 class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "blackbox_unrolled_" + self.opt.data_mode
+        self.opt.model_name = "whitebox_privacy_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -152,24 +132,16 @@ class Trainer:
 
         self.get_teacher_student()
 
-        self.writers = {}
-        for mode in ["train", "val"]:
-            self.writers[mode] = SummaryWriter(os.path.join(self.opt.log_path, mode))
-
     def get_teacher_student(self):
         if self.opt.data_mode == "cifar10":
             self.teacher = omniscient.OmniscientConvTeacher(self.opt.eta)
             self.student = omniscient.OmniscientConvStudent(self.opt.eta)
         else: # mnist / gaussian / moon
             self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
-            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
-            # self.teacher.load_state_dict(torch.load('teacher_w0.pth'))
-
+            self.teacher.apply(initialize_weights)
             self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
             self.baseline = omniscient.OmniscientLinearStudent(self.opt.dim)
-
-            # self.teacher = omniscient.TeacherClassifier(self.opt.dim)
-            # self.student = omniscient.StudentClassifier(self.opt.dim)
+            torch.save(self.teacher.state_dict(), 'teacher_w0.pth')
 
     def set_train(self):
         """Convert all models to training mode
@@ -216,25 +188,9 @@ class Trainer:
         gen_imgs = net_G(z, labels)
         save_image(gen_imgs.data, "images/%d.png" % batches_done, nrow=n_row, normalize=True)
 
-    def data_sampler(self, X, Y, i):
-        i_min = i * self.opt.batch_size
-        i_max = (i + 1) * self.opt.batch_size
-
-        x = X[i_min:i_max].cuda()
-        y = Y[i_min:i_max].cuda()
-
-        return x, y
-
     def main(self):
         """Run a single epoch of training and validation
         """
-
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
 
         print("Training")
         # self.set_train()
@@ -260,38 +216,18 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
-            '''
-            train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
-
-            X_train = train_dataset.data
-            X_test = test_dataset.data
-            Y_train = torch.tensor(train_dataset.targets, dtype=torch.float)
-            Y_test = torch.tensor(test_dataset.targets, dtype=torch.float)
-
-            X_train = X_train.view(X_train.shape[0], -1)
-            X_test = X_test.view(X_test.shape[0], -1)
-
-            img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
-            proj_matrix = torch.empty(int(np.prod(img_shape)), self.opt.dim).normal_(mean=0, std=0.1)
-            X_train = X_train.float() @ proj_matrix
-            X_test = X_test.float() @ proj_matrix
-            '''
-
-            '''
-            for i in range(50):
-                tensor_image = X_test[i].squeeze()
-                plt.imshow(tensor_image)
-                print(Y_test[i])
-                plt.show()
-
-                print("aklsdfj")
-            '''
-
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
+            X_val = torch.tensor(X[self.opt.nb_train+self.opt.nb_test:self.opt.nb_train+self.opt.nb_test+self.opt.nb_val], dtype=torch.float)
+            Y_val = torch.tensor(Y[self.opt.nb_train+self.opt.nb_test:self.opt.nb_train+self.opt.nb_test+self.opt.nb_val], dtype=torch.float)
+
+            data_train = BaseDataset(X_train, Y_train)
+            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
+
+            data_val = BaseDataset(X_val, Y_val)
+            val_loader = DataLoader(data_val, batch_size=1, drop_last=True, shuffle=True)
 
             X_train = X_train.reshape((self.opt.nb_train, self.opt.img_size**2))
             X_test = X_test.reshape((self.opt.nb_test, self.opt.img_size**2))
@@ -306,13 +242,11 @@ class Trainer:
             X_test = torch.tensor(X[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.float)
 
-            data_train = BaseDataset(X_train, Y_train)
-            train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
-
-        # data_train = BaseDataset(X_train, Y_train)
-        # data_test = BaseDataset(X_test, Y_test)
-        # train_loader = DataLoader(data_train, batch_size=self.opt.batch_size, drop_last=True)
-        # test_loader = DataLoader(data_test, batch_size=self.opt.batch_size, drop_last=True)
+        net = ResNet50().eval().cuda()
+        feat_privacy_set = torch.empty(len(val_loader), 2048).cuda()
+        for idx, (images, labels) in tqdm(enumerate(val_loader)):
+            images, labels = images.cuda(), labels.cuda()
+            feat_privacy_set[idx, :] = net(images)
 
         # ---------------------
         #  Train Teacher
@@ -326,6 +260,7 @@ class Trainer:
         w_star = self.teacher.lin.weight
         w_star = w_star / torch.norm(w_star)
 
+
         # ---------------------
         #  Train SGD
         # ---------------------
@@ -336,8 +271,8 @@ class Trainer:
             sgd_example = utils.BaseLinear(self.opt.dim)
             sgd_example.load_state_dict(torch.load('teacher_w0.pth'))
 
-            sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            _, _ = sgd_trainer.train(sgd_example, w_star)
+            sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test, data_train)
+            random_samples, random_labels = sgd_trainer.train(sgd_example, w_star)
 
         res_sgd, w_diff_sgd = self.load_experiment_result()
 
@@ -349,14 +284,15 @@ class Trainer:
         if self.opt.train_baseline == True:
             self.baseline.load_state_dict(torch.load('teacher_w0.pth'))
 
-            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
-            _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
+            imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test, data_train)
+            selected_samples, selected_labels = imt_trainer.train(self.baseline, self.teacher, w_star)
 
         res_baseline, w_diff_baseline = self.load_experiment_result()
 
         # ---------------------
         #  Train Student
         # ---------------------
+
         self.opt.experiment = "Student"
         print("Start training {} ...".format(self.opt.experiment))
         logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
@@ -367,34 +303,32 @@ class Trainer:
 
         tmp_student = utils.BaseLinear(self.opt.dim)
 
-        if self.opt.data_mode == "moon":
-            netG = blackbox.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
+        if self.opt.data_mode == "mnist":
+            netG = unrolled.Generator(self.opt, self.teacher, tmp_student).cuda()
+            unrolled_optimizer = unrolled.UnrolledOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, feature_extractor=net, X=X_train.cuda(), Y=Y_train.cuda(), X_val=X_val.cuda(), Y_val=Y_val.cuda(), feat_privacy_set=feat_privacy_set.cuda(), proj_matrix=proj_matrix)
         else:
-            netG = blackbox.Generator(self.opt, self.teacher, tmp_student).cuda()
-            unrolled_optimizer = blackbox.UnrolledBlackBoxOptimizer(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda(), proj_matrix=proj_matrix)
+            netG = unrolled.Generator_moon(self.opt, self.teacher, tmp_student).cuda()
+            unrolled_optimizer = unrolled.UnrolledOptimizer_moon(opt=self.opt, teacher=self.teacher, student=tmp_student, generator=netG, X=X_train.cuda(), Y=Y_train.cuda())
 
+        netG.train()
         netG.apply(weights_init)
-        optimG = torch.optim.Adam(netG.parameters(), lr=0.002, betas=(0.5, 0.999))
+        optimG = torch.optim.Adam(netG.parameters(), lr=self.opt.netG_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-04, amsgrad=False)
 
+        res_student = []
+        a_student = []
+        b_student = []
         loss_student = []
+        w_diff_student = []
 
-        self.step = 0
-
-        w_init = self.student.lin.weight
+        # tmp_student.load_state_dict(torch.load('teacher_w0.pth'))
+        # w_init = tmp_student.state_dict()
         for _ in tqdm(range(self.opt.n_unroll)):
-            self.step = self.step + 1
-
-            # -----------------
-            #  Train Generator
-            # -----------------
-
-            optimG.zero_grad()
 
             w_t = netG.state_dict()
-            gradients, generator_loss = unrolled_optimizer(w_t)
+            gradients, loss = unrolled_optimizer(w_t, w_star)
 
-            loss_student.append(generator_loss.item())
+            loss_student.append(loss.item())
+            # loss_student = loss_student + train_loss
 
             with torch.no_grad():
                 for p, g in zip(netG.parameters(), gradients):
@@ -402,40 +336,58 @@ class Trainer:
 
             optimG.step()
 
-        res_student = []
-        a_student = []
-        b_student = []
-        w_diff_student = []
+        # plt.plot(loss_student, c='b', label="loss")
+        # plt.title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+        # plt.xlabel("Iteration")
+        # plt.ylabel("Loss")
+        # plt.legend()
+        # plt.show()
+
+        cls = torch.arange(self.opt.n_classes)
+        onehot = torch.zeros(self.opt.n_classes, self.opt.n_classes).scatter_(1, cls.view(self.opt.n_classes, 1), 1)
 
         self.student.load_state_dict(torch.load('teacher_w0.pth'))
-
         for idx in tqdm(range(self.opt.n_iter)):
             if idx != 0:
                 w_t = self.student.lin.weight
                 w_t = w_t / torch.norm(w_t)
 
+                '''
+                y = torch.randint(0, 2, (1,), dtype=torch.float).cuda()
+                b = Y_train.cuda() == y
+                indices = b.nonzero()
+                idx = torch.randint(0, len(indices), (1,))
+                gt_x = X_train[indices[idx].squeeze(0)].cuda()
+                '''
                 i = torch.randint(0, nb_batch, size=(1,)).item()
                 gt_x, gt_y = self.data_sampler(X_train, Y_train, i)
+                gt_y_onehot = onehot[gt_y.long()].cuda()
 
-                # z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
-                z = Variable(torch.randn((self.opt.batch_size, self.opt.latent_dim))).cuda()
-                # z = Variable(torch.randn(gt_x.shape)).cuda()
+                z = Variable(torch.cuda.FloatTensor(np.random.normal(0, 1, gt_x.shape)))
 
-                x = torch.cat((w_t, gt_x), dim=1)
-                generated_sample = netG(x, gt_y)
+                # gt_x = gt_x / torch.norm(gt_x)
+                x = torch.cat((w_t, w_t-w_star, gt_x), dim=1)
+                # x = torch.cat((w_t, w_t-w_star), dim=1)
+                generated_sample = netG(x, gt_y_onehot)
 
                 if idx == 1:
                     generated_samples = generated_sample.cpu().detach().numpy()  # [np.newaxis, :]
-                    generated_labels = gt_y.unsqueeze(0).cpu().detach().numpy()  # [np.newaxis, :]
+                    generated_labels = gt_y.unsqueeze(1).cpu().detach().numpy()  # [np.newaxis, :]
                 else:
                     generated_samples = np.concatenate((generated_samples, generated_sample.cpu().detach().numpy()), axis=0)
-                    generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(0).cpu().detach().numpy()), axis=0)
+                    generated_labels = np.concatenate((generated_labels, gt_y.unsqueeze(1).cpu().detach().numpy()), axis=0)
 
                 if self.opt.data_mode == "mnist":
-                    generated_sample = generated_sample.view(self.opt.batch_size, -1)
-                    generated_sample = generated_sample @ proj_matrix.cuda()
+                    generated_sample = generated_sample.reshape((self.opt.batch_size, self.opt.img_size**2))
+                    generated_sample = generated_sample.detach().clone() @ proj_matrix.cuda()
 
-                self.student.update(generated_sample, gt_y.unsqueeze(1))
+                self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
+
+                #self.student(generated_sample)
+                #out = self.student(generated_sample)
+                #loss_fn = nn.MSELoss()
+                #loss1 = loss_fn(out, y)
+                #loss111.append(loss1.item())
 
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
@@ -464,30 +416,48 @@ class Trainer:
                 logwriter = csv.writer(logfile, delimiter=',')
                 logwriter.writerow([idx, acc, diff.item()])
 
+            print("acc", acc)
+
+        self.perceptual_loss(random_samples, selected_samples, generated_samples, feat_privacy_set, net, proj_matrix)
+
         if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-            # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
-            make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
         else:
-            make_results_img_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
-            # make_results_video_blackbox(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_student, w_diff_sgd, w_diff_student, 0)
+            make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
+            # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
 
-        save_folder = os.path.join(self.opt.log_path, "models")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
+        if self.visualize == False:
+            fig, (ax1, ax2) = plt.subplots(1, 2)
+            fig.set_size_inches(12, 6)
+            ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
+            ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
+            ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
+            # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
+            ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            ax1.set_xlabel("Iteration")
+            ax1.set_ylabel("Accuracy")
+            ax1.legend(loc="lower right")
 
-        save_path = os.path.join(save_folder, "netG.pth")
-        to_save = netG.state_dict()
-        torch.save(to_save, save_path)
+            ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
+            ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
+            ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
+            ax2.legend(loc="lower left")
+            ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
+            ax2.set_xlabel("Iteration")
+            ax2.set_ylabel("Distance between $w^t$ and $w^*$")
+            #ax2.set_aspect('equal')
 
-        # save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
-        # to_save = netD.state_dict()
-        # torch.save(to_save, save_path)
+            img_path = os.path.join(self.opt.log_path, 'results_{}_final.jpg'.format(self.opt.data_mode))
+            plt.savefig(img_path)
+            plt.close()
+            # plt.show()
 
         if self.visualize == False:
             a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
             for i in tqdm(range(len(res_student))):
                 fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                fig.set_size_inches(20, 5.8)
+                fig.set_size_inches(20, 6)
                 ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
                 ax1.scatter(X[:, 0], X[:, 1], c=Y)
                 ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
@@ -509,7 +479,7 @@ class Trainer:
                 ax3.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
                 # ax3.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
                 ax3.legend(loc="upper right")
-                ax3.set_title("W Difference")
+                ax3.set_title("Test Set Accuracy")
                 #ax3.set_aspect('equal')
 
                 plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
@@ -523,6 +493,7 @@ class Trainer:
             ])
             for file_name in glob.glob("*.png"):
                 os.remove(file_name)
+
 
     def plot_results(self):
 
@@ -544,6 +515,96 @@ class Trainer:
         plot_graphs(rootdir, experiment_dict, experiments_lst)
 
 
+    def plot_perceptual_loss(self):
+
+        self.opt.epsilon = 50
+
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+        rootdir = self.opt.log_path
+
+        file_lst = []
+
+        for file in os.listdir(rootdir):
+            if file.endswith('.csv'):
+                if 'PERCEPTUAL' in file:
+                    file_lst.append(file)
+
+        sns.set()
+        sns.set_style('white')
+        sns.set_theme(style="ticks")
+        sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
+
+        palette = list(iter(sns.mpl_palette("tab10", 8)))
+        # Plot acc results
+
+        plt.figure(figsize=(8, 6))
+        plt.rcParams["font.family"] = "Times New Roman"
+
+        for idx, experiment in enumerate(experiments_lst):
+            value_np = 0
+            for i, file in tqdm(enumerate(sorted(file_lst))):
+                file_path = os.path.join(rootdir, file)
+                if os.path.isfile(file_path):
+                    value = []
+                    with open(file_path, 'r') as csvfile:
+                        lines = csv.reader(csvfile, delimiter=',')
+                        for n, row in enumerate(lines):
+                            if n != 0:
+                                value.append(row[idx+1])
+                    tmp_value_np = np.asarray(value).astype(float)
+                    if i == 0:
+                        value_np = tmp_value_np[np.newaxis, :]
+                    else:
+                        value_np = np.concatenate((value_np, tmp_value_np[np.newaxis, :]), axis=0)
+
+            value_mean = np.mean(value_np, axis=0)
+            value_std = np.std(value_np, axis=0)
+
+            x = np.arange(len(value_mean))
+
+            if experiment == 'SGD':
+                plt.plot(x, value_mean, color=palette[0], c='g')
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[0], alpha=0.2)
+
+            elif experiment == 'IMT_Baseline':
+                plt.plot(x, value_mean, label='IMT', color=palette[2])
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[2], alpha=0.2)
+
+            else:
+                plt.plot(x, value_mean, label='DHT', color=palette[3])
+                plt.fill_between(x, value_mean-value_std, value_mean+value_std, color=palette[3], alpha=0.2)
+
+        plt.axhline(y=self.opt.epsilon, color='k', linestyle='dashed', label="$\epsilon = {}$".format(self.opt.epsilon), linewidth=4)
+        plt.ylabel('Perceptual Loss')
+        plt.xlabel('Number of iterations')
+        plt.legend(loc='best', fontsize=22)
+
+        plt.savefig(os.path.join(rootdir, 'paper_results_perceptual.pdf'), bbox_inches='tight')
+
+
+    def make_gif(self):
+        video_dir = os.path.join(self.opt.log_path, "video")
+
+        '''
+        os.chdir(video_dir)
+        images = []
+        for file_name in tqdm(sorted(glob.glob("*.png"))):
+            # print(file_name)
+            images.append(imageio.imread(file_name))
+            # os.remove(file_name)
+        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
+        imageio.mimsave(gif_path, images, fps=20)
+        '''
+
+        images = []
+        for file_name in tqdm(sorted(os.listdir(video_dir))):
+            if file_name.endswith('.png'):
+                file_path = os.path.join(video_dir, file_name)
+                images.append(imageio.imread(file_path))
+        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
+        # imageio.mimsave(gif_path, images, fps=20)
+        imageio.mimsave(gif_path, images, fps=20)
+
     def load_experiment_result(self):
         """Write an event to the tensorboard events file
         """
@@ -563,7 +624,156 @@ class Trainer:
 
         return acc_np, w_diff_np
 
-    def main1(self):
+    def data_sampler(self, X, Y, i):
+        i_min = i * self.opt.batch_size
+        i_max = (i + 1) * self.opt.batch_size
+
+        x = X[i_min:i_max].cuda()
+        y = Y[i_min:i_max].cuda()
+
+        return x, y
+
+    def perceptual_loss(self, random_samples, selected_samples, generated_samples, feat_privacy_set, net, proj_matrix=None):
+        self.opt.experiment = "PERCEPTUAL"
+        print("Start training {} ...".format(self.opt.experiment))
+        logname = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
+        if not os.path.exists(logname):
+            with open(logname, 'w') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow(['iter', 'sgd perceptual loss', 'baseline perceptual loss', 'student perceptual loss'])
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        unproj_matrix = torch.linalg.pinv(proj_matrix)
+
+        loss = []
+        img_shape = (1, 28, 28)
+        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
+
+        experiment_dict = {
+            'SGD': [],
+            'IMT_Baseline': [],
+            'Student': []
+        }
+
+        for experiment in experiments_lst:
+            if experiment == 'Student':
+                for idx in tqdm(range(len(generated_samples))):
+                    images = generated_samples[idx, :]
+                    images = torch.from_numpy(images).unsqueeze(0).cuda()
+
+                    # img = images.squeeze().cpu().numpy()
+                    # plt.imshow(img, cmap="gray")
+
+                    feat = net(images)
+                    # tmp_score = cos(feat, feat_privacy_set)
+                    tmp_score = pdist(feat, feat_privacy_set).min()
+                    experiment_dict[experiment].append(tmp_score.item())
+            elif experiment == "SGD":
+                for idx in tqdm(range(len(random_samples))):
+                    images = random_samples[idx, :]
+                    images = torch.from_numpy(images).unsqueeze(0).cuda()
+
+                    feat = net(images)
+                    # tmp_score = cos(feat, feat_privacy_set)
+                    tmp_score = pdist(feat, feat_privacy_set).min()
+                    experiment_dict[experiment].append(tmp_score.item())
+            else:
+                for idx in tqdm(range(len(selected_samples))):
+                    images = selected_samples[idx, :]
+                    images = torch.from_numpy(images).unsqueeze(0).cuda()
+
+                    feat = net(images)
+                    # tmp_score = cos(feat, feat_privacy_set)
+                    tmp_score = pdist(feat, feat_privacy_set).min()
+                    experiment_dict[experiment].append(tmp_score.item())
+
+        for t in range(len(generated_samples)):
+            sgd_perceptual_loss = experiment_dict['SGD'][t]
+            baseline_perceptual_loss = experiment_dict['IMT_Baseline'][t]
+            student_perceptual_loss = experiment_dict['Student'][t]
+
+            with open(logname, 'a') as logfile:
+                logwriter = csv.writer(logfile, delimiter=',')
+                logwriter.writerow([t, sgd_perceptual_loss, baseline_perceptual_loss, student_perceptual_loss])
+
+        return loss
+
+    '''
+    def perceptual_loss(self, train_loader, generated_samples, feat_privacy_set, net, proj_matrix):
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        min_score = 1000
+        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        for images, labels in tqdm(train_loader):
+            images, labels = images.cuda(), labels.cuda()
+            feat = net(images)
+            feat = feat.repeat(100, 1)
+            tmp_score = pdist(feat, feat_privacy_set).min()
+            # tmp_score = cos(feat, feat_privacy_set)
+            # tmp_score = tmp_score.min()
+            if tmp_score < min_score:
+                min_score = tmp_score
+
+        print("min score train data", min_score.item())
+
+        unproj_matrix = torch.linalg.pinv(proj_matrix)
+
+        img_shape = (1, 28, 28)
+        min_score = 1000
+        for idx in tqdm(range(len(generated_samples))):
+            images = generated_samples[idx, :]
+            images = torch.from_numpy(images).unsqueeze(0).cuda()
+
+            # images = images @ unproj_matrix.cuda()
+            # images = torch.reshape(images, (1, *img_shape))
+
+            feat = net(images)
+            # tmp_score = cos(feat, feat_privacy_set)
+            tmp_score = pdist(feat, feat_privacy_set).min()
+            if tmp_score < min_score:
+                min_score = tmp_score
+
+        print("min score generated data", min_score.item())
+        
+    def perceptual_loss(self, train_loader, generated_samples, feat_privacy_set, net, proj_matrix):
+
+        pdist = torch.nn.PairwiseDistance(p=2)
+
+        min_score = 1000
+        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        for images, labels in tqdm(train_loader):
+            images, labels = images.cuda(), labels.cuda()
+            feat = net(images)
+            tmp_score = cos(feat, feat_privacy_set)
+            tmp_score = tmp_score.min()
+            if tmp_score < min_score:
+                min_score = tmp_score
+
+        print("min score train data", min_score.item())
+
+        unproj_matrix = torch.linalg.pinv(proj_matrix)
+
+        img_shape = (1, 28, 28)
+        min_score = 1000
+        for idx in tqdm(range(len(generated_samples))):
+            images = generated_samples[idx, :]
+            images = torch.from_numpy(images).cuda()
+
+            images = images @ unproj_matrix.cuda()
+            images = torch.reshape(images, (1, *img_shape))
+
+            feat = net(images)
+            tmp_score = cos(feat, feat_privacy_set)
+            tmp_score = tmp_score.min()
+            if tmp_score < min_score:
+                min_score = tmp_score
+
+        print("min score generated data", min_score.item())
+    '''
+
+    def train(self):
         X_test = next(iter(self.test_loader))[0].numpy()
         Y_test = next(iter(self.test_loader))[1].numpy()
 
@@ -695,12 +905,18 @@ class Trainer:
                                                                                         cls=cls)
                 # acc_iou += losses["accuracy/iou_{}".format(fluid)]
 
-    def log(self, mode, d_loss, g_loss):
+    def log(self, mode, inputs, outputs, losses):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
-        writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
-        writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
+        for l, v in losses.items():
+            writer.add_scalar("{}".format(l), v, self.step)
+
+        for j in range(min(4, self.opt.batch_size, inputs["image"].shape[0])):  # write a maxmimum of four images
+            writer.add_image("inputs/{}".format(j), normalize_image(inputs["image"][j].data), self.step)
+            writer.add_image("labels/{}".format(j), normalize_target(inputs["label"][j].unsqueeze(0).data), self.step)
+            writer.add_image("predictions/{}".format(j), normalize_target(outputs["pred_idx"][j].data), self.step)
+            # writer.add_image("positive_region/{}".format(j), outputs["mask"][j].data, self.step)
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with

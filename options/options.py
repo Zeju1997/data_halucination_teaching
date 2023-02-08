@@ -10,7 +10,7 @@ class Options:
         # TODO: Write the arguments
         self.parser = argparse.ArgumentParser(description="Retouch options")
 
-        self.parser.add_argument('--config', help="configuration file *.yml", type=str, required=False, default='config.yml')
+        self.parser.add_argument('--config', help="configuration file *.yml", type=str, required=False, default='config')
         self.parser.add_argument('--seed', help="configuration file *.yml", type=int, required=False, default=65800)
         self.parser.add_argument('--init_data', help="configuration file *.yml", type=bool, required=False, default=True)
         self.parser.add_argument('--idx', help="configuration file *.yml", type=int, required=False, default=0)
@@ -26,7 +26,7 @@ class Options:
         self.parser.add_argument("--data_mode", type=str, help="data mode", default='mnist')
 
         # Teacher Parameters
-        self.parser.add_argument("--teaching_mode", type=str, help="name of the teaching mode", default='omniscient')
+        self.parser.add_argument("--teaching_policy", type=str, help="name of the teaching mode", default='omniscient_unrolled_mnist')
         self.parser.add_argument("--same_feat_space", type=bool, help="name of the teaching mode", default=True)
         self.parser.add_argument("--class_1", type=int, help="name of the teaching mode", default=3)
         self.parser.add_argument("--class_2", type=int, help="name of the teaching mode", default=7)
@@ -63,7 +63,6 @@ class Options:
         self.parser.add_argument("--scheduler_step_size", type=int, help="scheduler step size for lr decreasing", default=15)
         self.parser.add_argument("--gd_n", type=int, help="scheduler step size for lr decreasing", default=200)
         self.parser.add_argument("--optim", type=str, help="scheduler step size for lr decreasing", default='Adam')
-
 
         # System
         self.parser.add_argument("--no_cuda", help="if set disables CUDA", action="store_true")

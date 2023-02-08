@@ -5,7 +5,7 @@ CONF = EasyDict()
 CONF.PATH = EasyDict()
 
 # Base Folder
-CONF.PATH.BASE = os.path.abspath(os.path.dirname(__file__)) #Base Graph3DMOT path
+CONF.PATH.BASE = os.path.abspath(os.path.dirname(__file__))
 CONF.PATH.CONFIG = os.path.join(CONF.PATH.BASE, "configs")
 
 # Data

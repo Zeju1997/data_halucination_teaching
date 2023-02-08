@@ -18,8 +18,6 @@ from sklearn.model_selection import train_test_split
 
 from networks.resnet import ResNet50
 
-from datasets import CovidCTDataset
-
 from matplotlib.ticker import FormatStrFormatter
 
 # import utils
@@ -74,15 +72,13 @@ def init_data(opt):
         print("Loading MNIST data ...")
 
         # MNIST normalizing
-        if opt.generator_type == "cgan":
-            transform = transforms.Compose([transforms.ToTensor(),
-                                            transforms.Normalize([0.5], [0.5])
-            ])
-        elif opt.generator_type == "vae":
+        if opt.generator_type == "vae":
             transform = transforms.Compose([transforms.ToTensor(),
                                            lambda x: torch.round(x)])
         else:
-            sys.exit()
+            transform = transforms.Compose([transforms.ToTensor(),
+                                            transforms.Normalize([0.5], [0.5])
+                                            ])
 
         train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)

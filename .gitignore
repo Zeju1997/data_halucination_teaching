@@ -3,13 +3,15 @@ __pycache__/
 _cache/
 checkpoints/
 *.pth
+*.pt
+*.txt
 *.jpg
 *.png
 *ipynb
 .ipynb_checkpoints/
 .idea/
 *.mp4
-*.pt
+*.sh
 .idea/
 
 # data folder

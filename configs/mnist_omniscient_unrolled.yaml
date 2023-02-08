@@ -1,13 +1,13 @@
 data_mode: mnist
 teaching_mode: omniscient
 same_feat_space: True
-n_iter: 300
+n_iter: 300 # 500 # 200
 learning_rate: 1e-3
+netG_lr: 0.0002
 batch_size: 1
-batch_size_gan: 32 # 128
-nb_train: 1000 # 10000
-nb_test: 100 # 1000
-dim: 24 # 784
+nb_train: 1000
+nb_test: 200
+dim: 24 # 784 # 24
 n_teacher_runs: 30
 class_1: 3
 class_2: 5
@@ -17,20 +17,14 @@ optim: AMSGrad
 hidden_dim: 32
 latent_dim: 24
 n_unroll: 1000
-n_unroll_blocks: 60
-n_epochs: 3 # 35
-start_saving: 0
+n_unroll_blocks: 40
+n_epochs: 50
+start_saving: 1
 save_frequency: 1
 label_dim: 10
-n_critic: 5
-log_interval: 100
-n_classes: 2 # 10
-model_name: Blackbox_MNIST
-channels: 1
-img_size: 28
+n_critic: 1
 train_student: True
 train_sgd: True
 train_baseline: True
 train_wstar: True
-generator_type: vae
-n_in: 784
+generator_type: None

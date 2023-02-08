@@ -7,6 +7,7 @@ netG_lr: 0.0002
 batch_size: 1
 nb_train: 1000
 nb_test: 200
+nb_val: 100
 dim: 24 # 784 # 24
 n_teacher_runs: 30
 class_1: 3
@@ -27,3 +28,5 @@ train_student: True
 train_sgd: True
 train_baseline: True
 train_wstar: True
+generator_type: None
+epsilon: 50

@@ -21,7 +21,6 @@ import torchvision
 from torchvision import transforms
 from torchvision.transforms import ToTensor
 from train_utils import *
-from eval import EvalMetrics
 import teachers.omniscient_teacher as omniscient
 import teachers.surrogate_teacher as surrogate
 import teachers.imitation_teacher as imitation
@@ -42,7 +41,7 @@ def init_weights(m):
         m.bias.data.fill_(0.01)
 
 
-class Trainer:
+class Policy:
     def __init__(self, options):
         self.opt = options
         self.opt.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
