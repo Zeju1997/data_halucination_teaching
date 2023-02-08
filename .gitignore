@@ -6,7 +6,6 @@ checkpoints/
 *.pt
 *.txt
 *.jpg
-*.png
 *ipynb
 .ipynb_checkpoints/
 .idea/
