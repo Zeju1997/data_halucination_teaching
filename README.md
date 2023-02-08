@@ -1,14 +1,21 @@
-# Iterative Teaching by Data Hallucination
+<div align="center">
+<h1>Iterative Teaching by Data Hallucination</h1>
+</div>
 
-<div align="left">
-	
+<div align="center">
+
 [![arxiv-link](https://img.shields.io/badge/Paper-PDF-red?style=flat&logo=arXiv&logoColor=red)](https://arxiv.org/abs/2210.17467)
 [![made-with-pytorch](https://img.shields.io/badge/Made%20with-PyTorch-brightgreen)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+**Table of Contents**: - <a href="#getting-started">Getting started</a> - <a href="#usage">Usage</a> - <a href="#citation">Citation</a> -
+
 </div>
 
-***Table of Contents***: - <a href="#getting-started">Getting started</a> - <a href="#usage">Usage</a> - <a href="#citation">Citation</a> -
+<div align="center">
+<img src="figures/framework.png" width="500"/>
+</div>
+
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
@@ -24,9 +31,6 @@ optimization problem or drawn directly from a continuous distribution. Specifica
 data hallucination teaching (DHT) where the teacher can generate input data intelligently based on labels, 
 the learner’s status and the target concept. We study a number of challenging teaching setups 
 (e.g., linear/neural learners in omniscient and black-box settings).
-
-
-![Alt text](figures/framework.png?raw=true "Title")
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
