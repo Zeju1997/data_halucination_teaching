@@ -1,4 +1,20 @@
-# Iterative Teaching by Data Hallucination
+<div align="center">
+<h1>Iterative Teaching by Data Hallucination</h1>
+</div>
+
+<div align="center">
+
+[![arxiv-link](https://img.shields.io/badge/Paper-PDF-red?style=flat&logo=arXiv&logoColor=red)](https://arxiv.org/abs/2210.17467)
+[![made-with-pytorch](https://img.shields.io/badge/Made%20with-PyTorch-brightgreen)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Table of Contents**: - <a href="#getting-started">Getting started</a> - <a href="#usage">Usage</a> - <a href="#citation">Citation</a> -
+
+</div>
+
+<div align="center">
+<img src="figures/framework.png" width="500"/>
+</div>
 
 
 <!-- ABOUT THE PROJECT -->
@@ -15,9 +31,6 @@ optimization problem or drawn directly from a continuous distribution. Specifica
 data hallucination teaching (DHT) where the teacher can generate input data intelligently based on labels, 
 the learner’s status and the target concept. We study a number of challenging teaching setups 
 (e.g., linear/neural learners in omniscient and black-box settings).
-
-
-![Alt text](figures/framework.png?raw=true "Title")
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -80,6 +93,19 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<!-- CITATION -->
+## Citation
+  ```bibtex
+  @InProceedings{Qiu2023DHT,
+      title={Iterative Teaching by Data Hallucination},
+      author={Qiu, Zeju and Liu, Weiyang and Xiao, Tim Z and Liu, Zhen 
+        and Bhatt, Umang and Luo, Yucen and Weller, Adrian and Schölkopf, Bernhard},
+      booktitle = {AISTATS},
+      year={2023}
+  }
+  ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
