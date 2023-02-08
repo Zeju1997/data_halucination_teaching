@@ -1,5 +1,14 @@
 # Iterative Teaching by Data Hallucination
 
+<div align="left">
+	
+[![arxiv-link](https://img.shields.io/badge/Paper-PDF-red?style=flat&logo=arXiv&logoColor=red)](https://arxiv.org/abs/2210.17467)
+[![made-with-pytorch](https://img.shields.io/badge/Made%20with-PyTorch-brightgreen)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+</div>
+
+***Table of Contents***: - <a href="#getting-started">Getting started</a> - <a href="#usage">Usage</a> - <a href="#citation">Citation</a> -
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
@@ -80,6 +89,19 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<!-- CITATION -->
+## Citation
+  ```bibtex
+  @InProceedings{Qiu2023DHT,
+      title={Iterative Teaching by Data Hallucination},
+      author={Qiu, Zeju and Liu, Weiyang and Xiao, Tim Z and Liu, Zhen 
+        and Bhatt, Umang and Luo, Yucen and Weller, Adrian and Schölkopf, Bernhard},
+      booktitle = {AISTATS},
+      year={2023}
+  }
+  ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
