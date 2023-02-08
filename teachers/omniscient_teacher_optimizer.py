@@ -1,14 +1,14 @@
+# Some code is taken from the following Github repository:
+# https://github.com/Ipsedo/IterativeMachineTeaching
+
+
 from teachers.utils import BaseLinear, BaseConv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-import matplotlib.pyplot as plt
 
-from tqdm import tqdm
-
-import sys
 
 def clip_gradient(optimizer, grad_clip):
     """
@@ -31,57 +31,6 @@ def __example_difficulty__(student, X, y):
     :param y: Le label de la donnée
     :return: Le score de difficulté de l'exemple (X, y)
     """
-    '''
-    inp = Variable(torch.rand(3, 4), requires_grad=True)
-    W = Variable(torch.rand(4, 4), requires_grad=True)
-    yreal = Variable(torch.rand(3, 4), requires_grad=False)
-    gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
-
-    print("1", inp.grad)
-    ypred = torch.matmul(inp, W)
-    ypred.backward(torch.ones(ypred.shape), retain_graph=True)
-    print("2", inp.grad)
-    gradspred, = grad(ypred, inp,
-                      grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                      create_graph=True,
-                      retain_graph=True)
-    print("3", inp.grad)
-    loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
-    loss.backward()
-    print("4", inp.grad)
-    '''
-
-    '''
-    inp = Variable(torch.rand(1, 2), requires_grad=True)
-    W = Variable(torch.rand(2, 1), requires_grad=True)
-    yreal = Variable(torch.rand(3, 4), requires_grad=False)
-    gradsreal = Variable(torch.rand(3, 4), requires_grad=True)
-
-    print("1", inp.grad)
-    ypred = torch.matmul(inp, W)
-
-    gradspred_W, = grad(ypred, W,
-                  grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                  create_graph=True,
-                  retain_graph=True)
-
-    gradspred_i, = grad(gradspred_W, inp,
-              grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-              create_graph=True,
-              retain_graph=True)
-
-
-    ypred.backward(torch.ones(ypred.shape), retain_graph=True)
-    print("2", inp.grad)
-    gradspred_inp, = grad(ypred, inp,
-                      grad_outputs=ypred.data.new(ypred.shape).fill_(1),
-                      create_graph=True,
-                      retain_graph=True)
-    print("3", inp.grad)
-    loss = torch.mean((yreal - ypred) ** 2 + (gradspred - gradsreal) ** 2)
-    loss.backward()
-    print("4", inp.grad)
-    '''
 
     # We want to be able to calculate the gradient -> train()
     student.train()
@@ -242,144 +191,6 @@ def derivative(x, y):
 
 def rosen(x):
     return (1-x[0])**2 + 105.*(x[1]-x[0]**2)**2
-
-
-'''
-def __select_example__(teacher, student, opt, X, y, optimize_label=False):
-    nb_example = X.size(0)
-    nb_batch = int(nb_example / opt.batch_size)
-
-    min_score = 1000
-    arg_min = 0
-
-    # TODO
-    # - one "forward" scoring pass
-    # - sort n * log(n)
-    # - get first examples
-
-    for i in range(nb_batch):
-        i_min = i * opt.batch_size
-        i_max = (i + 1) * opt.batch_size
-
-        data = X[i_min:i_max]
-        label = y[i_min:i_max].unsqueeze(0)
-
-        lr = student.optim.param_groups[0]["lr"]
-
-        # Calculate the score per batch
-        s = (lr ** 2) * student.example_difficulty(data, label)
-        s -= lr * 2 * student.example_usefulness(teacher.lin.weight, data, label)
-
-        if s < min_score:
-            min_score = s
-            arg_min = i
-
-    if optimize_label:
-        s = 1000
-
-        best_score = 1000
-        count = 0
-
-        alpha = 0.001 # alpha = 0.02
-        beta1 = 0.8
-        beta2 = 0.999
-        # eps = 1e-8
-
-        i_min = arg_min * opt.batch_size
-        i_max = (arg_min + 1) * opt.batch_size
-
-        generated_sample = X[i_min:i_max]
-        generated_label = y[i_min:i_max].unsqueeze(0)
-        generated_label.requires_grad = True
-
-        bounds = [[0, 1]]
-        bounds = np.asarray(bounds)
-        # bounds = np.asarray([[X.min().cpu(), X.max().cpu()], [X.min().cpu(), X.max().cpu()]])
-        constraints = [False] * bounds.shape[0]
-
-        m = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-        v = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-        vhat = [torch.zeros(1).cuda() for _ in range(bounds.shape[0])]
-
-        lr = student.optim.param_groups[0]["lr"]
-        example_difficulty = ExampleDifficulty(student, lr)
-        example_usefulness = ExampleUsefulness(student, teacher, lr)
-        s1 = []
-
-        for t in range(opt.gd_n):
-            generated_label.requires_grad = True
-
-            loss = example_difficulty(generated_sample, generated_label) + example_usefulness(generated_sample, generated_label)
-            # print("score loss", score_loss)
-
-            grad = torch.autograd.grad(outputs=loss,
-                                       inputs=generated_label,
-                                       create_graph=False, retain_graph=False)
-
-            grad = - grad[0].detach().squeeze(0)
-
-            generated_label.requires_grad = False
-            score = ScoreLoss(example_difficulty, example_usefulness)
-
-            eps = np.sqrt(np.finfo(float).eps)
-            # eps_list = [np.sqrt(200) * eps] * X.shape[1]
-            # grad = approx_fprime(init_point, score_loss, eps_list)
-            # grad = torch.Tensor(grad).cuda()
-
-            # build a solution one variable at a time
-            for i in range(bounds.shape[0]):
-                if not constraints[i]:
-                    if opt.optim == "adam":
-                        # adam: convergence problem!
-                        # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
-                        m[i] = beta1 * m[i] + (1.0 - beta1) * grad[i]
-                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
-                        v[i] = beta2 * v[i] + (1.0 - beta2) * grad[i]**2
-                        # mhat(t) = m(t) / (1 - beta1(t))
-                        mhat = m[i] / (1.0 - beta1**(t+1))
-                        # vhat(t) = v(t) / (1 - beta2(t))
-                        vhat = v[i] / (1.0 - beta2**(t+1))
-                        # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + ep)
-                        update = torch.Tensor([alpha]).cuda() * mhat / (torch.sqrt(vhat) + eps)
-
-                    else:
-                        # AMSGrad
-                        # m(t) = beta1(t) * m(t-1) + (1 - beta1(t)) * g(t)
-                        m[i] = beta1**(t+1) * m[i] + (1.0 - beta1**(t+1)) * grad[i]
-                        # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
-                        v[i] = (beta2 * v[i]) + (1.0 - beta2) * grad[i]**2
-                        # vhat(t) = max(vhat(t-1), v(t))
-                        vhat[i] = max(vhat[i], v[i])
-                        # x(t) = x(t-1) - alpha(t) * m(t) / sqrt(vhat(t)))
-                        update = torch.Tensor([alpha]).cuda() * m[i] / (torch.sqrt(vhat[i]) + 1e-8)
-
-                    # escape local minima?
-                    #if torch.norm(grad) == 0:
-                    #    noise = torch.empty(1).normal_(mean=0, std=0.1).cuda()
-                    #    update = update + noise
-
-                    if constraints[i]:
-                        update[0] = 0
-
-                    generated_label[0, i] = generated_label[0, i] - update
-                    # print("update", update)
-
-                    if generated_label[0, i] > X.max() or generated_label[0, i] < X.min():
-                        constraints[i] = True
-
-            s = score(generated_sample, generated_label)
-
-            if len(s1) != 0:
-                if s == s1[-1]:
-                    count = count + 1
-                else:
-                    count = 0
-
-            if count > 10:
-                break
-
-    return arg_min
-'''
 
 
 def __select_example__(teacher, student, opt, X, y, optimize_label=False):

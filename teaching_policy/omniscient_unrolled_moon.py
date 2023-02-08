@@ -24,8 +24,6 @@ import torchvision.utils as vutils
 from torchvision.utils import save_image
 from train_utils import *
 import teachers.omniscient_teacher as omniscient
-import teachers.surrogate_teacher as surrogate
-import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 

@@ -22,8 +22,6 @@ from torchvision import transforms
 from torchvision.transforms import ToTensor
 from train_utils import *
 import teachers.omniscient_teacher as omniscient
-import teachers.surrogate_teacher as surrogate
-import teachers.imitation_teacher as imitation
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 import data.dataset_loader as data_loader
@@ -74,41 +72,6 @@ class Policy:
             else: # mnist / gaussian / moon
                 self.teacher = omniscient.OmniscientLinearTeacher(self.opt.dim)
                 self.student = omniscient.OmniscientLinearStudent(self.opt.dim)
-        elif self.opt.teaching_mode == "surrogate":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-                else:
-                    self.teacher = surrogate.SurrogateConvTeacher(self.opt.eta)
-                    self.student = surrogate.SurrogateConvStudent(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    self.teacher = surrogate.SurrogateLinearTeacher(self.opt.dim)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-                else:
-                    self.teacher = surrogate.SurrogateDiffLinearTeacher(self.opt.dim, 24, normal_dist=True)
-                    self.student = surrogate.SurrogateLinearStudent(self.opt.dim)
-        elif self.opt.teaching_mode == "imitation":
-            if self.opt.data_mode == "cifar10":
-                if self.opt.same_feat_space:
-                    tmp = next(iter(self.train_loader))[0]
-                    fst_x = torch.Tensor(tmp[torch.randint(0, tmp.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-                else:
-                    fst_x = torch.Tensor(data[torch.randint(0, data.shape[0], (1,)).item()]).unsqueeze(0).cuda()
-                    self.teacher = imitation.ImmitationConvTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
-            elif self.opt.data_mode == "mnist":
-                if self.opt.same_feat_space:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationLinearTeacher(self.opt.dim, fst_x)
-                    self.student = utils.BaseLinear(self.opt.dim)
-                else:
-                    fst_x = torch.Tensor(self.opt.dim).cuda()
-                    self.teacher = imitation.ImitationDiffLinearTeacher(self.opt.eta, fst_x)
-                    self.student = utils.BaseConv(self.opt.eta)
         else:
             print("Unrecognized teacher!")
             sys.exit()

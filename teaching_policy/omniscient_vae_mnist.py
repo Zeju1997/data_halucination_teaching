@@ -16,24 +16,17 @@ import torch.nn as nn
 import json
 from tqdm import tqdm
 import torchvision
-import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from train_utils import *
 import teachers.omniscient_teacher as omniscient
 import teachers.utils as utils
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-import cv2
 
 from datasets import BaseDataset
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
-
-import networks.cgan as cgan
 import networks.unrolled_vae as unrolled
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples
 from utils.data import init_data, load_experiment_result, plot_graphs
@@ -48,7 +41,6 @@ import csv
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
-
 
 
 

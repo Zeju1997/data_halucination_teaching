@@ -1,3 +1,6 @@
+# Some code is taken from the following Github repository:
+# https://github.com/Ipsedo/IterativeMachineTeaching
+
 from teachers.utils import BaseLinear, BaseConv
 import torch
 import sys
