@@ -67,7 +67,7 @@ specifiying a suited dataset.
 
 1. Run different teaching policy with the corresponding config file. Note, the config file should match the teaching policy!
    ```sh
-   python train.py --teaching_policy='omniscient_unrolled' --config='mnist'
+   python train.py --teaching_policy='omniscient_unrolled_mnist' --config='mnist_omniscient_unrolled'
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
