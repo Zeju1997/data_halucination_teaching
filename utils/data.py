@@ -1,26 +1,14 @@
-import torch
-from torchvision.utils import save_image, make_grid
-import numpy as np
-import matplotlib.pyplot as plt
-import imageio
-import glob
-import os
 import sys
 
 import torchvision
 from torchvision import transforms
-from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 import torch.nn as nn
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
-
-from networks.resnet import ResNet50
+from sklearn.datasets import make_moons
 
 from matplotlib.ticker import FormatStrFormatter
 
-# import utils
 
 import csv
 
@@ -28,19 +16,6 @@ sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
 visualize = False
-
-
-def plot_classifier(model, max, min):
-    w = 0
-    for layer in model.children():
-        if isinstance(layer, nn.Linear):
-            w = layer.state_dict()['weight'].cpu().numpy()
-
-    slope = (-w[0, 0]/w[0, 1] - 1) / (1 + w[0, 1]/w[0, 0])
-
-    x = np.linspace(min, max, 100)
-    y = slope * x
-    return x, y
 
 
 def init_data(opt):
@@ -64,10 +39,6 @@ def init_data(opt):
         (N, W, H, C) = train_dataset.data.shape
         dim = W*H*C
 
-        # sgd_example = utils.BaseConv(opt.eta)
-        # tmp_student = utils.BaseConv(opt.eta)
-        # baseline = utils.BaseConv(opt.eta)
-
     elif opt.data_mode == "mnist":
         print("Loading MNIST data ...")
 
@@ -82,24 +53,6 @@ def init_data(opt):
 
         train_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=CONF.PATH.DATA, train=False, download=True, transform=transform)
-
-        '''
-        idx = (train_dataset.targets == opt.class_1) | (train_dataset.targets == opt.class_2)
-        train_dataset.targets = train_dataset.targets[idx]
-        train_dataset.data = train_dataset.data[idx]
-        train_dataset.targets = np.where(train_dataset.targets == opt.class_1, 0, 1)
-        indices = np.random.choice(len(train_dataset), opt.nb_train)
-        train_dataset.data = train_dataset.data[indices]
-        train_dataset.targets = train_dataset.targets[indices]
-        
-        idx = (test_dataset.targets == opt.class_1) | (test_dataset.targets == opt.class_2)
-        test_dataset.targets = test_dataset.targets[idx]
-        test_dataset.data = test_dataset.data[idx]
-        test_dataset.targets = np.where(test_dataset.targets == opt.class_1, 0, 1)
-        indices = np.random.choice(len(test_dataset), opt.nb_train)
-        test_dataset.data = test_dataset.data[indices]
-        test_dataset.targets = test_dataset.targets[indices]
-        '''
 
         loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
         X = next(iter(loader))[0].numpy()
@@ -126,27 +79,6 @@ def init_data(opt):
 
         torch.save(proj_matrix, 'proj_matrix.pt')
 
-    elif opt.data_mode == "gaussian":
-        print("Generating Gaussian data ...")
-
-        dim__diff = 7
-        nb_data_per_class = 1000
-
-        X, Y = init_data(opt.dim, nb_data_per_class)
-
-        # sgd_example = utils.BaseLinear(opt.dim)
-        # tmp_student = utils.BaseLinear(opt.dim)
-        # baseline = utils.BaseLinear(opt.dim)
-
-        if visualize:
-            fig = plt.figure(figsize=(8, 5))
-            a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
-            plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=Y)
-            plt.title('Gaussian Data')
-            #plt.show()
-            plt.close()
-
     elif opt.data_mode == "moon":
         print("Generating moon data ...")
 
@@ -154,130 +86,6 @@ def init_data(opt):
         noise_val = 0.2
 
         X, Y = make_moons(opt.nb_train+opt.nb_test, noise=noise_val)
-
-        # sgd_example = utils.BaseLinear(opt.dim)
-        # tmp_student = utils.BaseLinear(opt.dim)
-        # baseline = utils.BaseLinear(opt.dim)
-
-        if visualize:
-            fig = plt.figure(figsize=(8, 5))
-            a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
-            plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=Y)
-            plt.title('Moon Data')
-            #plt.show()
-            plt.close()
-
-    elif opt.data_mode == "linearly_seperable":
-        print("Generating linearly seperable data ...")
-
-        X, Y = make_classification(
-            n_samples=opt.nb_train+opt.nb_test, n_features=2, n_redundant=0, n_informative=2, random_state=1, n_clusters_per_class=1
-        )
-        rng = np.random.RandomState(2)
-        X += 2 * rng.uniform(size=X.shape)
-
-        # sgd_example = utils.BaseLinear(opt.dim)
-        # tmp_student = utils.BaseLinear(opt.dim)
-        # baseline = utils.BaseLinear(opt.dim)
-
-        if visualize:
-            fig = plt.figure(figsize=(8, 5))
-            a, b = plot_classifier(teacher, X.max(axis=0), X.min(axis=0))
-            plt.plot(a, b, '-r', label='y=wx+b')
-            plt.scatter(X[:, 0], X[:, 1], c=Y)
-            plt.title('Linearly Seperable Data')
-            # plt.show()
-            plt.close()
-
-    elif opt.data_mode == "covid":
-        print("Loading Covid CT data ...")
-
-        base_dir = os.path.join(CONF.PATH.DATA, 'CovidCT')
-
-        encode_data = False
-        if encode_data:
-            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            train_transformer = transforms.Compose([
-                transforms.Resize(256),
-                # transforms.RandomResizedCrop((224),scale=(0.5, 1.0)),
-                # transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize
-            ])
-
-            val_transformer = transforms.Compose([
-                transforms.Resize(256), # transforms.Resize(224),
-                # transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize
-            ])
-
-            net = ResNet50()
-
-            trainset = CovidCTDataset(root_dir=base_dir,
-                                      txt_COVID='/Data-split/COVID/trainCT_COVID.txt',
-                                      txt_NonCOVID='/Data-split/NonCOVID/trainCT_NonCOVID.txt',
-                                      transform=train_transformer)
-            valset = CovidCTDataset(root_dir=base_dir,
-                                      txt_COVID='/Data-split/COVID/valCT_COVID.txt',
-                                      txt_NonCOVID='/Data-split/NonCOVID/valCT_NonCOVID.txt',
-                                      transform=val_transformer)
-            testset = CovidCTDataset(root_dir=base_dir,
-                                      txt_COVID='/Data-split/COVID/testCT_COVID.txt',
-                                      txt_NonCOVID='/Data-split/NonCOVID/testCT_NonCOVID.txt',
-                                      transform=val_transformer)
-            print(trainset.__len__())
-            print(valset.__len__())
-            print(testset.__len__())
-
-            train_loader = DataLoader(trainset, batch_size=1, drop_last=False, shuffle=True)
-            val_loader = DataLoader(valset, batch_size=1, drop_last=False, shuffle=True)
-            test_loader = DataLoader(testset, batch_size=1, drop_last=False, shuffle=False)
-
-            for i, data in tqdm(enumerate(train_loader)):
-                feat = net(data['img'])
-                data['img'] = feat
-                data_path = os.path.join(base_dir, 'train', '{}.pt'.format(i))
-                torch.save(data, data_path)
-
-            for i, data in tqdm(enumerate(val_loader)):
-                feat = net(data['img'])
-                data['img'] = feat
-                data_path = os.path.join(base_dir, 'val', '{}.pt'.format(i))
-                torch.save(data, data_path)
-
-            for i, data in tqdm(enumerate(test_loader)):
-                feat = net(data['img'])
-                data['img'] = feat
-                data_path = os.path.join(base_dir, 'test', '{}.pt'.format(i))
-                torch.save(data, data_path)
-
-        nb_train = 425
-        nb_val = 118
-        nb_test = 203
-        X = torch.empty(nb_train + nb_val + nb_test, 2048)
-        Y = torch.empty(nb_train + nb_val + nb_test, 1)
-
-        for i in range(nb_train):
-            data_path = os.path.join(base_dir, 'train', '{}.pt'.format(i))
-            data = torch.load(data_path)
-            X[i, :] = data['img']
-            Y[i, :] = data['label']
-
-        for i in range(nb_val):
-            data_path = os.path.join(base_dir, 'val', '{}.pt'.format(i))
-            data = torch.load(data_path)
-            X[i+nb_train, :] = data['img']
-            Y[i+nb_train, :] = data['label']
-
-        for i in range(nb_test):
-            data_path = os.path.join(base_dir, 'test', '{}.pt'.format(i))
-            data = torch.load(data_path)
-            X[i+nb_train+nb_val, :] = data['img']
-            Y[i+nb_train+nb_val, :] = data['label']
-
-        Y = Y.squeeze(1)
 
     else:
         print("Unrecognized data!")

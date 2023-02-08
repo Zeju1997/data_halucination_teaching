@@ -68,6 +68,7 @@ def weights_init(m):
         # torch.nn.init.kaiming_uniform_(m.weight)
         # m.bias.data.fill_(0.01)
 
+
 def plot_classifier(model, max, min):
     w = 0
     for layer in model.children():
