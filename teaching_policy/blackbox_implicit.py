@@ -550,32 +550,6 @@ class Trainer:
     def main(self):
         """Run a single epoch of training and validation
         """
-        '''
-        from time import time
-        import multiprocessing as mp
-        for num_workers in range(0, mp.cpu_count(), 2):
-            train_loader = DataLoader(self.train_dataset, shuffle=True, num_workers=num_workers, batch_size=self.opt.batch_size, pin_memory=True)
-            start = time()
-            for epoch in range(1, 3):
-                for i, data in enumerate(train_loader, 0):
-                    pass
-            end = time()
-            print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
-        
-        import torch
-        from torchvision import transforms
-        import torchvision.datasets as datasets
-        import matplotlib.pyplot as plt
-        from sklearn.cluster import KMeans
-        kmeans = KMeans(n_clusters=10)
-        X = self.val_dataset.dataset.data
-        # KMmodel = kmeans.fit(self.val_dataset.data.numpy())
-        KMmodel = kmeans.fit(X)
-        print("cluster centers", kmeans.labels_)
-        print("cluster centers", kmeans.cluster_centers_)
-        sys.exit()
-        
-        '''
 
         print(self.opt)
 
@@ -605,20 +579,12 @@ class Trainer:
             w_diff_example = []
             self.step = 0
             self.best_acc = 0
-            # example_optim = torch.optim.SGD(example.parameters(), lr=self.opt.lr, momentum=0.9, weight_decay=self.opt.decay)
 
             pdist = torch.nn.PairwiseDistance(p=2)
 
             example.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             example_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}], lr=self.opt.lr)
-            # example_optim = torch.optim.SGD([{'params': example.parameters()}, {'params': example_fc.parameters()}],
-            #                                 lr=self.opt.lr,
-            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-            #                                 weight_decay=self.opt.weight_decay)
-
-            # cosine learning rate
-            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(example_optim, len(self.train_loader)*self.opt.n_epochs)
 
             step = 0
             for epoch in tqdm(range(self.opt.n_epochs)):
@@ -666,40 +632,6 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
 
-                '''
-                example.eval()
-                test = example(X_test.cuda()).cpu()
-    
-                a, b = plot_classifier(example, X.max(axis=0), X.min(axis=0))
-                a_example.append(a)
-                b_example.append(b)
-    
-                if self.opt.data_mode == "mnist" or self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
-                    _, predicted = torch.max(test, dim=1)
-                    nb_correct = predicted.eq(Y_test.data).cpu().sum().float()
-                elif self.opt.data_mode == "cifar10":
-                    tmp = torch.max(test, dim=1).indices
-                    nb_correct = torch.where(tmp == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-                else:
-                    sys.exit()
-    
-                acc = nb_correct / X_test.size(0)
-                res_example.append(acc)
-                '''
-
-            if self.visualize == False:
-                fig, (ax1, ax2) = plt.subplots(1, 2)
-                fig.set_size_inches(12, 5.8)
-                ax1.plot(res_loss_example, c="b", label="Teacher (CNN)")
-                ax1.xlabel("Epoch")
-                ax1.ylabel("Loss")
-                ax1.legend()
-
-                ax2.plot(res_example, c="b", label="Teacher (CNN)")
-                ax2.xlabel("Epoch")
-                ax2.ylabel("Accuracy")
-                ax2.legend()
-                ax2.show()
 
         if self.opt.experiment == 'Student':
             # student
@@ -729,23 +661,10 @@ class Trainer:
             self.init_test_loss = 0
             self.init_feat_sim = 0
 
-            # loader_eval = iter(self.val_loader)
-            # avg_train_loss = 0
-            # tmp_train_loss = 0
-            # feat_sim = 0
-
             self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.student_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}], lr=self.opt.lr)
-            # student_optim = torch.optim.SGD([{'params': self.student.parameters()}, {'params': self.student_fc.parameters()}],
-            #                                 lr=self.opt.lr,
-            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-            #                                 weight_decay=self.opt.weight_decay)
-            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.train_loader)*self.opt.n_epochs)
 
-            # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
-            # train_loss = []
-            # train_loss2 = []
             for epoch in range(self.opt.n_epochs):
                 if epoch != 0:
                     self.student.train()
@@ -800,15 +719,6 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
 
-            if self.visualize == False:
-                fig = plt.figure()
-                plt.plot(res_student, c="r", label="Student")
-                plt.plot(res_example, c="g", label="SGD")
-                plt.xlabel("Epoch")
-                plt.ylabel("Accuracy")
-                plt.legend()
-                plt.show()
-
         if self.opt.experiment == 'Baseline':
             # student
             # self.opt.experiment = "Baseline"
@@ -849,15 +759,7 @@ class Trainer:
             self.baseline.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
             self.baseline_fc.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_fc_w0.pth')))
             baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}], lr=self.opt.lr)
-            # baseline_optim = torch.optim.SGD([{'params': self.baseline.parameters()}, {'params': self.baseline_fc.parameters()}],
-            #                                 lr=self.opt.lr,
-            #                                 momentum=self.opt.momentum, nesterov=self.opt.nesterov,
-            #                                 weight_decay=self.opt.weight_decay)
-            # student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(student_optim, len(self.loader)*self.opt.n_epochs)
 
-            # student_parameters = list(self.student.parameters()) + list(self.student_fc.parameters())
-            # train_loss = []
-            # train_loss2 = []
             for epoch in range(self.opt.n_epochs):
                 if epoch != 0:
                     self.baseline.train()
@@ -911,61 +813,6 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
 
-            if self.visualize == False:
-                fig = plt.figure()
-                plt.plot(res_student, c="r", label="Student")
-                plt.plot(res_example, c="g", label="SGD")
-                plt.xlabel("Epoch")
-                plt.ylabel("Accuracy")
-                plt.legend()
-                plt.show()
-
-        sys.exit()
-
-        if self.visualize == False:
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(14, 5.8)
-            # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            ax1.plot(res_student, 'r', label="Mixup Trained")
-            ax1.plot(res_example, 'g', label="SGD")
-            # ax1.plot(w_diff_example, 'go', label="sgd linear classifier", alpha=0.5)
-            # ax1.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.plot(w_diff_mixup, 'co', label="%s & mixup classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-            ax1.legend(loc="upper left")
-            ax1.set_title(str(self.opt.data_mode) + "Test Accuracy (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            #ax1.set_aspect('equal')
-            # ax1.close()
-
-            ax2.plot(res_loss_student, c='r', label="Implicit Trained")
-            ax2.plot(res_loss_example, c='g', label="SGD")
-            ax2.set_title(str(self.opt.data_mode) + "Test Loss (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            # ax2.xlabel("Iteration")
-            # ax2.ylabel("Loss")
-            ax2.legend(loc="upper right")
-
-            save_folder = os.path.join(self.opt.log_path, "imgs")
-            if not os.path.exists(save_folder):
-                os.makedirs(save_folder)
-
-            img_path = os.path.join(save_folder, "results_mnist_blackbox_mixup_cnn.png")
-
-            plt.savefig(img_path)
-            plt.show()
-            # plt.close()
-
-            '''
-            os.chdir(CONF.PATH.OUTPUT)
-            subprocess.call([
-                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-                'video_name.mp4'
-            ])
-            for file_name in glob.glob("*.png"):
-                os.remove(file_name)
-                
-            '''
-
     def normalize_lp_norms(self, x, p):
         # norms = torch.flatten(x).norms.lp(p=p, axis=-1)
         norms = x.norm(p=p, dim=-1)
@@ -989,17 +836,12 @@ class Trainer:
         factor = factor.unsqueeze(1)
         return x * factor
 
-    # def project(self, x, x0, epsilon):
-    #     return x0 + self.clip_lp_norms(x - x0, norm=epsilon, p=1)
-
     def project(self, x, x0, epsilon, p):
         return x0 + self.clip_lp_norms(x - x0, norm=epsilon, p=p)
 
     def projected_gradient_descent(self, model, fc, inputs, targets):
         # https://github.com/bethgelab/foolbox
-
-        """Run the style transfer."""
-        # print('Building the style transfer model..')
+        """Run projected gradient descent."""
 
         optim = torch.optim.SGD([{'params': model.parameters()}, {'params': fc.parameters()}], lr=0.001, momentum=0.9, weight_decay=self.opt.decay)
         optim_loss = []
@@ -1035,33 +877,6 @@ class Trainer:
             z = self.project(z, z0, epsilon, p)
 
             optim_loss.append(loss.item())
-
-        # diff = pdist(z, z0)
-        # print('diff', diff.max())
-
-        # mask = (diff < eps).float().unsqueeze(1)
-
-        # output = fc(z)
-        # loss = self.loss_fn(output, targets)
-        # loss.backward()
-        # optim.step()
-
-        # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
-
-        # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
-
-        # offset = project_onto_l1_ball(diff, 0.1)
-        # z_proj = z + offset
-
-        # fig = plt.figure()
-        # plt.plot(optim_loss, c="b", label="Mixup")
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Accuracy")
-        # plt.legend()
-        # plt.show()
-
-        # diff = z_org - z_tmp
-        # z = z - diff
 
         return z, optim_loss
 
@@ -1106,33 +921,6 @@ class Trainer:
 
             optim_loss.append(loss.item())
 
-        # diff = pdist(z, z0)
-        # print('diff', diff.max())
-
-        # mask = (diff < eps).float().unsqueeze(1)
-
-        # output = fc(z)
-        # loss = self.loss_fn(output, targets)
-        # loss.backward()
-        # optim.step()
-
-        # diff2 = torch.norm(z - z_new1, p='fro', dim=1) ** 2
-
-        # x_proj = mask * x + (1 - mask) * proj * torch.sign(x)
-
-        # offset = project_onto_l1_ball(diff, 0.1)
-        # z_proj = z + offset
-
-        fig = plt.figure()
-        plt.plot(optim_loss, c="b", label="Mixup")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-
-        # diff = z_org - z_tmp
-        # z = z - diff
-
         return z
 
     def get_activation(self, name):
@@ -1149,36 +937,6 @@ class Trainer:
 
         return x, y
 
-    def query_model1(self):
-        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
-        feat_sim = torch.empty(len(classes))
-
-        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-        '''
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-            _ = self.student(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1 = activation['latent'].mean(0).squeeze()
-            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-            _ = self.student(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-            # act2 = activation['latent'].mean(0).squeeze()
-            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-        '''
-        _ = self.student(self.query_set_1)
-        act1 = activation['latent'].squeeze()
-        _ = self.student(self.query_set_2)
-        act2 = activation['latent'].squeeze()
-        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
-        feat_sim = cos(act1, act2)
-
-        return feat_sim.cuda()
-
-
     def query_model(self):
         classes = torch.combinations(torch.arange(self.opt.n_query_classes))
         feat_sim = torch.empty(len(classes))
@@ -1186,21 +944,7 @@ class Trainer:
         cos = nn.CosineSimilarity(dim=0, eps=1e-6)
 
         m = nn.BatchNorm1d(512, affine=False).cuda()
-        '''
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-            _ = self.student(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1 = activation['latent'].mean(0).squeeze()
-            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-            _ = self.student(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-            # act2 = activation['latent'].mean(0).squeeze()
-            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-        '''
+
         _ = self.student(self.query_set_1)
         act1 = activation['latent'].squeeze()
         # act1_norm = m(act1)
@@ -1208,51 +952,9 @@ class Trainer:
         act2 = activation['latent'].squeeze()
         # act2_norm = m(act2)
 
-        # c = act1_norm.T @ act2_norm
-        # c.div_(self.opt.n_query_classes)
-
-        # on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-        # off_diag = off_diagonal(c).pow_(2).sum()
-        # feat_sim_loss = on_diag + 0.0051 * off_diag
-
         cos = nn.CosineSimilarity(dim=1, eps=1e-6)
         feat_sim = cos(act1, act2)
 
-        return feat_sim.cuda()
-
-
-    def query_model3(self):
-        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
-        feat_sim = torch.empty(len(classes))
-
-        # m = nn.BatchNorm1d(512, affine=False).cuda()
-
-        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-
-            _ = self.student(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1_norm = m(act1)
-            # act1 = activation['latent'].mean(0).squeeze()
-
-            _ = self.student(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-            # act2_norm = m(act2)
-            # act2 = activation['latent'].mean(0).squeeze()
-
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-
-
-        # _ = self.student(self.query_set_1)
-        # act1 = activation['latent'].squeeze()
-        # _ = self.student(self.query_set_2)
-        # act2 = activation['latent'].squeeze()
-        # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
-        # feat_sim = cos(act1, act2)
-        print(feat_sim)
         return feat_sim.cuda()
 
     def train(self, model, fc, train_loader, loss_fn, optimizer, epoch):
@@ -1284,12 +986,6 @@ class Trainer:
     def val(self, model, train_loader, loss_fn, optimizer, epoch):
         model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
-
-            # first_image = np.array(data.cpu(), dtype='float')
-            # pixels = first_image.reshape((28, 28))
-            # plt.imshow(pixels, cmap='gray')
-            # plt.title("Label {}".format(target.item()))
-            # plt.show()
 
             data, target = data.cuda(), target.long().cuda()
             optimizer.zero_grad()
@@ -1372,55 +1068,3 @@ class Trainer:
             best_val_loss = self.best_test_loss / self.init_test_loss
         model_features = [current_iter, avg_training_loss, best_val_loss]
         return torch.FloatTensor(model_features).cuda()
-
-    def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
-        # unproj_matrix = np.linalg.pinv(proj_matrix)
-        n_rows = 10
-        indices = torch.randint(0, len(generated_samples), (n_rows**2,))
-        labels = generated_labels[indices]
-        samples = generated_samples[indices]
-
-        # gen_imgs = samples @ unproj_matrix
-
-        img_shape = (1, 28, 28)
-        gen_imgs = samples
-        im = np.reshape(samples, (samples.shape[0], *img_shape))
-        im = torch.from_numpy(im)
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        grid = make_grid(im, nrow=10, normalize=True)
-        fig, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-        ax.axis('off')
-        ax.set_title("Fake Images, Label", )
-        img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        fig.set_size_inches(13, 5.8)
-        # ax1.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax1.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax1.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax1.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax1.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax1.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # plt.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax1.legend(loc="upper right")
-        ax1.set_title("Test Set Accuracy")
-        # ax1.set_aspect('equal')
-
-        ax2.plot(loss_g, c='b', label="netG loss")
-        ax2.plot(loss_d, c='g', label="netD loss")
-        ax2.plot(loss_student, c='r', label="generator loss")
-        ax2.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax2.xlabel("Iteration")
-        # ax2.ylabel("Loss")
-        ax2.legend(loc="upper right")
-
-        img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()

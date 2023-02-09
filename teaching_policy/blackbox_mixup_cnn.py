@@ -8,8 +8,6 @@ import sys
 
 import csv
 
-import torch
-import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
@@ -29,27 +27,7 @@ import teachers.omniscient_teacher as omniscient
 import teachers.utils as utils
 import matplotlib.pyplot as plt
 
-from torch.nn.functional import one_hot, log_softmax, softmax, normalize
-
-import itertools
-
-from torch.optim.lr_scheduler import StepLR
-
-from datasets import MoonDataset
-from datasets import BaseDataset
-
-import networks.cgan as cgan
-import networks.unrolled_optimizer as unrolled
 import networks.blackbox_mixup_cnn as blackbox_mixup
-# import networks
-
-from utils import HSIC
-
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
-
-import subprocess
-import glob
 
 sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
@@ -554,49 +532,10 @@ class Trainer:
     def main(self):
         """Run a single epoch of training and validation
         """
-        '''
-        from time import time
-        import multiprocessing as mp
-
-        for num_workers in range(0, mp.cpu_count(), 2):
-            train_loader = DataLoader(self.train_dataset, shuffle=True, num_workers=num_workers, batch_size=self.opt.batch_size, pin_memory=True)
-            start = time()
-            for epoch in range(1, 3):
-                for i, data in enumerate(train_loader, 0):
-                    pass
-            end = time()
-            print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
-        
-        import torch
-        from torchvision import transforms
-        import torchvision.datasets as datasets
-        import matplotlib.pyplot as plt
-        from sklearn.cluster import KMeans
-
-
-        kmeans = KMeans(n_clusters=10)
-
-        X = self.val_dataset.dataset.data
-
-        # KMmodel = kmeans.fit(self.val_dataset.data.numpy())
-        KMmodel = kmeans.fit(X)
-        print("cluster centers", kmeans.labels_)
-        print("cluster centers", kmeans.cluster_centers_)
-        sys.exit()
-        
-        '''
 
         print(self.opt)
 
         print("Training")
-        # self.set_train()
-
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
 
         if self.opt.model == "NET":
             tmp_student = networks.NET(n_in=self.opt.n_in, in_channels=self.opt.channels, num_classes=self.opt.n_classes).cuda()
@@ -735,19 +674,10 @@ class Trainer:
                             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                                 epoch, batch_idx * len(inputs), len(self.train_loader.dataset),
                                 100. * batch_idx / len(self.train_loader), loss_stu.item()), '\t')
-                                # 'Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                # epoch, batch_idx * len(inputs), len(self.val_loader.dataset),
-                                # 100. * batch_idx / len(self.val_loader), loss.item()))
                             self.log(mode="train", name="loss_student", value=loss_stu.item(), step=self.step)
                             # self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
 
                         if self.step == 1:
-                            # feat_sim = self.query_model()
-                            # self.init_feat_sim = feat_sim
-                            # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
-                            # print(self.init_feat_sim.mean())
-
-                            # _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
                             _, _ = self.val(self.baseline, val_loader=self.val_loader, epoch=epoch)
 
                             self.init_train_loss = train_loss / self.step
@@ -768,30 +698,11 @@ class Trainer:
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
 
-                # feat, labels = self.get_query_set()
-                # self.estimator.update_CV(feat, labels)
-                # cv_matrix = self.estimator.CoVariance.detach()
-
-                # if epoch % 2 == 0:
-                #    self.query_set_1, self.query_set_2 = self.get_query_set()
-
-                # self.adjust_learning_rate(baseline_optim, epoch)
-
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([epoch, acc])
 
             torch.save(netG.state_dict(), os.path.join(self.opt.log_path, 'weights/best_model_netG.pth'))
-
-            if self.visualize == False:
-                fig = plt.figure()
-                # plt.plot(w_diff_mixup, c="c", label="Mixup")
-                # plt.plot(res_example, c="g", label="SGD")
-                plt.plot(res_mixup, c="b", label="Mixup")
-                plt.xlabel("Epoch")
-                plt.ylabel("Accuracy")
-                plt.legend()
-                plt.show()
 
         if self.opt.experiment == "Second_Order_Optimization":
             # mixup student
@@ -877,40 +788,10 @@ class Trainer:
                             self.log(mode="train", name="loss_student", value=loss, step=self.step)
                             # self.log(mode="val", name="loss_teacher", value=loss.item(), step=self.step)
 
-                        '''
-                        if self.step == 1:
-                            # feat_sim = self.query_model()
-                            # self.init_feat_sim = feat_sim
-                            # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
-                            # print(self.init_feat_sim.mean())
-
-                            _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
-
-                            self.init_train_loss = train_loss / self.step
-                            avg_train_loss = self.init_train_loss
-                            self.init_test_loss = self.best_test_loss
-                            model_features = self.model_features(avg_train_loss)
-
-                        else:
-                            avg_train_loss = train_loss / self.step
-                            model_features = self.model_features(avg_train_loss)
-
-                        if self.step % 100 == 0:
-                            _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
-                        '''
                 # _, _ = self.val(self.baseline, val_loader=self.val_loader, epoch=epoch, netG=netG, save=True)
                 acc, test_loss = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch, netG=netG)
                 res_student.append(acc)
                 res_loss_student.append(test_loss)
-
-                # feat, labels = self.get_query_set()
-                # self.estimator.update_CV(feat, labels)
-                # cv_matrix = self.estimator.CoVariance.detach()
-
-                # if epoch % 2 == 0:
-                #    self.query_set_1, self.query_set_2 = self.get_query_set()
-
-                # self.adjust_learning_rate(baseline_optim, epoch)
 
                 with open(logname, 'a') as logfile:
                     logwriter = csv.writer(logfile, delimiter=',')
@@ -928,20 +809,9 @@ class Trainer:
                 plt.legend()
                 plt.show()
 
-        # w_student1 = []
-        # for param in self.baseline.parameters():
-        #     w_student1.append(param.data.clone())
-
-        # baseline_optim = torch.optim.SGD(self.baseline.parameters(), lr=self.opt.eta)
-        # self.baseline.load_state_dict(w_init)
-
         netG_path = os.path.join(self.opt.log_path, 'weights/best_model_netG.pth')
         netG = blackbox_mixup.Generator(self.opt).cuda()
         netG.load_state_dict(torch.load(netG_path))
-
-        # w_student2 = []
-        # for param in self.baseline.parameters():
-        #    w_student2.append(param.data.clone())
 
         self.opt.experiment = "Student"
         print("Start training {} ...".format(self.opt.experiment))
@@ -953,22 +823,6 @@ class Trainer:
 
         res_student = []
         res_loss_student = []
-
-        '''
-        batch_size = 5
-        nb_digits = 10
-        # Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
-        y = torch.LongTensor(batch_size,1).random_() % nb_digits
-        # One hot encoding buffer that you create out of the loop and just keep reusing
-        y_onehot = torch.FloatTensor(batch_size, nb_digits)
-
-        # In your for loop
-        y_onehot.zero_()
-        y_onehot.scatter_(1, y, 1)
-
-        print(y)
-        print(y_onehot)
-        '''
 
         self.student.load_state_dict(torch.load(os.path.join(self.opt.log_path, 'teacher_w0.pth')))
         student_optim = torch.optim.Adam(self.student.parameters(), lr=self.opt.lr)
@@ -1042,28 +896,6 @@ class Trainer:
 
                     self.log(mode="train", name="loss", value=loss.item(), step=self.step)
 
-                    '''
-                    if self.step == 1:
-                        # feat_sim = self.query_model()
-                        # self.init_feat_sim = feat_sim
-                        # feat_sim = torch.ones(self.opt.n_query_classes).cuda()
-                        # print(self.init_feat_sim.mean())
-
-                        _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
-
-                        self.init_train_loss = train_loss / self.step
-                        avg_train_loss = self.init_train_loss
-                        self.init_test_loss = self.best_test_loss
-                        model_features = self.model_features(avg_train_loss)
-
-                    else:
-                        avg_train_loss = train_loss / self.step
-                        model_features = self.model_features(avg_train_loss)
-
-                    if self.step % 100 == 0:
-                        _, _ = self.test(self.baseline, test_loader=self.test_loader, epoch=epoch)
-                    '''
-
             acc, test_loss = self.test(self.student, test_loader=self.test_loader, epoch=epoch)
             res_student.append(acc)
             res_loss_student.append(test_loss)
@@ -1074,7 +906,6 @@ class Trainer:
             with open(logname, 'a') as logfile:
                 logwriter = csv.writer(logfile, delimiter=',')
                 logwriter.writerow([epoch, acc])
-
 
     def get_activation(self, name):
         def hook(model, input, output):
@@ -1090,133 +921,22 @@ class Trainer:
 
         return x, y
 
-    def query_model1(self):
-        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
-        feat_sim = torch.empty(len(classes))
-
-        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-        '''
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-
-            _ = self.baseline(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1 = activation['latent'].mean(0).squeeze()
-
-            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-
-            _ = self.baseline(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-
-            # act2 = activation['latent'].mean(0).squeeze()
-
-            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-        '''
-        _ = self.baseline(self.query_set_1)
-        act1 = activation['latent'].squeeze()
-        _ = self.baseline(self.query_set_2)
-        act2 = activation['latent'].squeeze()
-        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
-        feat_sim = cos(act1, act2)
-
-        return feat_sim.cuda()
-
     def query_model(self):
-        # classes = torch.combinations(torch.arange(self.opt.n_query_classes))
-        # feat_sim = torch.empty(len(classes))
-
-        # cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-
-        # m = nn.BatchNorm1d(512, affine=False).cuda()
-        '''
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-
-            _ = self.baseline(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1 = activation['latent'].mean(0).squeeze()
-
-            # act1_norm = (act1 - act1.mean(0)) / act1.std(0)
-
-            _ = self.baseline(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-
-            # act2 = activation['latent'].mean(0).squeeze()
-
-            # act2_norm = (act2 - act2.mean(0)) / act2.std(0)
-
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-        '''
 
         feat1 = self.baseline(self.query_set_1)
         act1 = feat1.detach().squeeze()
         # act1_norm = m(act1)
         feat2 = self.baseline(self.query_set_2)
         act2 = feat2.detach().squeeze()
-        # act2_norm = m(act2)
-
-        # c = act1_norm.T @ act2_norm
-        # c.div_(self.opt.n_query_classes)
-
-        # on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-        # off_diag = off_diagonal(c).pow_(2).sum()
-        # feat_sim_loss = on_diag + 0.0051 * off_diag
 
         cos = nn.CosineSimilarity(dim=1, eps=1e-6)
         feat_sim = cos(act1, act2)
 
         return feat_sim.cuda()
 
-    def query_model3(self):
-        classes = torch.combinations(torch.arange(self.opt.n_query_classes))
-        feat_sim = torch.empty(len(classes))
-
-        # m = nn.BatchNorm1d(512, affine=False).cuda()
-
-        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-        for i, cls in enumerate(classes):
-            a, b = cls[0], cls[1]
-
-            _ = self.baseline(self.query_set[a, :])
-            act1 = activation['latent'].squeeze()
-            # act1_norm = m(act1)
-            # act1 = activation['latent'].mean(0).squeeze()
-
-            _ = self.baseline(self.query_set[b, :])
-            act2 = activation['latent'].squeeze()
-            # act2_norm = m(act2)
-            # act2 = activation['latent'].mean(0).squeeze()
-
-            # feat_sim[i] = HSIC(act1_norm, act2_norm)
-            cos_sim = cos(act1, act2)
-            feat_sim[i] = torch.mean(cos_sim)
-
-
-        # _ = self.baseline(self.query_set_1)
-        # act1 = activation['latent'].squeeze()
-        # _ = self.baseline(self.query_set_2)
-        # act2 = activation['latent'].squeeze()
-        # cos = nn.CosineSimilarity(dim=1, eps=1e-6)
-        # feat_sim = cos(act1, act2)
-        print(feat_sim)
-        return feat_sim.cuda()
-
-
     def train(self, model, train_loader, loss_fn, optimizer, epoch):
         model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
-
-            # first_image = np.array(data.cpu(), dtype='float')
-            # pixels = first_image.reshape((28, 28))
-            # plt.imshow(pixels, cmap='gray')
-            # plt.title("Label {}".format(target.item()))
-            # plt.show()
 
             data, target = data.cuda(), target.long().cuda()
             optimizer.zero_grad()
@@ -1322,100 +1042,6 @@ class Trainer:
 
         return torch.FloatTensor(model_features).cuda()
 
-    def make_results_img_2d(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch=None):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        fig.set_size_inches(20, 5.8)
-        ax1.plot(a_student[-1], b_student[-1], '-r', label='Optimizer Classifier')
-        ax1.scatter(X[:, 0], X[:, 1], c=Y)
-        ax1.scatter(generated_samples[:, 0], generated_samples[:, 1], c=generated_labels[:], marker='x')
-        ax1.legend(loc="upper right")
-        ax1.set_title("Data Generation (Optimizer)")
-        #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-        #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-        # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax2.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax2.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax2.legend(loc="upper right")
-        ax2.set_title("Test Set Accuracy")
-        #ax2.set_aspect('equal')
-
-        ax3.plot(loss_g, c='b', label="netG loss")
-        ax3.plot(loss_d, c='g', label="netD loss")
-        ax3.plot(loss_student, c='r', label="generator loss")
-        ax3.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax3.xlabel("Iteration")
-        # ax3.ylabel("Loss")
-        ax3.legend(loc="upper right")
-
-        fig.suptitle('Epoch {}'.format(epoch), fontsize=16)
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        img_path = os.path.join(save_folder, "results_{}.png".format(epoch))
-
-        plt.savefig(img_path)
-        # plt.show()
-        plt.close()
-
-    def make_results_img(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student, loss_student, loss_g, loss_d, epoch, proj_matrix):
-        # unproj_matrix = np.linalg.pinv(proj_matrix)
-        n_rows = 10
-        indices = torch.randint(0, len(generated_samples), (n_rows**2,))
-        labels = generated_labels[indices]
-        samples = generated_samples[indices]
-
-        # gen_imgs = samples @ unproj_matrix
-
-        img_shape = (1, 28, 28)
-        gen_imgs = samples
-        im = np.reshape(samples, (samples.shape[0], *img_shape))
-        im = torch.from_numpy(im)
-
-        save_folder = os.path.join(self.opt.log_path, "imgs")
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        grid = make_grid(im, nrow=10, normalize=True)
-        fig, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(grid.permute(1, 2, 0).data, cmap='binary')
-        ax.axis('off')
-        ax.set_title("Fake Images, Label", )
-        img_path = os.path.join(save_folder, "results_{}_imgs.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        fig.set_size_inches(13, 5.8)
-        # ax1.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-        # ax1.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        # ax1.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        ax1.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-        ax1.plot(w_diff_baseline, 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-        ax1.plot(w_diff_student, 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-        # plt.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-        ax1.legend(loc="upper right")
-        ax1.set_title("Test Set Accuracy")
-        # ax1.set_aspect('equal')
-
-        ax2.plot(loss_g, c='b', label="netG loss")
-        ax2.plot(loss_d, c='g', label="netD loss")
-        ax2.plot(loss_student, c='r', label="generator loss")
-        ax2.set_title(str(self.opt.data_mode) + "Model (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-        # ax2.xlabel("Iteration")
-        # ax2.ylabel("Loss")
-        ax2.legend(loc="upper right")
-
-        img_path = os.path.join(save_folder, "results_{}_w_diff.png".format(epoch))
-        plt.savefig(img_path)
-        plt.close()
-
     def save_model(self, model, name):
         """Save model weights to disk
         """
@@ -1426,42 +1052,3 @@ class Trainer:
         save_path = os.path.join(save_folder, "best_model_{}.pth".format(name))
         to_save = model.state_dict()
         torch.save(to_save, save_path)
-
-    def load_model(self):
-        """Load model(s) from disk
-        """
-        self.opt.load_weights_folder = os.path.expanduser(self.opt.load_weights_folder)
-
-        assert os.path.isdir(self.opt.load_weights_folder), \
-            "Cannot find folder {}".format(self.opt.load_weights_folder)
-        print("loading model from folder {}".format(self.opt.load_weights_folder))
-
-        for n in self.opt.models_to_load:
-            print("Loading {} weights...".format(n))
-            path = os.path.join(self.opt.load_weights_folder, "{}.pth".format(n))
-            model_dict = self.models[n].state_dict()
-            pretrained_dict = torch.load(path)
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-            model_dict.update(pretrained_dict)
-            self.models[n].load_state_dict(model_dict)
-
-        # loading adam state
-        optimizer_load_path = os.path.join(self.opt.load_weights_folder, "adam.pth")
-        if os.path.isfile(optimizer_load_path):
-            print("Loading Adam weights")
-            optimizer_dict = torch.load(optimizer_load_path)
-            self.model_optimizer.load_state_dict(optimizer_dict)
-        else:
-            print("Cannot find Adam weights so Adam is randomly initialized")
-
-    def log_time(self, batch_idx, duration, loss):
-        """Print a logging statement to the terminal
-        """
-        samples_per_sec = self.opt.batch_size / duration
-        time_sofar = time.time() - self.start_time
-        training_time_left = (
-                                     self.num_total_steps / self.step - 1.0) * time_sofar if self.step > 0 else 0
-        print_string = "epoch {:>3} | batch {:>6} | examples/s: {:5.1f}" + \
-                       " | loss: {:.5f} | time elapsed: {} | time left: {}"
-        print(print_string.format(self.epoch, batch_idx, samples_per_sec, loss,
-                                  sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
