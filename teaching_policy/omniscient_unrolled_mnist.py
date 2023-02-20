@@ -30,15 +30,6 @@ import matplotlib.pyplot as plt
 import networks.cgan as cgan
 import networks.unrolled_optimizer as unrolled
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
-
-from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-
-import imageio
-
-import subprocess
-import glob
 
 import csv
 
@@ -80,39 +71,11 @@ def plot_classifier(model, max, min):
     return x, y
 
 
-def approx_fprime(generator, f, epsilon, args=(), f0=None):
-    """
-    See ``approx_fprime``.  An optional initial function value arg is added.
-
-    """
-
-    xk = generator.linear.weight
-
-    if f0 is None:
-        f0 = f(*((xk,) + args))
-    grad = np.zeros((xk.shape[0], xk.shape[1]), float)
-    # grad = torch.zeros(len(xk),).cuda()
-    ei = np.zeros((xk.shape[0], xk.shape[1],), float)
-    # ei = torch.zeros(len(xk),).cuda()
-    for j in range(xk.shape[0]):
-        for k in range(xk.shape[1]):
-            ei[j, k] = 1.0
-            d = epsilon * ei
-            d = torch.Tensor(d).cuda()
-            grad[j, k] = (f(*((xk + d,) + args)) - f0) / d[j, k]
-            ei[j, k] = 0.0
-    return grad, f0
-
-
-def to_matrix(l, n):
-    return [l[i:i+n] for i in range(0, len(l), n)]
-
-
 class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_" + self.opt.data_mode
+        self.opt.model_name = "omniscient_unrolled_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -254,7 +217,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = sgd_trainer.train(sgd_example, w_star)
 
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
@@ -267,7 +230,7 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        res_baseline, w_diff_baseline = self.load_experiment_result()
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
@@ -362,12 +325,6 @@ class Trainer:
 
                 self.student.update(generated_sample.detach(), gt_y.unsqueeze(1))
 
-                #self.student(generated_sample)
-                #out = self.student(generated_sample)
-                #loss_fn = nn.MSELoss()
-                #loss1 = loss_fn(out, y)
-                #loss111.append(loss1.item())
-
             self.student.eval()
             test = self.student(X_test.cuda()).cpu()
 
@@ -404,133 +361,6 @@ class Trainer:
             # make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
             make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
 
-        if self.visualize == False:
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(12, 6)
-            ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
-            ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
-            ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
-            # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-            ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            ax1.set_xlabel("Iteration")
-            ax1.set_ylabel("Accuracy")
-            ax1.legend(loc="lower right")
-
-            ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-            ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-            ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
-            ax2.legend(loc="lower left")
-            ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-            ax2.set_xlabel("Iteration")
-            ax2.set_ylabel("Distance between $w^t$ and $w^*$")
-            #ax2.set_aspect('equal')
-
-            img_path = os.path.join(self.opt.log_path, 'results_{}_final.jpg'.format(self.opt.data_mode))
-            plt.savefig(img_path)
-            plt.close()
-            # plt.show()
-
-        if self.visualize == False:
-            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            for i in tqdm(range(len(res_student))):
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                fig.set_size_inches(20, 6)
-                ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-                ax1.scatter(X[:, 0], X[:, 1], c=Y)
-                ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
-                ax1.legend(loc="upper right")
-                ax1.set_title("Data Generation (Optimizer)")
-                #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-                #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-                ax2.plot(a_example[i], b_example[i], '-g', label='SGD Classifier')
-                ax2.scatter(X[:, 0], X[:, 1], c=Y)
-                ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1], marker='x')
-                ax2.legend(loc="upper right")
-                ax2.set_title("Data Selection (IMT)")
-                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-
-                ax3.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-                ax3.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-                ax3.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-                # ax3.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-                ax3.legend(loc="upper right")
-                ax3.set_title("Test Set Accuracy")
-                #ax3.set_aspect('equal')
-
-                plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
-
-                plt.close()
-
-            os.chdir(CONF.PATH.OUTPUT)
-            subprocess.call([
-                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-                'video_name.mp4'
-            ])
-            for file_name in glob.glob("*.png"):
-                os.remove(file_name)
-
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': []
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
-
-    def make_gif(self):
-        video_dir = os.path.join(self.opt.log_path, "video")
-
-        '''
-        os.chdir(video_dir)
-        images = []
-        for file_name in tqdm(sorted(glob.glob("*.png"))):
-            # print(file_name)
-            images.append(imageio.imread(file_name))
-            # os.remove(file_name)
-        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
-        imageio.mimsave(gif_path, images, fps=20)
-        '''
-
-        images = []
-        for file_name in tqdm(sorted(os.listdir(video_dir))):
-            if file_name.endswith('.png'):
-                file_path = os.path.join(video_dir, file_name)
-                images.append(imageio.imread(file_path))
-        gif_path = os.path.join(video_dir, 'results_{}.gif'.format(self.opt.data_mode))
-        # imageio.mimsave(gif_path, images, fps=20)
-        imageio.mimsave(gif_path, images, fps=20)
-
-    def load_experiment_result(self):
-        """Write an event to the tensorboard events file
-        """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
-
-        if os.path.isfile(csv_path):
-            acc = []
-            w_diff = []
-            with open(csv_path, 'r') as csvfile:
-                lines = csv.reader(csvfile, delimiter=',')
-                for idx, row in enumerate(lines):
-                    if idx != 0:
-                        acc.append(row[1])
-                        w_diff.append(row[2])
-            acc_np = np.asarray(acc).astype(float)
-            w_diff_np = np.asarray(w_diff).astype(float)
-
-        return acc_np, w_diff_np
 
     def data_sampler(self, X, Y, i):
         i_min = i * self.opt.batch_size
@@ -540,64 +370,3 @@ class Trainer:
         y = Y[i_min:i_max].cuda()
 
         return x, y
-
-    def train(self):
-        X_test = next(iter(self.test_loader))[0].numpy()
-        Y_test = next(iter(self.test_loader))[1].numpy()
-
-        accuracies = []
-        for epoch in tqdm(range(100)):
-            print('\nEpoch: %d' % epoch)
-            self.teacher.train()
-            train_loss = 0
-            correct = 0
-            total = 0
-            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                self.teacher.update(inputs, targets)
-
-                outputs = self.teacher(inputs.cuda())
-                predicted = torch.max(outputs, dim=1).indices
-
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # print('Acc: %.3f%% (%d/%d)'% (100.*correct/total, correct, total))
-
-            self.teacher.eval()
-            test_loss = 0
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(self.test_loader):
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                    outputs = self.teacher(inputs.cuda())
-                    predicted = torch.max(outputs, dim=1).indices
-
-                    total += targets.size(0)
-                    correct += predicted.eq(targets).sum().item()
-
-            # Save checkpoint.
-            acc = 100.*correct/total
-            accuracies.append(acc)
-
-            print("Epoch", epoch, "Acc", acc)
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-            test = self.teacher(X_test.cuda()).cpu()
-            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            accuracies.append(nb_correct / X_test.size(0))
-
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''

@@ -20,6 +20,5 @@ pretrained/
 # output folder
 log/
 outputs/
-results/
 slurm_log/
 

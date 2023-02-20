@@ -37,7 +37,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples
-from utils.data import init_data, initialize_weights, plot_graphs
+from utils.data import init_data, initialize_weights, plot_graphs, load_experiment_result
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -107,7 +107,7 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_cgan_" + self.opt.data_mode
+        self.opt.model_name = "omniscient_cgan_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -195,13 +195,6 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         print("Training")
         # self.set_train()
 
@@ -282,7 +275,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = sgd_trainer.train(sgd_example, w_star)
 
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
@@ -295,7 +288,7 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        res_baseline, w_diff_baseline = self.load_experiment_result()
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
@@ -515,102 +508,6 @@ class Trainer:
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                 plot_generated_samples(self.opt, X, Y, generated_samples, generated_labels, epoch, self.opt.seed)
 
-            sys.exit()
-            save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(epoch))
-            if not os.path.exists(save_folder):
-                os.makedirs(save_folder)
-
-            save_path = os.path.join(save_folder, "netG_{}.pth".format("models", epoch))
-            to_save = netG.state_dict()
-            torch.save(to_save, save_path)
-
-            save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
-            to_save = netD.state_dict()
-            torch.save(to_save, save_path)
-
-            # self.make_results_video_generated_data(generated_samples, epoch)
-
-            '''
-            plt.figure(figsize=(10,5))
-            plt.title("Discriminator and Generator loss during Training")
-            # plot Discriminator and generator loss
-            plt.plot(D_losses, label="D Loss")
-            plt.plot(G_losses, label="G Loss")
-            # get plot axis
-            ax = plt.gca()
-            # remove right and top spine
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            # add labels and create legend
-            plt.xlabel("num_epochs")
-            plt.legend()
-            plt.show()
-            '''
-
-            if self.visualize == True:
-                fig, (ax1, ax2) = plt.subplots(1, 2)
-                fig.set_size_inches(12, 6)
-                ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
-                ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
-                ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
-                # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-                ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-                ax1.set_xlabel("Iteration")
-                ax1.set_ylabel("Accuracy")
-                ax1.legend(loc="lower right")
-
-                ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-                ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-                ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
-                ax2.legend(loc="lower left")
-                ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-                ax2.set_xlabel("Iteration")
-                ax2.set_ylabel("Distance between $w^t$ and $w^*$")
-                #ax2.set_aspect('equal')
-
-                # plt.savefig('results_mnist_final.jpg')
-                # plt.close()
-                plt.show()
-
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': []
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
-
-
-    def load_experiment_result(self):
-        """Write an event to the tensorboard events file
-        """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
-
-        if os.path.isfile(csv_path):
-            acc = []
-            w_diff = []
-            with open(csv_path, 'r') as csvfile:
-                lines = csv.reader(csvfile, delimiter=',')
-                for idx, row in enumerate(lines):
-                    if idx != 0:
-                        acc.append(row[1])
-                        w_diff.append(row[2])
-            acc_np = np.asarray(acc).astype(float)
-            w_diff_np = np.asarray(w_diff).astype(float)
-
-        return acc_np, w_diff_np
-
     def compute_gradient_penalty(self, D, real_samples, fake_samples):
         """Calculates the gradient penalty loss for WGAN GP"""
         # Random weight term for interpolation between real and fake samples
@@ -632,271 +529,9 @@ class Trainer:
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
-    def make_results_video_generated_data(self, generated_samples, epoch):
-        n = generated_samples.shape[0]
-        for i in tqdm(range(n)):
-            img_path = self.opt.log_path + "/file%03d.png" % i
-            img = generated_samples[i]
-            img = torch.from_numpy(img)
-            torchvision.utils.save_image(img, img_path, nrow=10, padding=0, normalize=True)
-
-        #'-vf', 'scale=320:320'
-        subprocess.call([
-            'ffmpeg', '-framerate', '8', '-i', self.opt.log_path + '/file%03d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-            self.opt.log_path + '/generated_samples_epoch_{}.mp4'.format(epoch)
-        ])
-        for file_name in glob.glob(self.opt.log_path + '/' + "*.png"):
-            os.remove(file_name)
-
-
-    def make_results_video(self, X, Y, generated_samples, generated_labels, w_diff_example, w_diff_baseline, w_diff_student):
-        # a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-        for i in tqdm(range(len(w_diff_student))):
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(14, 6)
-            ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-            ax1.scatter(X[:, 0], X[:, 1], c=Y)
-            ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
-            ax1.legend(loc="upper right")
-            ax1.set_title("Data Generation (Optimizer)")
-            #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-            #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-            # ax2.plot(a_example[i], b_example[i], '-g', label='SGD Classifier')
-            # ax2.scatter(X[:, 0], X[:, 1], c=Y)
-            # ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1], marker='x')
-            # ax2.legend(loc="upper right")
-            # ax2.set_title("Data Selection (IMT)")
-            # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-            # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-
-            # ax2.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-            # ax2.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            # ax2.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            ax2.plot(w_diff_example, 'go', label="linear classifier", alpha=0.5)
-            ax2.plot(w_diff_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-            ax2.plot(w_diff_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-            # ax2.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-            ax2.legend(loc="upper right")
-            ax2.set_title("Test Set Accuracy")
-            #ax2.set_aspect('equal')
-
-            plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
-
-            plt.close()
-
-        os.chdir(CONF.PATH.OUTPUT)
-        subprocess.call([
-            'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-            'video_name.mp4'
-        ])
-        for file_name in glob.glob("*.png"):
-            os.remove(file_name)
-
-
     def log(self, mode, d_loss, g_loss):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
         writer.add_scalar("d_loss/{}".format("sa"), d_loss, self.step)
         writer.add_scalar("g_loss/{}".format("as"), g_loss, self.step)
-
-
-    def main1(self):
-        X_test = next(iter(self.test_loader))[0].numpy()
-        Y_test = next(iter(self.test_loader))[1].numpy()
-
-        accuracies = []
-        for epoch in tqdm(range(100)):
-            print('\nEpoch: %d' % epoch)
-            self.teacher.train()
-            train_loss = 0
-            correct = 0
-            total = 0
-            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                self.teacher.update(inputs, targets)
-
-                outputs = self.teacher(inputs.cuda())
-                predicted = torch.max(outputs, dim=1).indices
-
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # print('Acc: %.3f%% (%d/%d)'% (100.*correct/total, correct, total))
-
-            self.teacher.eval()
-            test_loss = 0
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(self.test_loader):
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                    outputs = self.teacher(inputs.cuda())
-                    predicted = torch.max(outputs, dim=1).indices
-
-                    total += targets.size(0)
-                    correct += predicted.eq(targets).sum().item()
-
-            # Save checkpoint.
-            acc = 100.*correct/total
-            accuracies.append(acc)
-
-            print("Epoch", epoch, "Acc", acc)
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-            test = self.teacher(X_test.cuda()).cpu()
-            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            accuracies.append(nb_correct / X_test.size(0))
-
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-
-    def process_batch(self, inputs):
-        #for key, ipt in inputs.items():
-        #    if key != 'case_name':
-        #        inputs[key] = ipt.to(self.device)
-
-        outputs = {}
-
-        # features = self.models["encoder"](inputs["image"])
-        # preds = self.models["decoder"](features)
-        preds = self.models["unet"](inputs["image"].to(self.device))
-
-        outputs["pred"] = preds
-        outputs["pred_idx"] = torch.argmax(preds, dim=1, keepdim=True)
-
-        losses = self.compute_losses(inputs, outputs)
-
-        return outputs, losses
-
-    def val(self):
-        """Validate the model on a single minibatch
-        """
-        self.set_eval()
-        try:
-            inputs = self.val_iter.next()
-        except StopIteration:
-            self.val_iter = iter(self.val_loader)
-            inputs = self.val_iter.next()
-
-        with torch.no_grad():
-            outputs, losses = self.process_batch(inputs)
-            self.compute_accuracy(inputs, outputs, losses)
-            self.log("val", inputs, outputs, losses)
-
-            del inputs, outputs, losses
-
-        self.set_train()
-
-    def compute_losses(self, inputs, outputs):
-        losses = {}
-        total_loss = 0
-
-        pred = outputs['pred']
-        target = inputs['label']
-
-        #to_optimise = self.criterion(output=pred,
-        #                             target=target)
-
-        to_optimise = self.criterion(pred, target.type(torch.LongTensor).cuda())
-
-        total_loss += to_optimise
-        losses["loss"] = total_loss
-        return losses
-
-    def compute_accuracy(self, inputs, outputs, losses):
-        with torch.no_grad():
-            # acc_dice = 0
-            # acc_iou = 0
-            for cls in range(1, self.opt.n_classes):
-                fluid = self.cls_to_fluid[cls]
-                losses["accuracy/dice_{}".format(fluid)] = self.eval_metric.compute_coef(outputs["pred_idx"].cpu().data,
-                                                                                         inputs['label'].cpu().data,
-                                                                                         mode='dice',
-                                                                                         cls=cls)
-                # acc_dice += losses["accuracy/dice_{}".format(fluid)]
-
-                losses["accuracy/iou_{}".format(fluid)] = self.eval_metric.compute_coef(outputs["pred_idx"].cpu().data,
-                                                                                        inputs['label'].cpu().data,
-                                                                                        mode='iou',
-                                                                                        cls=cls)
-                # acc_iou += losses["accuracy/iou_{}".format(fluid)]
-
-
-    def save_opts(self):
-        """Save options to disk so we know what we ran this experiment with
-        """
-        models_dir = os.path.join(self.opt.log_path, "models")
-        if not os.path.exists(models_dir):
-            os.makedirs(models_dir)
-        to_save = self.opt.__dict__.copy()
-
-        with open(os.path.join(models_dir, 'opt.json'), 'w') as f:
-            json.dump(to_save, f, indent=2)
-
-    def save_model(self):
-        """Save model weights to disk
-        """
-        save_folder = os.path.join(self.opt.log_path, "models", "weights_{}".format(self.epoch))
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        for model_name, model in self.models.items():
-            save_path = os.path.join(save_folder, "{}.pth".format(model_name))
-            to_save = model.state_dict()
-            torch.save(to_save, save_path)
-
-        if self.epoch >= self.opt.start_saving_optimizer:
-            save_path = os.path.join(save_folder, "{}.pth".format("adam"))
-            torch.save(self.model_optimizer.state_dict(), save_path)
-
-    def load_model(self):
-        """Load model(s) from disk
-        """
-        self.opt.load_weights_folder = os.path.expanduser(self.opt.load_weights_folder)
-
-        assert os.path.isdir(self.opt.load_weights_folder), \
-            "Cannot find folder {}".format(self.opt.load_weights_folder)
-        print("loading model from folder {}".format(self.opt.load_weights_folder))
-
-        for n in self.opt.models_to_load:
-            print("Loading {} weights...".format(n))
-            path = os.path.join(self.opt.load_weights_folder, "{}.pth".format(n))
-            model_dict = self.models[n].state_dict()
-            pretrained_dict = torch.load(path)
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-            model_dict.update(pretrained_dict)
-            self.models[n].load_state_dict(model_dict)
-
-        # loading adam state
-        optimizer_load_path = os.path.join(self.opt.load_weights_folder, "adam.pth")
-        if os.path.isfile(optimizer_load_path):
-            print("Loading Adam weights")
-            optimizer_dict = torch.load(optimizer_load_path)
-            self.model_optimizer.load_state_dict(optimizer_dict)
-        else:
-            print("Cannot find Adam weights so Adam is randomly initialized")
-
-    def log_time(self, batch_idx, duration, loss):
-        """Print a logging statement to the terminal
-        """
-        samples_per_sec = self.opt.batch_size / duration
-        time_sofar = time.time() - self.start_time
-        training_time_left = (
-                                     self.num_total_steps / self.step - 1.0) * time_sofar if self.step > 0 else 0
-        print_string = "epoch {:>3} | batch {:>6} | examples/s: {:5.1f}" + \
-                       " | loss: {:.5f} | time elapsed: {} | time left: {}"
-        print(print_string.format(self.epoch, batch_idx, samples_per_sec, loss,
-                                  sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))

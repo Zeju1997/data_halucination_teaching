@@ -142,7 +142,7 @@ from tqdm import tqdm
 import seaborn as sns
 
 
-def plot_graphs(rootdir, experiment_dict, experiment_lst):
+def plot_graphs(rootdir, experiment_dict, experiment_lst, model_name):
     # mpl.rcParams['figure.dpi'] = 120
     # mpl.rcParams['savefig.dpi'] = 200
 
@@ -196,7 +196,7 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
     plt.xlabel('Number of iterations')
     plt.legend(loc='best', fontsize=22)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_acc_{}.pdf'.format(model_name)), bbox_inches='tight')
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
@@ -243,127 +243,12 @@ def plot_graphs(rootdir, experiment_dict, experiment_lst):
 
     plt.ylabel('Difference between $w*$ and $w_t$')
     plt.xlabel('Number of iterations')
-    # plt.legend(loc='best', fontsize=22)
-
-    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
-
-
-def plot_graphs_vae_cgan(rootdir, experiment_dict, experiment_lst):
-    # mpl.rcParams['figure.dpi'] = 120
-    # mpl.rcParams['savefig.dpi'] = 200
-
-    sns.set()
-    sns.set_style('white')
-    sns.set_theme(style="ticks")
-    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
-
-    palette = list(iter(sns.mpl_palette("tab10", 8)))
-    # Plot acc results
-
-    plt.figure(figsize=(8, 6))
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-
-    for experiment in experiment_lst:
-        acc_np = 0
-        for i, file in tqdm(enumerate(sorted(experiment_dict[experiment]))):
-            file_path = os.path.join(rootdir, file)
-            if os.path.isfile(file_path):
-                acc = []
-                with open(file_path, 'r') as csvfile:
-                    lines = csv.reader(csvfile, delimiter=',')
-                    for idx, row in enumerate(lines):
-                        if idx != 0:
-                            acc.append(row[1])
-                tmp_acc_np = np.asarray(acc).astype(float)
-                if i == 0:
-                    acc_np = tmp_acc_np[np.newaxis, :]
-                else:
-                    acc_np = np.concatenate((acc_np, tmp_acc_np[np.newaxis, :]), axis=0)
-
-        acc_mean = np.mean(acc_np, axis=0)
-        acc_std = np.std(acc_np, axis=0) * 0.2
-
-        x = np.arange(len(acc_mean))
-
-        if experiment == 'SGD':
-            plt.plot(x, acc_mean, label='SGD', color=palette[0])
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[0], alpha=0.2)
-
-        elif experiment == 'IMT_Baseline':
-            plt.plot(x, acc_mean, label='IMT', color=palette[2])
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[2], alpha=0.2)
-
-        elif experiment == 'Student_vae':
-            plt.plot(x, acc_mean, label='DHT (VAE)', color=palette[1])
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[1], alpha=0.2)
-
-        else:
-            plt.plot(x, acc_mean, label='DHT (GAN)', color=palette[6])
-            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[6], alpha=0.2)
-
-    plt.ylabel('Accuracy')
-    plt.xlabel('Number of iterations')
     plt.legend(loc='best', fontsize=22)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
-
-    plt.figure(figsize=(8, 6))
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-
-    for experiment in experiment_lst:
-
-        w_diff_np = 0
-
-        for i, file in tqdm(enumerate(sorted(experiment_dict[experiment]))):
-            file_path = os.path.join(rootdir, file)
-            if os.path.isfile(file_path):
-                w_diff = []
-                with open(file_path, 'r') as csvfile:
-                    lines = csv.reader(csvfile, delimiter=',')
-                    for idx, row in enumerate(lines):
-                        if idx != 0:
-                            w_diff.append(row[2])
-                tmp_w_diff_np = np.asarray(w_diff).astype(float)
-                if i == 0:
-                    w_diff_np = tmp_w_diff_np[np.newaxis, :]
-                else:
-                    w_diff_np = np.concatenate((w_diff_np, tmp_w_diff_np[np.newaxis, :]), axis=0)
-
-        w_diff_mean = np.mean(w_diff_np, axis=0)
-        w_diff_std = np.std(w_diff_np, axis=0) * 0.2
-
-        x = np.arange(len(w_diff_mean))
-
-        if experiment == 'SGD':
-            plt.plot(x, w_diff_mean, label='SGD', color=palette[0])
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('yellow', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[0], alpha=0.2)
-
-        elif experiment == 'IMT_Baseline':
-            plt.plot(x, w_diff_mean, label='IMT', color=palette[2])
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('orange', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[2], alpha=0.2)
-
-        elif experiment == 'Student_vae':
-            plt.plot(x, w_diff_mean, label='DHT (VAE)', color=palette[1])
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[1], alpha=0.2)
-
-        else:
-            plt.plot(x, w_diff_mean, label='DHT (GAN)', color=palette[6])
-            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
-            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[6], alpha=0.2)
-
-    plt.ylabel('Difference between $w*$ and $w_t$')
-    plt.xlabel('Number of iterations')
-    # plt.legend(loc='best', fontsize=22)
-
-    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff_{}.pdf'.format(model_name)), bbox_inches='tight')
 
 
-def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
+def plot_graphs_optimized(rootdir, experiment_dict, experiment_lst, model_name):
     # mpl.rcParams['figure.dpi'] = 120
     # mpl.rcParams['savefig.dpi'] = 200
 
@@ -377,6 +262,7 @@ def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
 
     plt.figure(figsize=(8, 6))
     plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for experiment in experiment_lst:
         acc_np = 0
@@ -426,9 +312,9 @@ def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
 
     plt.ylabel('Accuracy')
     plt.xlabel('Number of iterations')
-    # plt.legend(loc='best', fontsize=16)
+    # plt.legend(loc='best', fontsize=22)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_acc.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_acc_{}.pdf'.format(model_name)), bbox_inches='tight')
 
     # Plot w diff results
     plt.figure(figsize=(8, 6))
@@ -486,7 +372,189 @@ def plot_graphs_optimized(rootdir, experiment_lst, experiment_dict):
     plt.xlabel('Number of iterations')
     plt.legend(loc='best', fontsize=22)
 
-    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff_{}.pdf'.format(model_name)), bbox_inches='tight')
+
+
+def plot_graphs_vae_cgan(rootdir, experiment_dict, experiment_lst, model_name):
+    # mpl.rcParams['figure.dpi'] = 120
+    # mpl.rcParams['savefig.dpi'] = 200
+
+    sns.set()
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
+
+    palette = list(iter(sns.mpl_palette("tab10", 8)))
+    # Plot acc results
+
+    plt.figure(figsize=(8, 6))
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+    for experiment in experiment_lst:
+        acc_np = 0
+        for i, file in tqdm(enumerate(sorted(experiment_dict[experiment]))):
+            file_path = os.path.join(rootdir, file)
+            if os.path.isfile(file_path):
+                acc = []
+                with open(file_path, 'r') as csvfile:
+                    lines = csv.reader(csvfile, delimiter=',')
+                    for idx, row in enumerate(lines):
+                        if idx != 0:
+                            acc.append(row[1])
+                tmp_acc_np = np.asarray(acc).astype(float)
+                if i == 0:
+                    acc_np = tmp_acc_np[np.newaxis, :]
+                else:
+                    acc_np = np.concatenate((acc_np, tmp_acc_np[np.newaxis, :]), axis=0)
+
+        acc_mean = np.mean(acc_np, axis=0)
+        acc_std = np.std(acc_np, axis=0) * 0.2
+
+        x = np.arange(len(acc_mean))
+
+        if experiment == 'SGD':
+            plt.plot(x, acc_mean, label='SGD', color=palette[0])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[0], alpha=0.2)
+
+        elif experiment == 'IMT_Baseline':
+            plt.plot(x, acc_mean, label='IMT', color=palette[2])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[2], alpha=0.2)
+
+        elif experiment == 'Student_vae':
+            plt.plot(x, acc_mean, label='DHT (VAE)', color=palette[1])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[1], alpha=0.2)
+
+        else:
+            plt.plot(x, acc_mean, label='DHT (GAN)', color=palette[6])
+            plt.fill_between(x, acc_mean-acc_std, acc_mean+acc_std, color=palette[6], alpha=0.2)
+
+    plt.ylabel('Accuracy')
+    plt.xlabel('Number of iterations')
+    plt.legend(loc='best', fontsize=22)
+
+    plt.savefig(os.path.join(rootdir, 'paper_results_acc_{}.pdf'.format(model_name)), bbox_inches='tight')
+
+    plt.figure(figsize=(8, 6))
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+    for experiment in experiment_lst:
+
+        w_diff_np = 0
+
+        for i, file in tqdm(enumerate(sorted(experiment_dict[experiment]))):
+            file_path = os.path.join(rootdir, file)
+            if os.path.isfile(file_path):
+                w_diff = []
+                with open(file_path, 'r') as csvfile:
+                    lines = csv.reader(csvfile, delimiter=',')
+                    for idx, row in enumerate(lines):
+                        if idx != 0:
+                            w_diff.append(row[2])
+                tmp_w_diff_np = np.asarray(w_diff).astype(float)
+                if i == 0:
+                    w_diff_np = tmp_w_diff_np[np.newaxis, :]
+                else:
+                    w_diff_np = np.concatenate((w_diff_np, tmp_w_diff_np[np.newaxis, :]), axis=0)
+
+        w_diff_mean = np.mean(w_diff_np, axis=0)
+        w_diff_std = np.std(w_diff_np, axis=0) * 0.2
+
+        x = np.arange(len(w_diff_mean))
+
+        if experiment == 'SGD':
+            plt.plot(x, w_diff_mean, label='SGD', color=palette[0])
+            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('yellow', amount=0.3), alpha=0.1)
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[0], alpha=0.2)
+
+        elif experiment == 'IMT_Baseline':
+            plt.plot(x, w_diff_mean, label='IMT', color=palette[2])
+            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('orange', amount=0.3), alpha=0.1)
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[2], alpha=0.2)
+
+        elif experiment == 'Student_vae':
+            plt.plot(x, w_diff_mean, label='DHT (VAE)', color=palette[1])
+            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[1], alpha=0.2)
+
+        else:
+            plt.plot(x, w_diff_mean, label='DHT (GAN)', color=palette[6])
+            # plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=adjust_lightness('r', amount=0.3), alpha=0.1)
+            plt.fill_between(x, w_diff_mean-w_diff_std, w_diff_mean+w_diff_std, color=palette[6], alpha=0.2)
+
+    plt.ylabel('Difference between $w*$ and $w_t$')
+    plt.xlabel('Number of iterations')
+    plt.legend(loc='best', fontsize=22)
+
+    plt.savefig(os.path.join(rootdir, 'paper_results_w_diff_{}.pdf'.format(model_name)), bbox_inches='tight')
+
+
+
+def plot_perceptual_loss(log_path, experiments_lst, model_name, epsilon=50):
+
+    rootdir = log_path
+
+    file_lst = []
+
+    for file in os.listdir(rootdir):
+        if file.endswith('.csv'):
+            if 'PERCEPTUAL' in file:
+                file_lst.append(file)
+
+    sns.set()
+    sns.set_style('white')
+    sns.set_theme(style="ticks")
+    sns.set_context("paper", font_scale=3, rc={"lines.linewidth": 2.5})
+
+    palette = list(iter(sns.mpl_palette("tab10", 8)))
+    # Plot acc results
+
+    plt.figure(figsize=(8, 6))
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+    for idx, experiment in enumerate(experiments_lst):
+        value_np = 0
+        for i, file in tqdm(enumerate(sorted(file_lst))):
+            file_path = os.path.join(rootdir, file)
+            if os.path.isfile(file_path):
+                value = []
+                with open(file_path, 'r') as csvfile:
+                    lines = csv.reader(csvfile, delimiter=',')
+                    for n, row in enumerate(lines):
+                        if n != 0:
+                            value.append(row[idx + 1])
+                tmp_value_np = np.asarray(value).astype(float)
+                if i == 0:
+                    value_np = tmp_value_np[np.newaxis, :]
+                else:
+                    value_np = np.concatenate((value_np, tmp_value_np[np.newaxis, :]), axis=0)
+
+        value_mean = np.mean(value_np, axis=0)
+        value_std = np.std(value_np, axis=0)
+
+        x = np.arange(len(value_mean))
+
+        if experiment == 'SGD':
+            plt.plot(x, value_mean, label='SGD', color=palette[0])
+            plt.fill_between(x, value_mean - value_std, value_mean + value_std, color=palette[0], alpha=0.2)
+
+        elif experiment == 'IMT_Baseline':
+            plt.plot(x, value_mean, label='IMT', color=palette[2])
+            plt.fill_between(x, value_mean - value_std, value_mean + value_std, color=palette[2], alpha=0.2)
+
+        else:
+            plt.plot(x, value_mean, label='DHT', color=palette[3])
+            plt.fill_between(x, value_mean - value_std, value_mean + value_std, color=palette[3], alpha=0.2)
+
+    plt.axhline(y=epsilon, color='k', linestyle='dashed', label="$\epsilon = {}$".format(epsilon), linewidth=4)
+
+    plt.ylabel('Perceptual Loss')
+    plt.xlabel('Number of iterations')
+    plt.legend(loc='best', fontsize=22)
+
+    plt.savefig(os.path.join(rootdir, 'paper_results_perceptual_{}.pdf'.format(model_name)), bbox_inches='tight')
 
 
 def initialize_weights(m):

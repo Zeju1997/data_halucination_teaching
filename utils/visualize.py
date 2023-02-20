@@ -1,7 +1,11 @@
 import torch
 from torchvision.utils import save_image, make_grid
 import numpy as np
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 import matplotlib.pyplot as plt
+
 from matplotlib.colors import ListedColormap
 import imageio
 import glob
@@ -15,7 +19,6 @@ import seaborn as sns
 
 cm = plt.cm.RdBu
 cm_bright = ListedColormap(['#FF0000', '#0000FF'])
-
 
 
 def make_results_video(opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, seed, proj_matrix=None):

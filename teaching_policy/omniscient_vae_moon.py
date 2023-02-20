@@ -36,7 +36,7 @@ from sklearn.datasets import make_moons, make_classification
 from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier, plot_distribution
-from utils.data import init_data, plot_graphs
+from utils.data import init_data, plot_graphs, load_experiment_result
 from utils.network import initialize_weights
 
 from vaes.models import VAE_HalfMoon
@@ -50,39 +50,12 @@ sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
 
-def approx_fprime(generator, f, epsilon, args=(), f0=None):
-    """
-    See ``approx_fprime``.  An optional initial function value arg is added.
-
-    """
-
-    xk = generator.linear.weight
-
-    if f0 is None:
-        f0 = f(*((xk,) + args))
-    grad = np.zeros((xk.shape[0], xk.shape[1]), float)
-    # grad = torch.zeros(len(xk),).to(self.device)
-    ei = np.zeros((xk.shape[0], xk.shape[1],), float)
-    # ei = torch.zeros(len(xk),).to(self.device)
-    for j in range(xk.shape[0]):
-        for k in range(xk.shape[1]):
-            ei[j, k] = 1.0
-            d = epsilon * ei
-            d = torch.Tensor(d).to(self.device)
-            grad[j, k] = (f(*((xk + d,) + args)) - f0) / d[j, k]
-            ei[j, k] = 0.0
-    return grad, f0
-
-
-def to_matrix(l, n):
-    return [l[i:i+n] for i in range(0, len(l), n)]
-
 
 class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_vae_" + self.opt.data_mode
+        self.opt.model_name = "omniscient_vae_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -96,6 +69,8 @@ class Trainer:
         self.device = torch.device("cpu" if self.opt.no_cuda else "cuda")
 
         self.get_teacher_student()
+
+        self.pre_train = False
 
         self.writers = {}
         for mode in ["train", "val"]:
@@ -184,7 +159,6 @@ class Trainer:
         X = torch.load('X.pt')
         Y = torch.load('Y.pt')
 
-
         nb_batch = int(self.opt.nb_train / self.opt.batch_size)
 
         if self.opt.data_mode == "cifar10":
@@ -249,7 +223,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = sgd_trainer.train(sgd_example, w_star)
 
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
@@ -262,12 +236,12 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        res_baseline, w_diff_baseline = self.load_experiment_result()
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
         # ---------------------
-        if self.visualize:
+        if self.pre_train:
             vae = VAE_HalfMoon(self.device)
             vae = vae.to(self.device)
 
@@ -279,8 +253,8 @@ class Trainer:
             train_loss_avg = []
 
             print('Training VAE ...')
-            self.opt.n_epochs = 600
-            for epoch in range(self.opt.n_epochs):
+            n_epochs = 600
+            for epoch in range(n_epochs):
                 train_loss_avg.append(0)
                 num_batches = 0
 
@@ -304,7 +278,7 @@ class Trainer:
                     num_batches += 1
 
                 train_loss_avg[-1] /= num_batches
-                print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, self.opt.n_epochs, train_loss_avg[-1]))
+                print('Epoch [%d / %d] average negative ELBO: %f' % (epoch+1, n_epochs, train_loss_avg[-1]))
 
             torch.save(vae.state_dict(), 'pretrained_vae.pth')
 
@@ -447,15 +421,14 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([idx, acc, diff.item()])
 
-            plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
-            sys.exit()
-
             if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed)
                 # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
 
                 a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
                 plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+
+                plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
             else:
                 make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, 0, self.opt.seed, proj_matrix)
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
@@ -469,41 +442,3 @@ class Trainer:
             torch.save(to_save, save_path)
 
             # self.make_results_video_generated_data(generated_samples, epoch)
-
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': [],
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
-
-    def load_experiment_result(self):
-        """Write an event to the tensorboard events file
-        """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
-
-        if os.path.isfile(csv_path):
-            acc = []
-            w_diff = []
-            with open(csv_path, 'r') as csvfile:
-                lines = csv.reader(csvfile, delimiter=',')
-                for idx, row in enumerate(lines):
-                    if idx != 0:
-                        acc.append(row[1])
-                        w_diff.append(row[2])
-            acc_np = np.asarray(acc).astype(float)
-            w_diff_np = np.asarray(w_diff).astype(float)
-
-        return acc_np, w_diff_np

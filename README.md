@@ -60,7 +60,7 @@ _Below is an example of how you can instruct your audience on installing and set
     conda create -n dht python=3.6
     conda activate dht
     conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0 -c pytorch
-    pip install imageio scikit-image scikit-learn matplotlib seaborn pyyaml easydict tensorboard tensorboardX tqdm mathutils==2.81.2 
+    pip install imageio scikit-image scikit-learn matplotlib seaborn pyyaml easydict tensorboard tensorboardX tqdm opencv-python mathutils==2.81.2 
    ```
 3. Create the environment from the yml file
    ```sh

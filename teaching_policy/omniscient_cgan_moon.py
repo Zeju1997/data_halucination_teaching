@@ -31,11 +31,9 @@ from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 import networks.cgan as cgan
 import networks.unrolled_cgan as unrolled
 
-from sklearn.datasets import make_moons, make_classification
-from sklearn.model_selection import train_test_split
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d, plot_generated_samples_2d, plot_classifier, plot_distribution
-from utils.data import init_data, plot_graphs
+from utils.data import init_data, plot_graphs, load_experiment_result
 from utils.network import initialize_weights
 
 import subprocess
@@ -47,39 +45,12 @@ sys.path.append('..') #Hack add ROOT DIR
 from baseconfig import CONF
 
 
-def approx_fprime(generator, f, epsilon, args=(), f0=None):
-    """
-    See ``approx_fprime``.  An optional initial function value arg is added.
-
-    """
-
-    xk = generator.linear.weight
-
-    if f0 is None:
-        f0 = f(*((xk,) + args))
-    grad = np.zeros((xk.shape[0], xk.shape[1]), float)
-    # grad = torch.zeros(len(xk),).cuda()
-    ei = np.zeros((xk.shape[0], xk.shape[1],), float)
-    # ei = torch.zeros(len(xk),).cuda()
-    for j in range(xk.shape[0]):
-        for k in range(xk.shape[1]):
-            ei[j, k] = 1.0
-            d = epsilon * ei
-            d = torch.Tensor(d).cuda()
-            grad[j, k] = (f(*((xk + d,) + args)) - f0) / d[j, k]
-            ei[j, k] = 0.0
-    return grad, f0
-
-
-def to_matrix(l, n):
-    return [l[i:i+n] for i in range(0, len(l), n)]
-
 
 class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_cgan_" + self.opt.data_mode
+        self.opt.model_name = "omniscient_cgan_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -172,13 +143,6 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         print("Training")
         # self.set_train()
 
@@ -186,12 +150,6 @@ class Trainer:
             init_data(self.opt)
         X = torch.load('X.pt')
         Y = torch.load('Y.pt')
-
-        # Shuffle datasets
-        # randomize = np.arange(X.shape[0])
-        # np.random.shuffle(randomize)
-        # X = X[randomize]
-        # Y = Y[randomize]
 
         nb_batch = int(self.opt.nb_train / self.opt.batch_size)
 
@@ -202,33 +160,6 @@ class Trainer:
             Y_test = torch.tensor(Y[self.opt.nb_train:self.opt.nb_train + self.opt.nb_test], dtype=torch.long)
 
         elif self.opt.data_mode == "mnist":
-            '''
-            train_loader = DataLoader(train_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=self.opt.batch_size, drop_last=True, shuffle=False)
-
-            X_train = train_dataset.data
-            X_test = test_dataset.data
-            Y_train = torch.tensor(train_dataset.targets, dtype=torch.float)
-            Y_test = torch.tensor(test_dataset.targets, dtype=torch.float)
-
-            X_train = X_train.view(X_train.shape[0], -1)
-            X_test = X_test.view(X_test.shape[0], -1)
-
-            img_shape = (self.opt.channels, self.opt.img_size, self.opt.img_size)
-            proj_matrix = torch.empty(int(np.prod(img_shape)), self.opt.dim).normal_(mean=0, std=0.1)
-            X_train = X_train.float() @ proj_matrix
-            X_test = X_test.float() @ proj_matrix
-            '''
-
-            '''
-            for i in range(50):
-                tensor_image = X_test[i].squeeze()
-                plt.imshow(tensor_image)
-                print(Y_test[i])
-                plt.show()
-
-                print("aklsdfj")
-            '''
 
             X_train = torch.tensor(X[:self.opt.nb_train], dtype=torch.float)
             Y_train = torch.tensor(Y[:self.opt.nb_train], dtype=torch.float)
@@ -284,7 +215,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = sgd_trainer.train(sgd_example, w_star)
 
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
@@ -297,7 +228,7 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        res_baseline, w_diff_baseline = self.load_experiment_result()
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
@@ -454,15 +385,14 @@ class Trainer:
                     logwriter = csv.writer(logfile, delimiter=',')
                     logwriter.writerow([idx, acc, diff.item()])
 
-            plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
-            sys.exit()
-
             if self.opt.data_mode == "gaussian" or self.opt.data_mode == "moon":
                 # make_results_img_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
                 # make_results_video_2d(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed)
 
                 a_star, b_star = plot_classifier(self.teacher, X_test[:, 0].max(axis=0), X_test[:, 0].min(axis=0))
                 plot_generated_samples_2d(self.opt, X, Y, a_star, b_star, a_student, b_student, generated_samples, generated_labels, epoch, self.opt.seed)
+
+                plot_distribution(self.opt, X_train, Y_train, generated_samples, generated_labels)
             else:
                 make_results_img(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
                 # make_results_video(self.opt, X, Y, generated_samples, generated_labels, res_sgd, res_baseline, res_student, w_diff_sgd, w_diff_baseline, w_diff_student, epoch, self.opt.seed, proj_matrix)
@@ -481,50 +411,8 @@ class Trainer:
 
             # self.make_results_video_generated_data(generated_samples, epoch)
 
-            '''
-            plt.figure(figsize=(10,5))
-            plt.title("Discriminator and Generator loss during Training")
-            # plot Discriminator and generator loss
-            plt.plot(D_losses, label="D Loss")
-            plt.plot(G_losses, label="G Loss")
-            # get plot axis
-            ax = plt.gca()
-            # remove right and top spine
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            # add labels and create legend
-            plt.xlabel("num_epochs")
-            plt.legend()
-            plt.show()
-            '''
-
-            if self.visualize == False:
-                fig, (ax1, ax2) = plt.subplots(1, 2)
-                fig.set_size_inches(12, 6)
-                ax1.plot(res_sgd, c='g', label="SGD %s" % self.opt.data_mode)
-                ax1.plot(res_baseline, c='b', label="IMT %s" % self.opt.data_mode)
-                ax1.plot(res_student, c='r', label="Student %s" % self.opt.data_mode)
-                # ax1.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-                ax1.set_title("Test accuracy " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-                ax1.set_xlabel("Iteration")
-                ax1.set_ylabel("Accuracy")
-                ax1.legend(loc="lower right")
-
-                ax2.plot(w_diff_sgd, 'go', label="SGD %s" % self.opt.data_mode)
-                ax2.plot(w_diff_baseline, 'bo', label="IMT %s" % self.opt.data_mode, alpha=0.5)
-                ax2.plot(w_diff_student, 'ro', label="Student %s" % self.opt.data_mode, alpha=0.5)
-                ax2.legend(loc="lower left")
-                ax2.set_title("w diff " + str(self.opt.data_mode) + " (class : " + str(self.opt.class_1) + ", " + str(self.opt.class_2) + ")")
-                ax2.set_xlabel("Iteration")
-                ax2.set_ylabel("Distance between $w^t$ and $w^*$")
-                #ax2.set_aspect('equal')
-
-                # plt.savefig('results_mnist_final.jpg')
-                # plt.close()
-                plt.show()
-
     def load_experiment_result(self):
-        """Write an event to the tensorboard events file
+        """If already trained before, load the experiment results from the corresponding .csv file.
         """
         csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
 
@@ -563,163 +451,11 @@ class Trainer:
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': []
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
-
     def log(self, mode, name, value, step):
         """Write an event to the tensorboard events file
         """
         writer = self.writers[mode]
         writer.add_scalar("{}/{}/{}".format(self.opt.experiment, mode, name), value, step)
-
-    def main1(self):
-        X_test = next(iter(self.test_loader))[0].numpy()
-        Y_test = next(iter(self.test_loader))[1].numpy()
-
-        accuracies = []
-        for epoch in tqdm(range(100)):
-            print('\nEpoch: %d' % epoch)
-            self.teacher.train()
-            train_loss = 0
-            correct = 0
-            total = 0
-            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                self.teacher.update(inputs, targets)
-
-                outputs = self.teacher(inputs.cuda())
-                predicted = torch.max(outputs, dim=1).indices
-
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # print('Acc: %.3f%% (%d/%d)'% (100.*correct/total, correct, total))
-
-            self.teacher.eval()
-            test_loss = 0
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(self.test_loader):
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                    outputs = self.teacher(inputs.cuda())
-                    predicted = torch.max(outputs, dim=1).indices
-
-                    total += targets.size(0)
-                    correct += predicted.eq(targets).sum().item()
-
-            # Save checkpoint.
-            acc = 100.*correct/total
-            accuracies.append(acc)
-
-            print("Epoch", epoch, "Acc", acc)
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-            test = self.teacher(X_test.cuda()).cpu()
-            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            accuracies.append(nb_correct / X_test.size(0))
-
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-
-    def process_batch(self, inputs):
-        #for key, ipt in inputs.items():
-        #    if key != 'case_name':
-        #        inputs[key] = ipt.to(self.device)
-
-        outputs = {}
-
-        # features = self.models["encoder"](inputs["image"])
-        # preds = self.models["decoder"](features)
-        preds = self.models["unet"](inputs["image"].to(self.device))
-
-        outputs["pred"] = preds
-        outputs["pred_idx"] = torch.argmax(preds, dim=1, keepdim=True)
-
-        losses = self.compute_losses(inputs, outputs)
-
-        return outputs, losses
-
-    def val(self):
-        """Validate the model on a single minibatch
-        """
-        self.set_eval()
-        try:
-            inputs = self.val_iter.next()
-        except StopIteration:
-            self.val_iter = iter(self.val_loader)
-            inputs = self.val_iter.next()
-
-        with torch.no_grad():
-            outputs, losses = self.process_batch(inputs)
-            self.compute_accuracy(inputs, outputs, losses)
-            self.log("val", inputs, outputs, losses)
-
-            del inputs, outputs, losses
-
-        self.set_train()
-
-    def compute_losses(self, inputs, outputs):
-        losses = {}
-        total_loss = 0
-
-        pred = outputs['pred']
-        target = inputs['label']
-
-        #to_optimise = self.criterion(output=pred,
-        #                             target=target)
-
-        to_optimise = self.criterion(pred, target.type(torch.LongTensor).cuda())
-
-        total_loss += to_optimise
-        losses["loss"] = total_loss
-        return losses
-
-    def compute_accuracy(self, inputs, outputs, losses):
-        with torch.no_grad():
-            # acc_dice = 0
-            # acc_iou = 0
-            for cls in range(1, self.opt.n_classes):
-                fluid = self.cls_to_fluid[cls]
-                losses["accuracy/dice_{}".format(fluid)] = self.eval_metric.compute_coef(outputs["pred_idx"].cpu().data,
-                                                                                         inputs['label'].cpu().data,
-                                                                                         mode='dice',
-                                                                                         cls=cls)
-                # acc_dice += losses["accuracy/dice_{}".format(fluid)]
-
-                losses["accuracy/iou_{}".format(fluid)] = self.eval_metric.compute_coef(outputs["pred_idx"].cpu().data,
-                                                                                        inputs['label'].cpu().data,
-                                                                                        mode='iou',
-                                                                                        cls=cls)
-                # acc_iou += losses["accuracy/iou_{}".format(fluid)]
-
 
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with

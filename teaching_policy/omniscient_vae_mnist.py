@@ -77,7 +77,7 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
 
-        self.opt.model_name = "whitebox_unrolled_vae_" + self.opt.data_mode
+        self.opt.model_name = "omniscient_vae_" + self.opt.data_mode
 
         self.opt.log_path = os.path.join(CONF.PATH.LOG, self.opt.model_name)
         if not os.path.exists(self.opt.log_path):
@@ -91,6 +91,8 @@ class Trainer:
         self.device = torch.device("cpu" if self.opt.no_cuda else "cuda")
 
         self.get_teacher_student()
+
+        self.pre_train = True
 
         self.writers = {}
         for mode in ["train", "val"]:
@@ -239,7 +241,7 @@ class Trainer:
         # ---------------------
         #  Train Student
         # ---------------------
-        if self.visualize == False:
+        if self.pre_train:
             vae = VAE_bMNIST(self.device)
             vae = vae.to(self.device)
 
@@ -438,22 +440,3 @@ class Trainer:
             torch.save(to_save, save_path)
 
             # self.make_results_video_generated_data(generated_samples, epoch)
-
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': []
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)

@@ -26,7 +26,7 @@ import teachers.utils as utils
 import matplotlib.pyplot as plt
 
 from utils.visualize import make_results_video, make_results_video_2d, make_results_img, make_results_img_2d
-from utils.data import init_data, plot_graphs
+from utils.data import init_data, plot_graphs, load_experiment_result
 
 from experiments import SGDTrainer, IMTTrainer, WSTARTrainer
 
@@ -72,34 +72,6 @@ def plot_classifier(model, max, min):
     x = np.linspace(min, max, 100)
     y = slope * x
     return x, y
-
-
-def approx_fprime(generator, f, epsilon, args=(), f0=None):
-    """
-    See ``approx_fprime``.  An optional initial function value arg is added.
-
-    """
-
-    xk = generator.linear.weight
-
-    if f0 is None:
-        f0 = f(*((xk,) + args))
-    grad = np.zeros((xk.shape[0], xk.shape[1]), float)
-    # grad = torch.zeros(len(xk),).cuda()
-    ei = np.zeros((xk.shape[0], xk.shape[1],), float)
-    # ei = torch.zeros(len(xk),).cuda()
-    for j in range(xk.shape[0]):
-        for k in range(xk.shape[1]):
-            ei[j, k] = 1.0
-            d = epsilon * ei
-            d = torch.Tensor(d).cuda()
-            grad[j, k] = (f(*((xk + d,) + args)) - f0) / d[j, k]
-            ei[j, k] = 0.0
-    return grad, f0
-
-
-def to_matrix(l, n):
-    return [l[i:i+n] for i in range(0, len(l), n)]
 
 
 def mixup_data(x, y, alpha=1.0):
@@ -229,13 +201,6 @@ class Trainer:
         """Run a single epoch of training and validation
         """
 
-        # torch.manual_seed(self.opt.seed)
-        # np.random.seed(self.opt.seed)
-        # torch.cuda.manual_seed(self.opt.seed)
-        # torch.cuda.set_device(args.gpu)
-        # cudnn.benchmark = True
-        # cudnn.enabled=True
-
         print("Training")
         # self.set_train()
 
@@ -339,7 +304,7 @@ class Trainer:
             sgd_trainer = SGDTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = sgd_trainer.train(sgd_example, w_star)
 
-        res_sgd, w_diff_sgd = self.load_experiment_result()
+        res_sgd, w_diff_sgd = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train IMT Baseline
@@ -352,7 +317,7 @@ class Trainer:
             imt_trainer = IMTTrainer(self.opt, X_train, Y_train, X_test, Y_test)
             _, _ = imt_trainer.train(self.baseline, self.teacher, w_star)
 
-        res_baseline, w_diff_baseline = self.load_experiment_result()
+        res_baseline, w_diff_baseline = load_experiment_result(self.opt)
 
         # ---------------------
         #  Train Student
@@ -482,144 +447,3 @@ class Trainer:
         # save_path = os.path.join(save_folder, "netD_{}.pth".format("models", epoch))
         # to_save = netD.state_dict()
         # torch.save(to_save, save_path)
-
-        if self.visualize == False:
-            a, b = plot_classifier(self.teacher, X.max(axis=0), X.min(axis=0))
-            for i in tqdm(range(len(res_student))):
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                fig.set_size_inches(20, 5.8)
-                ax1.plot(a_student[i], b_student[i], '-r', label='Optimizer Classifier')
-                ax1.scatter(X[:, 0], X[:, 1], c=Y)
-                ax1.scatter(generated_samples[:i+1, 0], generated_samples[:i+1, 1], c=generated_labels[:i+1], marker='x')
-                ax1.legend(loc="upper right")
-                ax1.set_title("Data Generation (Optimizer)")
-                #ax1.set_xlim([X.min()-0.5, X.max()+0.5])
-                #ax1.set_ylim([X.min()-0.5, X.max()+0.5])
-
-                ax2.plot(a_example[i], b_example[i], '-g', label='SGD Classifier')
-                ax2.scatter(X[:, 0], X[:, 1], c=Y)
-                ax2.scatter(selected_samples[:i+1, 0], selected_samples[:i+1, 1], c=selected_labels[:i+1], marker='x')
-                ax2.legend(loc="upper right")
-                ax2.set_title("Data Selection (IMT)")
-                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-                # ax2.set_xlim([X.min()-0.5, X.max()+0.5])
-
-                ax3.plot(res_example, 'go', label="linear classifier", alpha=0.5)
-                ax3.plot(res_baseline[:i+1], 'bo', label="%s & baseline" % self.opt.teaching_mode, alpha=0.5)
-                ax3.plot(res_student[:i+1], 'ro', label="%s & linear classifier" % self.opt.teaching_mode, alpha=0.5)
-                # ax3.axhline(y=teacher_acc, color='k', linestyle='-', label="teacher accuracy")
-                ax3.legend(loc="upper right")
-                ax3.set_title("W Difference")
-                #ax3.set_aspect('equal')
-
-                plt.savefig(CONF.PATH.OUTPUT + "/file%02d.png" % i)
-
-                plt.close()
-
-            os.chdir(CONF.PATH.OUTPUT)
-            subprocess.call([
-                'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-                'video_name.mp4'
-            ])
-            for file_name in glob.glob("*.png"):
-                os.remove(file_name)
-
-    def plot_results(self):
-
-        experiments_lst = ['SGD', 'IMT_Baseline', 'Student']
-        rootdir = self.opt.log_path
-
-        experiment_dict = {
-            'SGD': [],
-            'IMT_Baseline': [],
-            'Student': []
-        }
-
-        for experiment in experiments_lst:
-            for file in os.listdir(rootdir):
-                if file.endswith('.csv'):
-                    if experiment in file:
-                        experiment_dict[experiment].append(file)
-
-        plot_graphs(rootdir, experiment_dict, experiments_lst)
-
-
-    def load_experiment_result(self):
-        """Write an event to the tensorboard events file
-        """
-        csv_path = os.path.join(self.opt.log_path, 'results' + '_' + self.opt.experiment + '_' + str(self.opt.seed) + '.csv')
-
-        if os.path.isfile(csv_path):
-            acc = []
-            w_diff = []
-            with open(csv_path, 'r') as csvfile:
-                lines = csv.reader(csvfile, delimiter=',')
-                for idx, row in enumerate(lines):
-                    if idx != 0:
-                        acc.append(row[1])
-                        w_diff.append(row[2])
-            acc_np = np.asarray(acc).astype(float)
-            w_diff_np = np.asarray(w_diff).astype(float)
-
-        return acc_np, w_diff_np
-
-    def main1(self):
-        X_test = next(iter(self.test_loader))[0].numpy()
-        Y_test = next(iter(self.test_loader))[1].numpy()
-
-        accuracies = []
-        for epoch in tqdm(range(100)):
-            print('\nEpoch: %d' % epoch)
-            self.teacher.train()
-            train_loss = 0
-            correct = 0
-            total = 0
-            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                self.teacher.update(inputs, targets)
-
-                outputs = self.teacher(inputs.cuda())
-                predicted = torch.max(outputs, dim=1).indices
-
-                total += targets.size(0)
-                correct += predicted.eq(targets).sum().item()
-
-                # print('Acc: %.3f%% (%d/%d)'% (100.*correct/total, correct, total))
-
-            self.teacher.eval()
-            test_loss = 0
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(self.test_loader):
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-                    outputs = self.teacher(inputs.cuda())
-                    predicted = torch.max(outputs, dim=1).indices
-
-                    total += targets.size(0)
-                    correct += predicted.eq(targets).sum().item()
-
-            # Save checkpoint.
-            acc = 100.*correct/total
-            accuracies.append(acc)
-
-            print("Epoch", epoch, "Acc", acc)
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
-            test = self.teacher(X_test.cuda()).cpu()
-            tmp = torch.where(test > 0.5, torch.ones(1), torch.zeros(1))
-            nb_correct = torch.where(tmp.view(-1) == Y_test, torch.ones(1), torch.zeros(1)).sum().item()
-            accuracies.append(nb_correct / X_test.size(0))
-
-        plt.plot(accuracies, c="b", label="Teacher (CNN)")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.legend()
-        plt.show()
-        '''
