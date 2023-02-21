@@ -768,8 +768,8 @@ def plot_distribution(opt, X, Y, generated_samples, generated_labels):
     y1 = np.array(y1)
 
     sns.kdeplot(x0, shade=True, color="Blue", ax=ax1, label='Class 0 - GT')
-    sns.kdeplot(x1, shade=True, color="Red", ax=ax1, label='Class 1 - GT')
     sns.kdeplot(y0, shade=True, color="Blue", ax=ax2, label='Class 0 - GT')
+    sns.kdeplot(x1, shade=True, color="Red", ax=ax1, label='Class 1 - GT')
     sns.kdeplot(y1, shade=True, color="Red", ax=ax2, label='Class 1 - GT')
 
     x0 = []
@@ -789,8 +789,8 @@ def plot_distribution(opt, X, Y, generated_samples, generated_labels):
     y1 = np.array(y1)
 
     sns.kdeplot(x0, shade=True, color="Green", ax=ax1, label='Class 0 - DHT')
-    sns.kdeplot(x1, shade=True, color="Orange", ax=ax1, label='Class 1 - DHT')
     sns.kdeplot(y0, shade=True, color="Green", ax=ax2, label='Class 0 - DHT')
+    sns.kdeplot(x1, shade=True, color="Orange", ax=ax1, label='Class 1 - DHT')
     sns.kdeplot(y1, shade=True, color="Orange", ax=ax2, label='Class 1 - DHT')
 
     ax1.legend(loc="best", fontsize=18)
